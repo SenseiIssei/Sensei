@@ -1,0 +1,56 @@
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter
+
+from sensei.compression.ccr import CCRStore
+from sensei.config import settings
+
+router = APIRouter(prefix="/stats", tags=["stats"])
+
+_ccr_store: CCRStore | None = None
+
+
+def init_stats_deps(ccr_store: CCRStore) -> None:
+    global _ccr_store
+    _ccr_store = ccr_store
+
+
+@router.get("")
+async def get_stats() -> dict[str, Any]:
+    """Get compression and cache statistics."""
+    if _ccr_store is None:
+        return {"error": "Stats not initialized"}
+
+    ccr_stats = _ccr_store.stats()
+    evicted = _ccr_store.cleanup()
+
+    return {
+        "compression_enabled": settings.compression_enabled,
+        "ccr": ccr_stats,
+        "evicted_entries": evicted,
+        "cache_ttl_hours": settings.ccr_ttl_hours,
+    }
+
+
+@router.get("/ccr/{ccr_id}")
+async def get_ccr_info(ccr_id: str) -> dict[str, Any]:
+    """Get info about a specific CCR entry."""
+    if _ccr_store is None:
+        return {"error": "CCR store not initialized"}
+    info = _ccr_store.get_info(ccr_id)
+    if info is None:
+        return {"error": "CCR entry not found or expired"}
+    return info
+
+
+@router.get("/ccr/{ccr_id}/original")
+async def retrieve_original(ccr_id: str) -> dict[str, Any]:
+    """Retrieve the original uncompressed content for a CCR entry."""
+    if _ccr_store is None:
+        return {"error": "CCR store not initialized"}
+    original = _ccr_store.retrieve(ccr_id)
+    if original is None:
+        return {"error": "CCR entry not found or expired"}
+    return {"content": original}
