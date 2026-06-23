@@ -1,0 +1,67 @@
+version: "3.9"
+
+services:
+  sensei-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "${SENSEI_PORT:-7000}:7000"
+    env_file:
+      - .env
+    volumes:
+      - sensei-cache:/app/.sensei_cache
+      - sensei-memory:/app/.sensei_memory
+      - sensei-sessions:/app/.sensei_sessions
+      - ./models:/models:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - sensei-net
+
+  sensei-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    depends_on:
+      sensei-backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - sensei-net
+
+  # Ollama for local model serving (optional — use profile: ollama)
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    profiles: ["ollama"]
+    networks:
+      - sensei-net
+
+volumes:
+  sensei-cache:
+  sensei-memory:
+  sensei-sessions:
+  ollama-models:
+
+networks:
+  sensei-net:
+    driver: bridge
