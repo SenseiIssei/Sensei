@@ -110,7 +110,7 @@ All your data stays on your machine. No tracking, no telemetry, no cloud depende
 
 - **Docker Compose** — One command for full stack + optional Ollama
 - **Cross-platform** — Linux, Windows, macOS
-- **VPS-ready** — Production Dockerfile, non-root user, health checks
+- **Production-ready** — Production Dockerfile, non-root user, health checks
 - **Multi-stage builds** — Optimized image sizes
 - **GPU support** — Optional NVIDIA GPU profile for Ollama
 
@@ -146,7 +146,7 @@ The installer will:
 
 You just pick your models and paste API keys — the installer handles the rest.
 
-### Option 1: Docker (recommended for VPS)
+### Option 1: Docker (recommended)
 
 ```bash
 git clone https://github.com/SenseiIssei/Sensei.git
@@ -202,34 +202,6 @@ pytest -v
 ```
 
 > 📋 **[View the Interactive Roadmap &rarr;](roadmap.html)**** — a beautiful, animated, glassy page showing all planned features, enterprise plans, and the Sensei-1 model vision.**
-
-### Option 4: VPS Deployment (Public Chat like Claude/ChatGPT)
-
-Deploy Sensei as a public chat app on your VPS — users can register, log in, and chat just like Claude or ChatGPT.
-
-```bash
-# On your VPS (Ubuntu/Debian), as root:
-git clone https://github.com/SenseiIssei/Sensei.git /opt/sensei
-cd /opt/sensei
-chmod +x deploy/vps-deploy.sh
-./deploy/vps-deploy.sh
-```
-
-The script installs everything: Docker, Nginx, SSL (Let's Encrypt), and starts the app.
-
-**Routing:**
-- `senseiissei.dev` → Public chat (register/login required, like Claude/ChatGPT)
-- `senseiissei.dev/#/devpanel` → Secret admin/dev panel (only you know this URL)
-- `senseiissei.dev/docs` → API documentation
-- `senseiissei.dev/health` → Health check
-
-**To update later:**
-```bash
-cd /opt/sensei
-git pull
-cd frontend && npm run build && cd ..
-docker compose restart
-```
 
 ## Architecture
 
@@ -578,9 +550,6 @@ Sensei/
 │   ├── export.py            # Merge LoRA + export
 │   ├── quantize.py          # GGUF/AWQ/GPTQ quantization
 │   └── evaluate.py          # Benchmark vs GLM-5.2, Claude, GPT-4o
-├── deploy/                  # VPS deployment configs
-│   ├── nginx.conf           # Nginx reverse proxy config
-│   └── vps-deploy.sh        # One-command VPS deployment script
 ├── roadmap.html             # Interactive animated roadmap page
 ├── LICENSE
 └── ROADMAP.md
