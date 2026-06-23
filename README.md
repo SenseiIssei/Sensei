@@ -201,6 +201,36 @@ pip install -e ".[dev]"
 pytest -v
 ```
 
+> 📋 **[View the Interactive Roadmap &rarr;](roadmap.html)**** — a beautiful, animated, glassy page showing all planned features, enterprise plans, and the Sensei-1 model vision.**
+
+### Option 4: VPS Deployment (Public Chat like Claude/ChatGPT)
+
+Deploy Sensei as a public chat app on your VPS — users can register, log in, and chat just like Claude or ChatGPT.
+
+```bash
+# On your VPS (Ubuntu/Debian), as root:
+git clone https://github.com/SenseiIssei/Sensei.git /opt/sensei
+cd /opt/sensei
+chmod +x deploy/vps-deploy.sh
+./deploy/vps-deploy.sh
+```
+
+The script installs everything: Docker, Nginx, SSL (Let's Encrypt), and starts the app.
+
+**Routing:**
+- `senseiissei.dev` → Public chat (register/login required, like Claude/ChatGPT)
+- `senseiissei.dev/#/devpanel` → Secret admin/dev panel (only you know this URL)
+- `senseiissei.dev/docs` → API documentation
+- `senseiissei.dev/health` → Health check
+
+**To update later:**
+```bash
+cd /opt/sensei
+git pull
+cd frontend && npm run build && cd ..
+docker compose restart
+```
+
 ## Architecture
 
 ```
@@ -250,48 +280,168 @@ pytest -v
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-## Performance
+## Performance ✨
+
+> *Every token saved is a little victory. Sensei turns your words into compressed dreams — faster, cheaper, greener.* 🌿
 
 ### Token Compression Results
 
-The compression pipeline reduces token usage before sending to the model:
+The compression pipeline reduces token usage **before** the model sees it. Less tokens = less cost = happier you. 💚
 
-```
-Content Type    Original Tokens    Compressed Tokens    Reduction
-──────────────────────────────────────────────────────────────────
-JSON (arrays)       1,200               380              68%
-JSON (objects)        800               290              64%
-Python code         1,500               520              65%
-JavaScript code     1,400               490              65%
-Prose text          2,000               800              60%
-Mixed content       3,000             1,050              65%
-──────────────────────────────────────────────────────────────────
-Average             1,650               588              64%
-```
+<!-- Glassmorphism performance cards -->
+<table>
+<tr>
+<td width="50%" valign="top" style="border: 1px solid rgba(255,255,255,0.06); background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01)); padding: 24px; border-radius: 16px; backdrop-filter: blur(10px);">
 
-```
-Token Reduction by Content Type
+<h3 align="center">📊 Token Reduction by Content Type</h3>
 
-JSON    ████████████░░░░░░░░░░░░░░░░  68%
-Code    ███████████░░░░░░░░░░░░░░░░░  65%
-Text    ██████████░░░░░░░░░░░░░░░░░░  60%
-Mixed   ███████████░░░░░░░░░░░░░░░░░  65%
+<!-- Animated CSS bar chart -->
+<div style="font-family: monospace; font-size: 13px; line-height: 2.2;">
 
-█ = tokens saved    ░ = tokens sent
-```
+<div style="display: flex; align-items: center; gap: 8px;">
+<span style="width: 60px; color: #94a3b8;">JSON</span>
+<div style="flex: 1; background: rgba(255,255,255,0.05); border-radius: 6px; overflow: hidden; height: 22px;">
+<div style="width: 68%; height: 100%; background: linear-gradient(90deg, #22c55e, #4ade80); border-radius: 6px; animation: growBar 1.5s ease-out;">
+</div>
+</div>
+<span style="color: #4ade80; font-weight: bold; width: 40px; text-align: right;">68%</span>
+</div>
 
-### Cost Savings
+<div style="display: flex; align-items: center; gap: 8px;">
+<span style="width: 60px; color: #94a3b8;">Python</span>
+<div style="flex: 1; background: rgba(255,255,255,0.05); border-radius: 6px; overflow: hidden; height: 22px;">
+<div style="width: 65%; height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); border-radius: 6px; animation: growBar 1.5s ease-out 0.1s;">
+</div>
+</div>
+<span style="color: #60a5fa; font-weight: bold; width: 40px; text-align: right;">65%</span>
+</div>
 
-With GLM-5.2 at ~$0.50/1M tokens (OpenRouter), compression saves:
+<div style="display: flex; align-items: center; gap: 8px;">
+<span style="width: 60px; color: #94a3b8;">JS/TS</span>
+<div style="flex: 1; background: rgba(255,255,255,0.05); border-radius: 6px; overflow: hidden; height: 22px;">
+<div style="width: 65%; height: 100%; background: linear-gradient(90deg, #f59e0b, #fbbf24); border-radius: 6px; animation: growBar 1.5s ease-out 0.2s;">
+</div>
+</div>
+<span style="color: #fbbf24; font-weight: bold; width: 40px; text-align: right;">65%</span>
+</div>
 
-```
-Messages/day    Tokens/msg    Monthly cost (no compression)    With Sensei    Savings
-────────────────────────────────────────────────────────────────────────────────────
-100             2,000         $3.00                            $1.08          $1.92
-500             2,000         $15.00                           $5.40          $9.60
-1000            5,000         $75.00                           $27.00         $48.00
-5000            5,000         $375.00                          $135.00        $240.00
-```
+<div style="display: flex; align-items: center; gap: 8px;">
+<span style="width: 60px; color: #94a3b8;">Prose</span>
+<div style="flex: 1; background: rgba(255,255,255,0.05); border-radius: 6px; overflow: hidden; height: 22px;">
+<div style="width: 60%; height: 100%; background: linear-gradient(90deg, #a855f7, #c084fc); border-radius: 6px; animation: growBar 1.5s ease-out 0.3s;">
+</div>
+</div>
+<span style="color: #c084fc; font-weight: bold; width: 40px; text-align: right;">60%</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 8px;">
+<span style="width: 60px; color: #94a3b8;">Mixed</span>
+<div style="flex: 1; background: rgba(255,255,255,0.05); border-radius: 6px; overflow: hidden; height: 22px;">
+<div style="width: 65%; height: 100%; background: linear-gradient(90deg, #ec4899, #f472b6); border-radius: 6px; animation: growBar 1.5s ease-out 0.4s;">
+</div>
+</div>
+<span style="color: #f472b6; font-weight: bold; width: 40px; text-align: right;">65%</span>
+</div>
+
+</div>
+
+<p align="center" style="color: #94a3b8; font-size: 12px; margin-top: 16px;">
+<b style="color: #4ade80;">Average: 64% token reduction</b> — you only pay for ~1/3 of the tokens 🎉
+</p>
+
+</td>
+<td width="50%" valign="top" style="border: 1px solid rgba(255,255,255,0.06); background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01)); padding: 24px; border-radius: 16px; backdrop-filter: blur(10px);">
+
+<h3 align="center">💰 Monthly Cost Savings</h3>
+
+<div style="font-family: monospace; font-size: 13px; line-height: 2.2;">
+
+<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+<span style="width: 80px; color: #94a3b8;">100 msg/d</span>
+<div style="flex: 1; background: rgba(255,255,255,0.05); border-radius: 6px; overflow: hidden; height: 22px; position: relative;">
+<div style="width: 100%; height: 100%; background: rgba(239,68,68,0.3); border-radius: 6px; position: absolute;"></div>
+<div style="width: 36%; height: 100%; background: linear-gradient(90deg, #22c55e, #4ade80); border-radius: 6px; position: relative; animation: growBar 1.5s ease-out 0.5s;">
+</div>
+</div>
+<span style="color: #4ade80; font-weight: bold; width: 50px; text-align: right;">$1.92</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+<span style="width: 80px; color: #94a3b8;">500 msg/d</span>
+<div style="flex: 1; background: rgba(255,255,255,0.05); border-radius: 6px; overflow: hidden; height: 22px; position: relative;">
+<div style="width: 100%; height: 100%; background: rgba(239,68,68,0.3); border-radius: 6px; position: absolute;"></div>
+<div style="width: 36%; height: 100%; background: linear-gradient(90deg, #22c55e, #4ade80); border-radius: 6px; position: relative; animation: growBar 1.5s ease-out 0.6s;">
+</div>
+</div>
+<span style="color: #4ade80; font-weight: bold; width: 50px; text-align: right;">$9.60</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+<span style="width: 80px; color: #94a3b8;">1K msg/d</span>
+<div style="flex: 1; background: rgba(255,255,255,0.05); border-radius: 6px; overflow: hidden; height: 22px; position: relative;">
+<div style="width: 100%; height: 100%; background: rgba(239,68,68,0.3); border-radius: 6px; position: absolute;"></div>
+<div style="width: 36%; height: 100%; background: linear-gradient(90deg, #22c55e, #4ade80); border-radius: 6px; position: relative; animation: growBar 1.5s ease-out 0.7s;">
+</div>
+</div>
+<span style="color: #4ade80; font-weight: bold; width: 50px; text-align: right;">$48.00</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+<span style="width: 80px; color: #94a3b8;">5K msg/d</span>
+<div style="flex: 1; background: rgba(255,255,255,0.05); border-radius: 6px; overflow: hidden; height: 22px; position: relative;">
+<div style="width: 100%; height: 100%; background: rgba(239,68,68,0.3); border-radius: 6px; position: absolute;"></div>
+<div style="width: 36%; height: 100%; background: linear-gradient(90deg, #22c55e, #4ade80); border-radius: 6px; position: relative; animation: growBar 1.5s ease-out 0.8s;">
+</div>
+</div>
+<span style="color: #4ade80; font-weight: bold; width: 50px; text-align: right;">$240.00</span>
+</div>
+
+</div>
+
+<p align="center" style="color: #94a3b8; font-size: 12px; margin-top: 16px;">
+<span style="color: #ef4444;">▮</span> Without Sensei &nbsp; vs &nbsp; <span style="color: #4ade80;">▮</span> With Sensei<br>
+<b style="color: #4ade80;">Save up to $240/month</b> — that's a new GPU every few months 🚀
+</p>
+
+</td>
+</tr>
+</table>
+
+<!-- Key stats row -->
+<table>
+<tr>
+<td align="center" style="border: 1px solid rgba(34,197,94,0.15); background: linear-gradient(135deg, rgba(34,197,94,0.08), rgba(34,197,94,0.02)); padding: 20px; border-radius: 12px; backdrop-filter: blur(10px);">
+<h2 style="color: #4ade80; margin: 0;">64%</h2>
+<p style="color: #94a3b8; margin: 4px 0 0 0; font-size: 13px;">Avg Token Reduction</p>
+</td>
+<td align="center" style="border: 1px solid rgba(59,130,246,0.15); background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(59,130,246,0.02)); padding: 20px; border-radius: 12px; backdrop-filter: blur(10px);">
+<h2 style="color: #60a5fa; margin: 0;">14+</h2>
+<p style="color: #94a3b8; margin: 4px 0 0 0; font-size: 13px;">Model Providers</p>
+</td>
+<td align="center" style="border: 1px solid rgba(168,85,247,0.15); background: linear-gradient(135deg, rgba(168,85,247,0.08), rgba(168,85,247,0.02)); padding: 20px; border-radius: 12px; backdrop-filter: blur(10px);">
+<h2 style="color: #c084fc; margin: 0;">$0</h2>
+<p style="color: #94a3b8; margin: 4px 0 0 0; font-size: 13px;">Cost with Ollama</p>
+</td>
+<td align="center" style="border: 1px solid rgba(236,72,153,0.15); background: linear-gradient(135deg, rgba(236,72,153,0.08), rgba(236,72,153,0.02)); padding: 20px; border-radius: 12px; backdrop-filter: blur(10px);">
+<h2 style="color: #f472b6; margin: 0;">0</h2>
+<p style="color: #94a3b8; margin: 4px 0 0 0; font-size: 13px;">Telemetry Calls</p>
+</td>
+</tr>
+</table>
+
+<style>
+@keyframes growBar {
+  from { width: 0%; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(34,197,94,0.2); }
+  50% { box-shadow: 0 0 20px rgba(34,197,94,0.4); }
+}
+</style>
 
 ## Configuration
 
@@ -428,6 +578,10 @@ Sensei/
 │   ├── export.py            # Merge LoRA + export
 │   ├── quantize.py          # GGUF/AWQ/GPTQ quantization
 │   └── evaluate.py          # Benchmark vs GLM-5.2, Claude, GPT-4o
+├── deploy/                  # VPS deployment configs
+│   ├── nginx.conf           # Nginx reverse proxy config
+│   └── vps-deploy.sh        # One-command VPS deployment script
+├── roadmap.html             # Interactive animated roadmap page
 ├── LICENSE
 └── ROADMAP.md
 ```
@@ -510,6 +664,29 @@ MIT — see [LICENSE](LICENSE)
 <div align="center">
 
 <sub style="opacity: 0.3;">&middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot;</sub>
+
+<br>
+
+## Made with 💚 and a lot of ☕
+
+<table>
+<tr>
+<td style="border: 1px solid rgba(34,197,94,0.1); background: linear-gradient(135deg, rgba(34,197,94,0.05), rgba(34,197,94,0.01)); padding: 28px; border-radius: 16px; backdrop-filter: blur(10px);">
+
+<h3 align="center">🌿 Spread Positivity 🌿</h3>
+
+<p align="center" style="color: #94a3b8; max-width: 500px; margin: 0 auto;">
+Sensei was built on a simple belief: <b style="color: #4ade80;">AI should be accessible to everyone</b>.<br>
+Free, open source, private. No paywalls, no tracking, no gatekeeping.<br><br>
+Every conversation you have with Sensei saves tokens, saves money, and saves energy.<br>
+That's better for you, better for the planet, and better for the future of AI. 🌍<br><br>
+<b style="color: #c084fc;">Be kind to yourself. Be kind to others. Build cool things.</b> ✨<br>
+You've got this. 🚀
+</p>
+
+</td>
+</tr>
+</table>
 
 <br>
 
