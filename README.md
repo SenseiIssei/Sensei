@@ -110,6 +110,7 @@ All your data stays on your machine. No tracking, no telemetry, no cloud depende
 
 - **Docker Compose** — One command for full stack + optional Ollama
 - **Cross-platform** — Linux, Windows, macOS
+- **Production-ready** — Production Dockerfile, non-root user, health checks
 - **Multi-stage builds** — Optimized image sizes
 - **GPU support** — Optional NVIDIA GPU profile for Ollama
 
@@ -145,6 +146,7 @@ The installer will:
 
 You just pick your models and paste API keys — the installer handles the rest.
 
+### Option 1: Docker (recommended)
 
 ```bash
 git clone https://github.com/SenseiIssei/Sensei.git
@@ -200,25 +202,6 @@ pytest -v
 ```
 
 > 📋 **[View the Interactive Roadmap &rarr;](roadmap.html)**** — a beautiful, animated, glassy page showing all planned features, enterprise plans, and the Sensei-1 model vision.**
-
-### Option 4: VPS Deployment (Public Chat like Claude/ChatGPT)
-
-Deploy Sensei as a public chat app on your VPS — users can register, log in, and chat just like Claude or ChatGPT.
-
-```bash
-# On your VPS (Ubuntu/Debian), as root:
-```
-
-The script installs everything: Docker, Nginx, SSL (Let's Encrypt), and starts the app.
-
-**Routing:**
-
-**To update later:**
-```bash
-git pull
-cd frontend && npm run build && cd ..
-docker compose restart
-```
 
 ## Architecture
 
