@@ -6,6 +6,7 @@ User data is stored in a simple JSON file (easily swapable for a database).
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -79,7 +80,7 @@ def _create_token(user_id: str, email: str) -> str:
     }
     payload_json = json.dumps(payload, separators=(",", ":"))
     payload_b64 = _b64_encode(payload_json)
-    sig = hashlib.hmac.new(JWT_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+    sig = hmac.new(JWT_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
     return f"{payload_b64}.{sig}"
 
 
@@ -102,7 +103,7 @@ def verify_token(token: str) -> Optional[dict]:
         if len(parts) != 2:
             return None
         payload_b64, sig = parts
-        expected_sig = hashlib.hmac.new(JWT_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+        expected_sig = hmac.new(JWT_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
         if not secrets.compare_digest(sig, expected_sig):
             return None
         payload = json.loads(_b64_decode(payload_b64))
