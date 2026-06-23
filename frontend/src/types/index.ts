@@ -6,6 +6,13 @@ export interface FileReference {
   dataUrl?: string;
 }
 
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  created_at: number;
+}
+
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
