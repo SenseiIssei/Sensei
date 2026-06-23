@@ -117,6 +117,16 @@ async def list_available_models() -> list[ModelInfo]:
             "zai": "Z.ai",
             "openrouter": "OpenRouter",
             "huggingface": "HuggingFace",
+            "openai": "OpenAI",
+            "anthropic": "Anthropic (Claude)",
+            "google": "Google Gemini",
+            "groq": "Groq",
+            "mistral": "Mistral",
+            "together": "Together AI",
+            "deepseek": "DeepSeek",
+            "cohere": "Cohere",
+            "fireworks": "Fireworks AI",
+            "perplexity": "Perplexity",
             "custom": "Custom",
         }
         label = provider_labels.get(settings.api_provider, settings.api_provider)

@@ -145,8 +145,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
 
 ### v0.1.0 (Initial Release)
 - Token compression pipeline (60-95% reduction)
-- Multi-provider support: Ollama, OpenRouter, Z.ai, HuggingFace
+- 14+ model providers: Ollama, OpenAI, Claude, Gemini, OpenRouter, Groq, DeepSeek, Mistral, Together AI, Cohere, Fireworks, Perplexity, Z.ai, HuggingFace
+- One-command installer (`python install.py`) with interactive provider selection
 - Web UI, Qt GUI, CLI, REST API
 - Per-user sessions, auth, rate limiting, data encryption
-- Docker Compose deployment
+- Docker Compose deployment with optional Ollama GPU profile
 - Comprehensive test suite
