@@ -20,6 +20,7 @@ frontend/node_modules/
 .sensei_cache/
 .sensei_memory/
 .sensei_sessions/
+.sensei_users.json
 /models/
 *.gguf
 *.safetensors

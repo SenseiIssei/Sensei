@@ -128,10 +128,12 @@ async def health() -> dict[str, str]:
 
 
 # Register routers
+from sensei.routers.auth import router as auth_router  # noqa: E402
 from sensei.routers.chat import router as chat_router  # noqa: E402
 from sensei.routers.models import router as models_router  # noqa: E402
 from sensei.routers.stats import router as stats_router  # noqa: E402
 
+app.include_router(auth_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
 app.include_router(stats_router, prefix="/api")

@@ -37,13 +37,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     # Paths that don't require auth
     PUBLIC_PATHS = {"/", "/health", "/docs", "/openapi.json", "/redoc"}
+    PUBLIC_PREFIXES = ("/api/health", "/api/auth/")
 
     async def dispatch(self, request: Request, call_next):
         if not settings.auth_enabled:
             return await call_next(request)
 
         path = request.url.path
-        if path in self.PUBLIC_PATHS or path.startswith("/api/health"):
+        if path in self.PUBLIC_PATHS or any(path.startswith(p) for p in self.PUBLIC_PREFIXES):
             return await call_next(request)
 
         if not check_auth(request):
