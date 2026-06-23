@@ -8,6 +8,7 @@ import {
   Cpu,
   Zap,
   X,
+  Search,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Conversation } from "@/types";
@@ -35,6 +36,7 @@ export function Sidebar({
   tokensSaved,
 }: SidebarProps) {
   const [models, setModels] = useState<{ id: string; name: string; status: string }[]>([]);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     api.getModels().then((data) => {
@@ -42,17 +44,21 @@ export function Sidebar({
     }).catch(() => {});
   }, []);
 
+  const filteredConversations = conversations.filter(c =>
+    c.title.toLowerCase().includes(search.toLowerCase())
+  );
+
   return (
-    <div className="w-72 bg-gray-900 border-r border-gray-800 flex flex-col h-full">
+    <div className="w-72 glass border-r border-gray-800/50 flex flex-col h-full">
       {/* Logo */}
-      <div className="px-4 py-4 border-b border-gray-800">
+      <div className="px-4 py-4 border-b border-gray-800/50">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-sensei-600 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-sensei-600 flex items-center justify-center glow-text">
             <span className="text-white font-bold text-lg">S</span>
           </div>
           <div>
             <h1 className="font-bold text-lg text-white">Sensei</h1>
-            <p className="text-xs text-gray-500">GLM-5.2 · Self-hosted</p>
+            <p className="text-xs text-gray-500">14+ providers · Self-hosted</p>
           </div>
         </div>
       </div>
@@ -68,22 +74,36 @@ export function Sidebar({
         </button>
       </div>
 
+      {/* Search */}
+      <div className="px-3 pb-2">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-600" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search conversations..."
+            className="w-full glass text-sm text-gray-300 rounded-lg pl-8 pr-3 py-2 border border-gray-700/50 focus:border-sensei-600/50 focus:outline-none"
+          />
+        </div>
+      </div>
+
       {/* Conversations */}
       <div className="flex-1 overflow-y-auto scrollbar-thin px-2">
         <div className="space-y-1">
-          {conversations.length === 0 && (
+          {filteredConversations.length === 0 && (
             <p className="text-xs text-gray-600 px-3 py-4 text-center">
-              No conversations yet
+              {search ? "No matches found" : "No conversations yet"}
             </p>
           )}
-          {conversations.map((conv) => (
+          {filteredConversations.map((conv) => (
             <div
               key={conv.id}
               className={clsx(
                 "group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors",
                 activeConversationId === conv.id
-                  ? "bg-gray-800 text-white"
-                  : "text-gray-400 hover:bg-gray-800/50"
+                  ? "glass text-white"
+                  : "text-gray-400 hover:bg-white/5"
               )}
               onClick={() => onSelectConversation(conv.id)}
             >
@@ -104,8 +124,8 @@ export function Sidebar({
       </div>
 
       {/* Token Savings Badge */}
-      <div className="px-3 py-2 border-t border-gray-800">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800/50">
+      <div className="px-3 py-2 border-t border-gray-800/50">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg glass">
           <Zap className="w-4 h-4 text-sensei-400" />
           <div className="flex-1">
             <p className="text-xs text-gray-500">Tokens Saved</p>
@@ -117,8 +137,8 @@ export function Sidebar({
       </div>
 
       {/* Model Status */}
-      <div className="px-3 py-2 border-t border-gray-800">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800/50">
+      <div className="px-3 py-2 border-t border-gray-800/50">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg glass">
           <Cpu className="w-4 h-4 text-gray-400" />
           <div className="flex-1 min-w-0">
             <p className="text-xs text-gray-500">Model</p>
@@ -138,17 +158,17 @@ export function Sidebar({
       </div>
 
       {/* Bottom Actions */}
-      <div className="p-3 border-t border-gray-800 flex gap-2">
+      <div className="p-3 border-t border-gray-800/50 flex gap-2">
         <button
           onClick={onOpenStats}
-          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-colors text-sm"
+          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg glass glass-hover text-gray-400 hover:text-white transition-colors text-sm"
         >
           <BarChart3 className="w-4 h-4" />
           Stats
         </button>
         <button
           onClick={onOpenSettings}
-          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-colors text-sm"
+          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg glass glass-hover text-gray-400 hover:text-white transition-colors text-sm"
         >
           <Settings className="w-4 h-4" />
           Settings

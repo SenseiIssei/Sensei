@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import type { ChatMessage, WSMessage } from "@/types";
+import type { ChatMessage, FileReference, WSMessage } from "@/types";
 
 const WS_URL = `ws://${window.location.hostname}:7000/api/chat/ws`;
 
@@ -13,34 +13,35 @@ export function useChat(options?: UseChatOptions) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [tokensSaved, setTokensSaved] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string | undefined>(undefined);
   const wsRef = useRef<WebSocket | null>(null);
 
   const sendMessage = useCallback(
-    (content: string, model?: string) => {
+    (content: string, model?: string, files?: FileReference[]) => {
       if (!content.trim() || isStreaming) return;
 
       setError(null);
       setIsStreaming(true);
 
-      // Add user message immediately
-      const userMsg: ChatMessage = { role: "user", content, timestamp: Date.now() };
+      const userMsg: ChatMessage = { role: "user", content, timestamp: Date.now(), files, model };
       setMessages((prev) => [...prev, userMsg]);
 
-      // Add empty assistant message for streaming
-      const assistantMsg: ChatMessage = { role: "assistant", content: "", timestamp: Date.now() };
+      const assistantMsg: ChatMessage = { role: "assistant", content: "", timestamp: Date.now(), model };
       setMessages((prev) => [...prev, assistantMsg]);
 
       const ws = new WebSocket(WS_URL);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        ws.send(
-          JSON.stringify({
-            message: content,
-            conversation_id: conversationId,
-            model,
-          })
-        );
+        const payload: Record<string, unknown> = {
+          message: content,
+          conversation_id: conversationId,
+          model: model || selectedModel,
+        };
+        if (files && files.length > 0) {
+          payload.files = files.map(f => ({ name: f.name, type: f.type, size: f.size }));
+        }
+        ws.send(JSON.stringify(payload));
       };
 
       ws.onmessage = (event) => {
@@ -51,6 +52,16 @@ export function useChat(options?: UseChatOptions) {
             case "meta":
               setConversationId(data.conversation_id);
               setTokensSaved((prev) => prev + data.tokens_saved);
+              if (data.model) {
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last && last.role === "assistant") {
+                    updated[updated.length - 1] = { ...last, model: data.model, tokensSaved: data.tokens_saved };
+                  }
+                  return updated;
+                });
+              }
               options?.onMeta?.({
                 conversationId: data.conversation_id,
                 tokensSaved: data.tokens_saved,
@@ -86,7 +97,7 @@ export function useChat(options?: UseChatOptions) {
       };
 
       ws.onerror = () => {
-        setError("WebSocket connection error");
+        setError("WebSocket connection error — is the backend running on port 7000?");
         setIsStreaming(false);
       };
 
@@ -94,8 +105,16 @@ export function useChat(options?: UseChatOptions) {
         setIsStreaming(false);
       };
     },
-    [conversationId, isStreaming, options]
+    [conversationId, isStreaming, options, selectedModel]
   );
+
+  const cancelStreaming = useCallback(() => {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    setIsStreaming(false);
+  }, []);
 
   const clearMessages = useCallback(() => {
     setMessages([]);
@@ -120,8 +139,11 @@ export function useChat(options?: UseChatOptions) {
     conversationId,
     tokensSaved,
     error,
+    selectedModel,
     sendMessage,
+    cancelStreaming,
     clearMessages,
     loadConversation,
+    setSelectedModel,
   };
 }

@@ -16,9 +16,12 @@ export default function App() {
     conversationId,
     tokensSaved,
     error,
+    selectedModel,
     sendMessage,
+    cancelStreaming,
     clearMessages,
     loadConversation,
+    setSelectedModel,
   } = useChat();
 
   const refreshConversations = useCallback(async () => {
@@ -89,7 +92,10 @@ export default function App() {
         isStreaming={isStreaming}
         tokensSaved={tokensSaved}
         error={error}
+        selectedModel={selectedModel}
         onSend={sendMessage}
+        onCancel={cancelStreaming}
+        onSelectModel={setSelectedModel}
       />
       <StatsPanel open={showStats} onClose={() => setShowStats(false)} />
       <SettingsPanel open={showSettings} onClose={() => setShowSettings(false)} />
