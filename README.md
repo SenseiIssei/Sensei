@@ -19,6 +19,7 @@
 <a href="https://react.dev"><img src="https://img.shields.io/badge/React-18-61dafb?style=for-the-badge&logo=react&logoColor=black" alt="React 18"></a>
 <a href="docker-compose.yml"><img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker"></a>
 <a href="#contributing"><img src="https://img.shields.io/badge/PRs-Welcome-f59e0b?style=for-the-badge&logo=github&logoColor=white" alt="PRs Welcome"></a>
+<a href="https://discord.com/users/senseiissei"><img src="https://img.shields.io/badge/Discord-senseiissei-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
 
 <br><br>
 
@@ -418,6 +419,13 @@ Sensei/
 │   └── package.json
 ├── docker-compose.yml
 ├── .env.example
+├── training/                # Sensei-1 model fine-tuning pipeline
+│   ├── configs/             # LoRA, QLoRA, DPO configs
+│   ├── train.py             # Training script
+│   ├── prepare_data.py      # Convert conversations to training data
+│   ├── export.py            # Merge LoRA + export
+│   ├── quantize.py          # GGUF/AWQ/GPTQ quantization
+│   └── evaluate.py          # Benchmark vs GLM-5.2, Claude, GPT-4o
 ├── LICENSE
 └── ROADMAP.md
 ```
@@ -438,14 +446,16 @@ Test coverage:
 
 ## Contributing
 
-Contributions are welcome! See [ROADMAP.md](ROADMAP.md) for planned features.
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
+
+> **Note:** The `main` branch is protected — all changes go through Pull Request review. Fork the repo, create a branch, and open a PR!
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Run tests (`pytest -v`)
-4. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Commit changes (`git commit -m 'feat: add amazing feature'`)
 5. Push to branch (`git push origin feature/amazing-feature`)
-6. Open a Pull Request
+6. Open a Pull Request — requires 1 approving review
 
 ## Acknowledgments
 
@@ -454,10 +464,21 @@ Contributions are welcome! See [ROADMAP.md](ROADMAP.md) for planned features.
 - [GLM-5.2](https://github.com/zai-org/GLM-5.2) — Zhipu AI / Z.ai for the open-source model
 - [Ollama](https://ollama.com) — Local model serving
 - [OpenRouter](https://openrouter.ai) — API model access
+- [OpenClaw](https://github.com/openclaw/openclaw) — Multi-channel AI assistant inspiration
 
 ## License
 
 MIT — see [LICENSE](LICENSE)
+
+## Community
+
+<div align="center">
+
+<a href="https://discord.com/users/senseiissei"><img src="https://img.shields.io/badge/Add_me_on_Discord-senseiissei-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
+&emsp;
+<a href="https://ko-fi.com/senseiissei"><img src="https://img.shields.io/badge/Support_on_Ko--fi-senseiissei-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
+
+</div>
 
 ## ☕ Support the Project
 

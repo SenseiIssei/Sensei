@@ -1,0 +1,47 @@
+# Sensei-1 QLoRA Training Config (4-bit quantized base)
+model:
+  base_model: "THUDM/glm-5.2-744b"
+  trust_remote_code: true
+  torch_dtype: "bfloat16"
+  quantization:
+    load_in_4bit: true
+    bnb_4bit_quant_type: "nf4"
+    bnb_4bit_compute_dtype: "bfloat16"
+    bnb_4bit_use_double_quant: true
+
+lora:
+  r: 128
+  lora_alpha: 256
+  target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+  lora_dropout: 0.05
+  bias: "none"
+  task_type: "CAUSAL_LM"
+
+training:
+  output_dir: "./qlora_output"
+  num_train_epochs: 5
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 16
+  learning_rate: 1.0e-4
+  warmup_ratio: 0.03
+  lr_scheduler_type: "cosine"
+  logging_steps: 10
+  save_strategy: "steps"
+  save_steps: 500
+  save_total_limit: 3
+  bf16: true
+  gradient_checkpointing: true
+  max_seq_length: 16384
+  optim: "paged_adamw_8bit"
+  weight_decay: 0.0
+  max_grad_norm: 1.0
+
+data:
+  train_file: "training_data.jsonl"
+  eval_file: "eval_data.jsonl"
+  compression_aware: true
+  ccr_examples_ratio: 0.3
+
+wandb:
+  project: "sensei-1"
+  run_name: "qlora-v0.1"
