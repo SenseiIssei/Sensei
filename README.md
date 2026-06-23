@@ -1,24 +1,59 @@
 <div align="center">
 
-# Sensei
+<br>
 
-### Self-hosted AI workspace with token compression, powered by GLM-5.2
+<!-- Premium header with glassmorphism-inspired design -->
+<img src="frontend/public/sensei.svg" width="120" height="120" alt="Sensei" />
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
-[![React 18](https://img.shields.io/badge/React-18-61dafb.svg)](https://react.dev)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](docker-compose.yml)
-[![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg)](#contributing)
+<br>
 
-**Free · Open Source · Self-hosted · Privacy-first**
+<h1 style="font-size: 3em; font-weight: 800; letter-spacing: -0.03em;">Sensei</h1>
 
-[Quick Start](#quick-start) · [Features](#features) · [Architecture](#architecture) · [Performance](#performance) · [Roadmap](ROADMAP.md) · [Donate](#--support-the-project)
+<h3 style="font-weight: 300; opacity: 0.7;">The self-hosted AI workspace that thinks in compressed dreams.</h3>
+
+<br>
+
+<!-- Badges -->
+<a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge&logo=opensourceinitiative&logoColor=white" alt="MIT License"></a>
+<a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.11+"></a>
+<a href="https://react.dev"><img src="https://img.shields.io/badge/React-18-61dafb?style=for-the-badge&logo=react&logoColor=black" alt="React 18"></a>
+<a href="docker-compose.yml"><img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker"></a>
+<a href="#contributing"><img src="https://img.shields.io/badge/PRs-Welcome-f59e0b?style=for-the-badge&logo=github&logoColor=white" alt="PRs Welcome"></a>
+
+<br><br>
+
+<!-- Glassmorphism-style feature pills -->
+<table>
+<tr>
+<td align="center" style="border: none; background: rgba(255,255,255,0.03); backdrop-filter: blur(10px);">
+
+**Free Forever** &bull; **Open Source** &bull; **Self-Hosted** &bull; **Privacy-First** &bull; **Zero Telemetry**
+
+</td>
+</tr>
+</table>
+
+<br>
+
+<!-- Navigation with surreal twist -->
+<sub>descend into the workspace</sub>
+
+[Quick Start](#quick-start) &nbsp;&middot;&nbsp; [Features](#features) &nbsp;&middot;&nbsp; [Architecture](#architecture) &nbsp;&middot;&nbsp; [Performance](#performance) &nbsp;&middot;&nbsp; [Roadmap](ROADMAP.md) &nbsp;&middot;&nbsp; [Support](#--support-the-project)
+
+<br>
 
 </div>
 
----
+<!-- Surreal divider -->
+<div align="center">
+<sub style="opacity: 0.3;">&middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot;</sub>
+</div>
+
+<br>
 
 ## What is Sensei?
+
+> *Imagine an AI workspace that compresses your thoughts before they reach the model — like folding a letter into a paper crane, sending it across the void, and unfolding it perfectly on the other side. That's Sensei.*
 
 Sensei is a **free, open-source, self-hosted AI workspace** that combines:
 
@@ -26,34 +61,60 @@ Sensei is a **free, open-source, self-hosted AI workspace** that combines:
 - **[Odysseus](https://github.com/pewdiepie-archdaemon/odysseus)**-style self-hosted workspace design
 - **[GLM-5.2](https://github.com/zai-org/GLM-5.2)** — 744B MoE model with 1M token context (MIT license)
 
-All your data stays on your machine. No tracking, no telemetry, no cloud dependency.
+All your data stays on your machine. No tracking, no telemetry, no cloud dependency. Your thoughts never leave your orbit.
 
 ## Features
 
+<!-- Glassmorphism-inspired feature sections -->
+<table>
+<tr>
+<td width="50%" valign="top" style="border: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); padding: 20px; border-radius: 12px;">
+
 ### Core
-- **Token Compression Pipeline** — Automatically compresses prompts 60-95% before sending to the model
-- **Multi-Provider Support** — Ollama (local, free), OpenRouter, Z.ai, HuggingFace, or any OpenAI-compatible API
-- **Reversible Compression (CCR)** — Originals cached locally, retrievable by the model via tool calls
-- **Cross-session Memory** — Conversation history persists across restarts
+
+- **Token Compression Pipeline** — 60-95% prompt compression before the model sees it
+- **Multi-Provider Support** — Ollama (local, free), OpenRouter, Z.ai, HuggingFace
+- **Reversible Compression (CCR)** — Originals cached locally, retrievable by the model
+- **Cross-session Memory** — Conversations persist across restarts like dreams you can revisit
 - **KV Cache Alignment** — Stabilizes prompt prefixes for faster inference
 
+</td>
+<td width="50%" valign="top" style="border: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); padding: 20px; border-radius: 12px;">
+
 ### Interfaces
-- **Web UI** — React + TypeScript + TailwindCSS dark-themed chat interface
-- **Qt Desktop App** — PySide6 native desktop application (`python -m sensei.gui`)
-- **CLI** — Interactive console chat with slash commands (`python -m sensei.cli`)
+
+- **Web UI** — React + TypeScript + TailwindCSS dark glass interface
+- **Qt Desktop App** — PySide6 native desktop application
+- **CLI** — Interactive console chat with slash commands
 - **REST API** — Full FastAPI with WebSocket streaming, docs at `/docs`
 
-### Security and Privacy
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top" style="border: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); padding: 20px; border-radius: 12px;">
+
+### Security & Privacy
+
 - **Per-user sessions** — Each user gets isolated conversation history
-- **Local data encryption** — Data at rest is encrypted with machine-specific keys
+- **Local data encryption** — Data at rest encrypted with machine-specific keys
 - **Token-based auth** — Optional bearer token authentication
 - **Rate limiting** — Configurable sliding-window rate limiter
-- **Zero telemetry** — Nothing leaves your machine except the compressed prompt to your chosen model provider
+- **Zero telemetry** — Nothing leaves your machine except compressed prompts
+
+</td>
+<td width="50%" valign="top" style="border: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); padding: 20px; border-radius: 12px;">
 
 ### Deployment
-- **Docker Compose** — One command for full stack (backend + frontend + optional Ollama)
-- **Cross-platform** — Works on Linux, Windows, and macOS
-- **VPS-ready** — Production Dockerfile with non-root user, health checks, multi-stage build
+
+- **Docker Compose** — One command for full stack + optional Ollama
+- **Cross-platform** — Linux, Windows, macOS
+- **VPS-ready** — Production Dockerfile, non-root user, health checks
+- **Multi-stage builds** — Optimized image sizes
+- **GPU support** — Optional NVIDIA GPU profile for Ollama
+
+</td>
+</tr>
+</table>
 
 ## Quick Start
 
@@ -352,16 +413,41 @@ MIT — see [LICENSE](LICENSE)
 
 ## ☕ Support the Project
 
-If Sensei saves you tokens (and money), consider buying me a coffee!
-
-[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/senseiissei)
-
-Every donation helps fund development and server costs. Thank you!
-
----
+> *If Sensei folds your tokens into paper cranes and saves you money, consider leaving one at the shrine.*
 
 <div align="center">
 
-**[SenseiIssei/Sensei](https://github.com/SenseiIssei/Sensei)** · MIT License · Built for the open-source AI community
+<table>
+<tr>
+<td align="center" style="border: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); padding: 30px; border-radius: 16px;">
+
+<a href="https://ko-fi.com/senseiissei"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Buy me a coffee" width="200"></a>
+
+<br><br>
+
+<sub>Every donation helps fund development and server costs. Thank you.</sub>
+
+</td>
+</tr>
+</table>
+
+</div>
+
+<br>
+
+<!-- Surreal closing -->
+<div align="center">
+
+<sub style="opacity: 0.3;">&middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot; &middot;</sub>
+
+<br>
+
+**[SenseiIssei/Sensei](https://github.com/SenseiIssei/Sensei)**
+
+MIT License &bull; Built for the open-source AI community
+
+<br>
+
+<sub style="opacity: 0.4;">compress &middot; dream &middot; retrieve &middot; repeat</sub>
 
 </div>
