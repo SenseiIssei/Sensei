@@ -8,7 +8,7 @@ import { useChat } from "@/hooks/useChat";
 import type { ChatMessage, FileReference, Conversation } from "@/types";
 import { PROVIDERS as PROVIDER_LIST } from "@/types";
 
-const WS_URL = `ws://${window.location.hostname}:7000/api/chat/ws`;
+const WS_URL = `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/api/chat/ws`;
 
 export function PublicChat() {
   const {

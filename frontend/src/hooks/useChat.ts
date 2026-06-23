@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { ChatMessage, FileReference, WSMessage } from "@/types";
 
-const WS_URL = `ws://${window.location.hostname}:7000/api/chat/ws`;
+const WS_URL = `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/api/chat/ws`;
 
 interface UseChatOptions {
   onMeta?: (meta: { conversationId: string; tokensSaved: number; compressionEnabled: boolean }) => void;
