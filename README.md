@@ -73,7 +73,8 @@ All your data stays on your machine. No tracking, no telemetry, no cloud depende
 ### Core
 
 - **Token Compression Pipeline** — 60-95% prompt compression before the model sees it
-- **Multi-Provider Support** — Ollama (local, free), OpenRouter, Z.ai, HuggingFace
+- **14+ Model Providers** — Ollama, OpenAI, Claude, Gemini, OpenRouter, Groq, DeepSeek, Mistral, and more
+- **One-Command Installer** — `python install.py` sets up everything interactively
 - **Reversible Compression (CCR)** — Originals cached locally, retrievable by the model
 - **Cross-session Memory** — Conversations persist across restarts like dreams you can revisit
 - **KV Cache Alignment** — Stabilizes prompt prefixes for faster inference
@@ -117,6 +118,32 @@ All your data stays on your machine. No tracking, no telemetry, no cloud depende
 </table>
 
 ## Quick Start
+
+### Option 0: One-Command Installer (easiest)
+
+**Linux / macOS:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/SenseiIssei/Sensei/main/install.sh | bash
+```
+
+**Windows / Any OS:**
+```bash
+git clone https://github.com/SenseiIssei/Sensei.git
+cd Sensei
+python install.py
+```
+
+The installer will:
+1. Check prerequisites automatically
+2. Install all dependencies
+3. Show you all 14+ model providers to choose from
+4. Let you enter API keys interactively (or skip for later)
+5. Generate your `.env` file
+6. Optionally pull Ollama models
+7. Run tests to verify everything works
+8. Start the server
+
+You just pick your models and paste API keys — the installer handles the rest.
 
 ### Option 1: Docker (recommended for VPS)
 
@@ -272,7 +299,7 @@ All settings via environment variables (see [`.env.example`](.env.example)):
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SENSEI_MODEL_PROVIDER` | `auto` | `auto`, `local`, or `api` |
-| `SENSEI_API_PROVIDER` | `openrouter` | `openrouter`, `zai`, `huggingface`, `custom` |
+| `SENSEI_API_PROVIDER` | `openrouter` | `ollama`, `openrouter`, `groq`, `google`, `huggingface`, `zai`, `openai`, `anthropic`, `deepseek`, `mistral`, `together`, `cohere`, `fireworks`, `perplexity`, `custom` |
 | `SENSEI_OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
 | `SENSEI_OPENROUTER_API_KEY` | | OpenRouter API key |
 | `SENSEI_ZAI_API_KEY` | | Z.ai API key |
@@ -282,31 +309,52 @@ All settings via environment variables (see [`.env.example`](.env.example)):
 | `SENSEI_RATE_LIMIT_ENABLED` | `true` | Enable rate limiting |
 | `SENSEI_DATA_ENCRYPTION_ENABLED` | `true` | Encrypt data at rest |
 
-## Model Provider Setup
+## Model Providers
 
-### Ollama (free, local, no API key)
+Sensei supports **14+ model providers** — pick one or use multiple. Free providers need no payment.
+
+<!-- Glassmorphism-style provider table -->
+<table>
+<tr>
+<th>Provider</th>
+<th>Models</th>
+<th>Tier</th>
+<th>Get API Key</th>
+</tr>
+<tr><td><b>Ollama</b></td><td>GLM-5.2, Llama 3.3, Qwen, any GGUF</td><td>🟢 Free (local)</td><td><a href="https://ollama.com">ollama.com</a></td></tr>
+<tr><td><b>OpenRouter</b></td><td>All models (aggregator)</td><td>🟢 Free tier</td><td><a href="https://openrouter.ai/keys">openrouter.ai/keys</a></td></tr>
+<tr><td><b>Groq</b></td><td>Llama 3.3 70B, Mixtral (ultra-fast)</td><td>🟢 Free tier</td><td><a href="https://console.groq.com/keys">console.groq.com</a></td></tr>
+<tr><td><b>Google Gemini</b></td><td>Gemini 2.0 Flash, Pro</td><td>🟢 Free tier</td><td><a href="https://aistudio.google.com/apikey">aistudio.google.com</a></td></tr>
+<tr><td><b>HuggingFace</b></td><td>GLM-5.2, thousands of models</td><td>🟢 Free</td><td><a href="https://huggingface.co/settings/tokens">huggingface.co</a></td></tr>
+<tr><td><b>Z.ai</b></td><td>GLM-5.2 (original)</td><td>🟡 Paid</td><td><a href="https://open.bigmodel.cn">open.bigmodel.cn</a></td></tr>
+<tr><td><b>OpenAI</b></td><td>GPT-4o, o1, o3</td><td>🟣 Premium</td><td><a href="https://platform.openai.com/api-keys">platform.openai.com</a></td></tr>
+<tr><td><b>Anthropic</b></td><td>Claude 3.5 Sonnet, Opus, Haiku</td><td>🟣 Premium</td><td><a href="https://console.anthropic.com/settings/keys">console.anthropic.com</a></td></tr>
+<tr><td><b>DeepSeek</b></td><td>DeepSeek V3, R1 (cheap & powerful)</td><td>🟣 Premium</td><td><a href="https://platform.deepseek.com/api_keys">platform.deepseek.com</a></td></tr>
+<tr><td><b>Mistral</b></td><td>Mistral Large, Codestral</td><td>🟣 Premium</td><td><a href="https://console.mistral.ai/api-keys">console.mistral.ai</a></td></tr>
+<tr><td><b>Together AI</b></td><td>Llama, Qwen, DeepSeek</td><td>🟣 Premium</td><td><a href="https://api.together.xyz/settings/api-keys">api.together.xyz</a></td></tr>
+<tr><td><b>Cohere</b></td><td>Command R+</td><td>🟣 Premium</td><td><a href="https://dashboard.cohere.com/api-keys">dashboard.cohere.com</a></td></tr>
+<tr><td><b>Fireworks AI</b></td><td>Llama, Qwen (fast inference)</td><td>🟣 Premium</td><td><a href="https://fireworks.ai/apikeys">fireworks.ai</a></td></tr>
+<tr><td><b>Perplexity</b></td><td>Sonar (online search-augmented)</td><td>🟣 Premium</td><td><a href="https://www.perplexity.ai/settings/api">perplexity.ai</a></td></tr>
+</table>
+
+> **Just want to get started?** Run `python install.py` and pick Ollama (free, local) or OpenRouter (free tier, all models). You can always add more providers later by editing `.env`.
+
+### Quick manual setup
+
+**Ollama (free, local, no API key):**
 ```bash
-# Install: https://ollama.com
-ollama pull glm-5.2
-# Sensei auto-detects Ollama — no config needed
+ollama pull glm-5.2  # Sensei auto-detects Ollama
 ```
 
-### OpenRouter (recommended API)
+**Any API provider:**
 ```bash
-# Get key: https://openrouter.ai/keys
-echo "SENSEI_OPENROUTER_API_KEY=sk-or-..." >> .env
-```
+# Example: OpenAI
+echo "SENSEI_API_PROVIDER=openai" >> .env
+echo "SENSEI_OPENAI_API_KEY=sk-..." >> .env
 
-### Z.ai (original GLM provider)
-```bash
-# Get key: https://open.bigmodel.cn
-echo "SENSEI_ZAI_API_KEY=..." >> .env
-```
-
-### HuggingFace
-```bash
-# Get key: https://huggingface.co/settings/tokens
-echo "SENSEI_HUGGINGFACE_API_KEY=hf_..." >> .env
+# Example: Claude
+echo "SENSEI_API_PROVIDER=anthropic" >> .env
+echo "SENSEI_ANTHROPIC_API_KEY=sk-ant-..." >> .env
 ```
 
 ## Tech Stack
@@ -325,6 +373,8 @@ echo "SENSEI_HUGGINGFACE_API_KEY=hf_..." >> .env
 
 ```
 Sensei/
+├── install.py                # One-command installer (interactive)
+├── install.sh                # Shell installer for Linux/macOS
 ├── backend/
 │   ├── sensei/
 │   │   ├── config.py          # Pydantic settings
