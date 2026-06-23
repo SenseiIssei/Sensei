@@ -18,18 +18,18 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <HashRouter>
       <Routes>
-        {/* Secret dev panel — only accessible via /#/devpanel */}
-        <Route path="/devpanel" element={<App />} />
+        {/* Main app — devpanel is the landing page */}
+        <Route path="/" element={<App />} />
 
-        {/* Auth page */}
-        <Route path="/auth" element={<AuthPage />} />
-
-        {/* Public chat — main landing */}
-        <Route path="/" element={
+        {/* Public chat — accessible under Jakobs Stuff */}
+        <Route path="/chat" element={
           <ProtectedRoute>
             <PublicChat />
           </ProtectedRoute>
         } />
+
+        {/* Auth page */}
+        <Route path="/auth" element={<AuthPage />} />
 
         {/* Catch-all redirect to home */}
         <Route path="*" element={<Navigate to="/" replace />} />

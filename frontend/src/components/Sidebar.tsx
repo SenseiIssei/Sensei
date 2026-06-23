@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   MessageSquarePlus,
   Trash2,
@@ -9,6 +10,9 @@ import {
   Zap,
   X,
   Search,
+  MessageCircle,
+  FolderClosed,
+  ChevronDown,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Conversation } from "@/types";
@@ -37,6 +41,8 @@ export function Sidebar({
 }: SidebarProps) {
   const [models, setModels] = useState<{ id: string; name: string; status: string }[]>([]);
   const [search, setSearch] = useState("");
+  const [jakobsOpen, setJakobsOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     api.getModels().then((data) => {
@@ -61,6 +67,29 @@ export function Sidebar({
             <p className="text-xs text-gray-500">14+ providers · Self-hosted</p>
           </div>
         </div>
+      </div>
+
+      {/* Jakobs Stuff */}
+      <div className="p-3 border-b border-gray-800/50">
+        <button
+          onClick={() => setJakobsOpen(!jakobsOpen)}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg glass glass-hover text-gray-300 hover:text-white transition-colors text-sm font-medium"
+        >
+          <FolderClosed className="w-4 h-4" />
+          Jakobs Stuff
+          <ChevronDown className={clsx("w-3.5 h-3.5 ml-auto transition-transform", jakobsOpen && "rotate-180")} />
+        </button>
+        {jakobsOpen && (
+          <div className="mt-2 ml-2 space-y-1">
+            <button
+              onClick={() => navigate("/chat")}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-400 hover:bg-white/5 hover:text-white transition-colors text-sm"
+            >
+              <MessageCircle className="w-4 h-4" />
+              Chat
+            </button>
+          </div>
+        )}
       </div>
 
       {/* New Chat */}
