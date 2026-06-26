@@ -90,6 +90,31 @@ class TestTextCompressor:
         result = comp.compress(text)
         assert result.count("\n\n\n") == 0
 
+    def test_replace_verbose_phrases(self):
+        comp = TextCompressor()
+        result = comp.compress("We did it due to the fact that it was required.")
+        assert "due to the fact that" not in result
+        assert "because" in result
+
+    def test_remove_filler_words(self):
+        comp = TextCompressor()
+        result = comp.compress("This is, in fact, basically a really simple example.")
+        assert "in fact" not in result
+        assert "basically" not in result
+        # Filler-heavy prose should get meaningfully shorter.
+        assert len(result) < len("This is, in fact, basically a really simple example.")
+
+    def test_clean_prose_preserved(self):
+        comp = TextCompressor()
+        clean = "The pipeline routes each block to the right compressor."
+        # No filler/verbosity to remove — content should survive intact.
+        assert comp.compress(clean) == clean
+
+    def test_sentence_capitalization_restored(self):
+        comp = TextCompressor()
+        result = comp.compress("In order to win, you must try.")
+        assert result[0].isupper()
+
 
 class TestContentRouter:
     def test_detect_json(self):
