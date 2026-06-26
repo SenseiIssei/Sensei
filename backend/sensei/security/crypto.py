@@ -9,57 +9,75 @@ from sensei.config import settings
 
 logger = logging.getLogger(__name__)
 
-# XOR-based simple encryption for local data at rest.
-# For production use, consider using cryptography library's Fernet.
-# This keeps zero external dependencies while providing basic obfuscation.
+# Authenticated AES-256-GCM for local data at rest, with a zero-dependency XOR
+# fallback when the `cryptography` package isn't installed. The machine-derived
+# key ties data to this machine; GCM additionally detects tampering.
+
+try:  # pragma: no cover - depends on whether `cryptography` is installed
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    _HAS_AES = True
+except ImportError:
+    AESGCM = None  # type: ignore[assignment]
+    _HAS_AES = False
+
+# 1-byte mode tags so a blob can be decrypted without out-of-band metadata.
+_TAG_AES = b"A"
+_TAG_XOR = b"X"
 
 
 class LocalCrypto:
-    """Simple local data encryption for at-rest protection.
+    """Local data encryption for at-rest protection.
 
-    Uses XOR-based stream cipher with a machine-specific key derived
-    from the machine's hostname + user + app salt. This ensures data
-    is obfuscated on disk and tied to the local machine.
-
-    For stronger encryption, install the cryptography package and
-    set SENSEI_DATA_ENCRYPTION_ENABLED=true.
+    Uses **AES-256-GCM** (authenticated) when ``cryptography`` is available,
+    deriving a 256-bit key from a machine-specific id + app salt. Falls back to
+    an XOR stream cipher (obfuscation only) so installs without the optional
+    dependency keep working. Legacy XOR files written by older versions are
+    still readable.
     """
 
     SALT = b"sensei_local_data_protection_v1"
 
     def __init__(self, key: bytes | None = None):
-        if key is not None:
-            self._key = key
-        else:
-            self._key = self._derive_machine_key()
+        self._key = key if key is not None else self._derive_machine_key()
+        # AES needs exactly 32 bytes; hash whatever we were given.
+        self._aes = AESGCM(hashlib.sha256(self._key).digest()) if _HAS_AES else None
 
     def _derive_machine_key(self) -> bytes:
         """Derive a machine-specific key from environment."""
-        machine_id = f"{os.getlogin()}@{os.uname().nodename if hasattr(os, 'uname') else 'localhost'}"
+        node = os.uname().nodename if hasattr(os, "uname") else os.environ.get("COMPUTERNAME", "localhost")
+        machine_id = f"{os.getlogin()}@{node}"
         return hashlib.sha256(machine_id.encode() + self.SALT).digest()
 
     def encrypt(self, data: str | bytes) -> bytes:
-        """Encrypt data using XOR stream cipher."""
-        if isinstance(data, str):
-            data = data.encode("utf-8")
-        return self._xor(data)
+        """Encrypt data, returning a self-describing blob (mode tag + payload)."""
+        raw = data.encode("utf-8") if isinstance(data, str) else data
+        if self._aes is not None:
+            nonce = os.urandom(12)
+            return _TAG_AES + nonce + self._aes.encrypt(nonce, raw, None)
+        return _TAG_XOR + self._xor(raw)
 
     def decrypt(self, data: bytes) -> str:
-        """Decrypt data and return as string."""
+        """Decrypt a blob produced by ``encrypt`` (or legacy untagged XOR)."""
+        if data[:1] == _TAG_AES and self._aes is not None:
+            nonce, ct = data[1:13], data[13:]
+            return self._aes.decrypt(nonce, ct, None).decode("utf-8")
+        if data[:1] == _TAG_XOR:
+            return self._xor(data[1:]).decode("utf-8")
+        # Legacy: untagged XOR payload (pre-AES versions).
         return self._xor(data).decode("utf-8")
 
     def encrypt_file(self, path: Path, content: str) -> None:
-        """Encrypt content and write to file."""
-        encrypted = self.encrypt(content)
-        # Write with a magic header to identify encrypted files
-        path.write_bytes(b"SENSEI_ENC:" + encrypted)
+        """Encrypt content and write to file with a versioned magic header."""
+        path.write_bytes(b"SENSEI_ENC2:" + self.encrypt(content))
 
     def decrypt_file(self, path: Path) -> str | None:
-        """Read and decrypt a file. Returns None if not encrypted."""
+        """Read and decrypt a file. Returns None if it can't be decoded."""
         data = path.read_bytes()
-        if data.startswith(b"SENSEI_ENC:"):
-            return self.decrypt(data[len(b"SENSEI_ENC:"):])
-        # Fallback: return as plain text
+        if data.startswith(b"SENSEI_ENC2:"):
+            return self.decrypt(data[len(b"SENSEI_ENC2:"):])
+        if data.startswith(b"SENSEI_ENC:"):  # legacy XOR container
+            return self._xor(data[len(b"SENSEI_ENC:"):]).decode("utf-8")
         try:
             return data.decode("utf-8")
         except UnicodeDecodeError:
@@ -80,3 +98,8 @@ def get_crypto() -> LocalCrypto:
     if _crypto is None:
         _crypto = LocalCrypto()
     return _crypto
+
+
+def encryption_backend() -> str:
+    """Return the active backend name for diagnostics ('aes-256-gcm' or 'xor')."""
+    return "aes-256-gcm" if _HAS_AES else "xor"
