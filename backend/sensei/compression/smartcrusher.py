@@ -29,8 +29,85 @@ class SmartCrusher:
         except (json.JSONDecodeError, ValueError):
             return json_str
 
+        # Biggest win: a homogeneous array of dicts (the shape of almost every
+        # list / search / tool output) renders far cheaper as a CSV-schema table
+        # than as JSON — no repeated keys, quotes, or per-row braces. Lossless.
+        if isinstance(data, list) and self._is_table(data):
+            return self._to_csv_schema(data)
+
         compressed = self._compress_value(data)
         return json.dumps(compressed, separators=(",", ":"), ensure_ascii=False)
+
+    # ─── CSV-schema tabular compaction (lossless) ────────────────────────────
+
+    def _is_table(self, lst: list) -> bool:
+        """True if `lst` is a homogeneous array of dicts worth tabulating."""
+        if len(lst) < 3 or not all(isinstance(x, dict) for x in lst):
+            return False
+        common = set.intersection(*(set(d.keys()) for d in lst))
+        return len(common) >= 2
+
+    def _to_csv_schema(self, lst: list[dict]) -> str:
+        """Render a homogeneous dict array as a compact CSV-schema table.
+
+        Format::
+
+            @csv const(k=v,...) cols=c1,c2,... extra(k=v,...)
+            v1,v2,...
+            ...
+
+        Constant columns (same value in every row) are hoisted into ``const(...)``
+        once instead of repeated per row; keys present in only some rows are
+        summarised in ``extra(...)``. Fully reversible to the original records.
+        """
+        keys = sorted(set.intersection(*(set(d.keys()) for d in lst)))
+        rows = [[self._scalar(d.get(k)) for k in keys] for d in lst]
+
+        const: dict[str, str] = {}
+        var_idx: list[int] = []
+        for ci, key in enumerate(keys):
+            if len({r[ci] for r in rows}) == 1:
+                const[key] = rows[0][ci]
+            else:
+                var_idx.append(ci)
+
+        extra: dict[str, str] = {}
+        for d in lst:
+            for k, v in d.items():
+                if k not in keys and k not in extra:
+                    extra[k] = self._scalar(v)
+
+        header = "@csv"
+        if const:
+            header += " const(" + ",".join(f"{k}={self._csv_field(v)}" for k, v in const.items()) + ")"
+        header += " cols=" + ",".join(self._csv_field(keys[ci]) for ci in var_idx)
+        if extra:
+            header += " extra(" + ",".join(f"{k}={self._csv_field(v)}" for k, v in extra.items()) + ")"
+
+        lines = [header]
+        for r in rows:
+            lines.append(",".join(self._csv_field(r[ci]) for ci in var_idx))
+        return "\n".join(lines)
+
+    def _scalar(self, value: Any) -> str:
+        """Normalize a JSON value to a single CSV cell string."""
+        if value is None:
+            return ""
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        if isinstance(value, (int, float)):
+            return str(value)
+        if isinstance(value, str):
+            return self._compress_string(value)
+        # Nested object / array — keep as compact JSON inside the cell.
+        return json.dumps(value, separators=(",", ":"), ensure_ascii=False)
+
+    @staticmethod
+    def _csv_field(s: str) -> str:
+        """CSV-escape a field (RFC4180-ish): quote if it has a comma, quote, or newline."""
+        if any(c in s for c in (",", '"', "\n", "\r")):
+            return '"' + s.replace('"', '""') + '"'
+        return s
 
     def _compress_value(self, value: Any, depth: int = 0) -> Any:
         if isinstance(value, dict):

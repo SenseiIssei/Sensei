@@ -29,11 +29,15 @@ class TestSmartCrusher:
             {"id": 3, "name": "Charlie", "email": None},
         ])
         result = crusher.compress(original)
-        data = json.loads(result)
-        # Should be columnar: {"k": [...], "v": [...]}
-        assert "k" in data
-        assert "v" in data
-        assert len(data["v"]) == 3
+        # New format: a CSV-schema table. `email` is constant (null) and hoisted;
+        # id and name vary across rows.
+        lines = result.splitlines()
+        assert lines[0].startswith("@csv")
+        assert "cols=id,name" in lines[0]
+        assert len(lines) == 4  # header + 3 rows
+        assert "Alice" in result and "Bob" in result and "Charlie" in result
+        # And it must actually be smaller than the original JSON.
+        assert len(result) < len(original)
 
     def test_invalid_json_passthrough(self):
         crusher = SmartCrusher()
@@ -116,6 +120,27 @@ class TestTextCompressor:
         assert result[0].isupper()
 
 
+class TestLogCompressor:
+    def test_keeps_errors_drops_noise(self):
+        from sensei.compression.logcomp import LogCompressor
+
+        comp = LogCompressor()
+        lines = [f"2026-01-01 12:00:{i:02d} INFO  step {i} ok" for i in range(40)]
+        lines.append("2026-01-01 12:01:00 ERROR something exploded")
+        text = "\n".join(lines)
+        result = comp.compress(text)
+        assert "ERROR something exploded" in result
+        assert "lines omitted" in result
+        assert len(result) < len(text)
+
+    def test_short_log_passthrough(self):
+        from sensei.compression.logcomp import LogCompressor
+
+        comp = LogCompressor()
+        text = "line1\nline2\nERROR boom"  # < 10 lines
+        assert comp.compress(text) == text
+
+
 class TestContentRouter:
     def test_detect_json(self):
         router = ContentRouter(enable_caching=False)
@@ -126,6 +151,11 @@ class TestContentRouter:
         router = ContentRouter(enable_caching=False)
         code = "def hello():\n    print('world')\n"
         assert router.detect_type(code) == ContentType.code
+
+    def test_detect_logs(self):
+        router = ContentRouter(enable_caching=False)
+        log = "\n".join(f"2026-01-01 12:00:{i:02d} INFO doing thing {i}" for i in range(20))
+        assert router.detect_type(log) == ContentType.logs
 
     def test_detect_text(self):
         router = ContentRouter(enable_caching=False)
