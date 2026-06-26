@@ -103,18 +103,20 @@ async function listConversations(): Promise<Conversation[]> {
 async function getConversation(id: string): Promise<{ messages: { role: string; content: string }[] }> {
   return getJson(`${backendUrl()}/api/conversations/${id}`);
 }
-async function sendChat(
-  message: string,
-  model?: string,
-  conversationId?: string
-): Promise<{ message: string; tokens_saved: number; conversation_id: string }> {
-  const resp = await fetch(`${backendUrl()}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, model, conversation_id: conversationId }),
-  });
-  if (!resp.ok) throw new Error(`Sensei backend HTTP ${resp.status}`);
-  return (await resp.json()) as any;
+function parseSSE(frame: string): { event: string; data: any } {
+  let event = "message";
+  let dataStr = "";
+  for (const line of frame.split("\n")) {
+    if (line.startsWith("event:")) event = line.slice(6).trim();
+    else if (line.startsWith("data:")) dataStr += line.slice(5).trim();
+  }
+  let data: any = {};
+  try {
+    data = JSON.parse(dataStr);
+  } catch {
+    /* ignore */
+  }
+  return { event, data };
 }
 
 // ─── status bar ──────────────────────────────────────────────────────────────
@@ -180,6 +182,7 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = "sensei.chatView";
   private conversationId: string | undefined;
   private view?: vscode.WebviewView;
+  private abort?: AbortController;
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -198,6 +201,9 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
           break;
         case "send":
           await this.handleSend(msg.text, msg.model);
+          break;
+        case "cancel":
+          this.abort?.abort();
           break;
         case "setModel":
           try {
@@ -241,12 +247,46 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleSend(text: string, model?: string): Promise<void> {
+    this.abort = new AbortController();
+    this.post({ type: "streamStart" });
+    let tokensSaved = 0;
     try {
-      const reply = await sendChat(text, model, this.conversationId);
-      this.conversationId = reply.conversation_id;
-      this.post({ type: "reply", text: reply.message, tokensSaved: reply.tokens_saved });
+      const resp = await fetch(`${backendUrl()}/api/chat/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, model, conversation_id: this.conversationId }),
+        signal: this.abort.signal,
+      });
+      if (!resp.ok || !resp.body) throw new Error(`Sensei backend HTTP ${resp.status}`);
+      const reader = (resp.body as any).getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let idx: number;
+        while ((idx = buf.indexOf("\n\n")) >= 0) {
+          const ev = parseSSE(buf.slice(0, idx));
+          buf = buf.slice(idx + 2);
+          if (ev.event === "meta") {
+            if (ev.data.conversation_id) this.conversationId = ev.data.conversation_id;
+            tokensSaved = ev.data.tokens_saved ?? 0;
+          } else if (ev.event === "token") {
+            this.post({ type: "streamToken", t: ev.data.t });
+          } else if (ev.event === "error") {
+            this.post({ type: "streamError", text: ev.data.message });
+          } else if (ev.event === "done") {
+            tokensSaved = ev.data.tokens_saved ?? tokensSaved;
+          }
+        }
+      }
+      this.post({ type: "streamDone", tokensSaved });
     } catch (e: any) {
-      this.post({ type: "error", text: String(e?.message ?? e) });
+      if (e?.name === "AbortError") this.post({ type: "streamDone", tokensSaved, cancelled: true });
+      else this.post({ type: "streamError", text: String(e?.message ?? e) });
+    } finally {
+      this.abort = undefined;
     }
   }
 

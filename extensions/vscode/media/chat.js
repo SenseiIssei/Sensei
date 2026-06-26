@@ -4,6 +4,7 @@
   const input = document.getElementById("input");
   const modelSel = document.getElementById("model");
   const warn = document.getElementById("warn");
+  const sendBtn = document.getElementById("send");
 
   function esc(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -73,9 +74,21 @@
     }
     log.appendChild(d);
     log.scrollTop = log.scrollHeight;
+    return d;
+  }
+
+  // ─── streaming state ───
+  let streaming = false;
+  let streamBuf = "";
+  let streamDiv = null;
+
+  function setStreaming(on) {
+    streaming = on;
+    sendBtn.textContent = on ? "Stop" : "Send";
   }
 
   function send() {
+    if (streaming) return;
     const text = input.value.trim();
     if (!text) return;
     add(text, "user");
@@ -83,7 +96,10 @@
     vscode.postMessage({ type: "send", text, model: modelSel.value || undefined });
   }
 
-  document.getElementById("send").addEventListener("click", send);
+  sendBtn.addEventListener("click", () => {
+    if (streaming) vscode.postMessage({ type: "cancel" });
+    else send();
+  });
   document.getElementById("new").addEventListener("click", () => {
     log.innerHTML = "";
     vscode.postMessage({ type: "newChat" });
@@ -111,10 +127,42 @@
         .map((x) => "<option" + (x === m.model ? " selected" : "") + ">" + x + "</option>")
         .join("");
       warn.style.display = m.keySet ? "none" : "block";
-    } else if (m.type === "reply") {
-      add(m.text, "bot", m.tokensSaved ? "saved " + m.tokensSaved + " tokens" : "");
-    } else if (m.type === "error") {
-      add("⚠ " + m.text, "bot");
+    } else if (m.type === "streamStart") {
+      streamBuf = "";
+      setStreaming(true);
+      streamDiv = document.createElement("div");
+      streamDiv.className = "msg bot";
+      log.appendChild(streamDiv);
+      log.scrollTop = log.scrollHeight;
+    } else if (m.type === "streamToken") {
+      streamBuf += m.t;
+      if (streamDiv) {
+        streamDiv.textContent = streamBuf;
+        log.scrollTop = log.scrollHeight;
+      }
+    } else if (m.type === "streamDone") {
+      if (streamDiv) {
+        streamDiv.innerHTML = renderMarkdown(streamBuf || (m.cancelled ? "_(stopped)_" : ""));
+        if (m.tokensSaved) {
+          const mm = document.createElement("div");
+          mm.className = "meta";
+          mm.textContent = "saved " + m.tokensSaved + " tokens" + (m.cancelled ? " · stopped" : "");
+          streamDiv.appendChild(mm);
+        }
+      }
+      streamDiv = null;
+      setStreaming(false);
+    } else if (m.type === "streamError") {
+      if (streamDiv) {
+        streamDiv.innerHTML = renderMarkdown(streamBuf);
+        const er = document.createElement("div");
+        er.textContent = "⚠ " + m.text;
+        streamDiv.appendChild(er);
+      } else {
+        add("⚠ " + m.text, "bot");
+      }
+      streamDiv = null;
+      setStreaming(false);
     } else if (m.type === "load") {
       log.innerHTML = "";
       (m.messages || []).forEach((x) => add(x.content, x.role === "user" ? "user" : "bot"));

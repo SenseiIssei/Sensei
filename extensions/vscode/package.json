@@ -2,7 +2,7 @@
   "name": "sensei-tokens",
   "displayName": "Sensei — Token Saver",
   "description": "Compress prompts for Claude Code, Codex, Copilot and any AI tool. Saves tokens in the background and adds a Sensei chat panel.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "senseiissei",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/SenseiIssei/Sensei" },
