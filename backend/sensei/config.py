@@ -149,6 +149,10 @@ class Settings(BaseSettings):
     # Audit log (metadata only — never prompt contents).
     audit_enabled: bool = True
     audit_file: str = ".sensei_audit.jsonl"
+    # Data auto-purge: drop expired sessions/CCR + audit entries older than N
+    # days, every purge_interval_minutes (0 disables the loop).
+    audit_max_days: int = 30
+    purge_interval_minutes: int = 60
     # DLP: redact secrets (and optionally PII) before prompts leave the machine.
     redaction_enabled: bool = False
     redaction_pii: bool = False
