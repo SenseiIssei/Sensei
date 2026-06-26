@@ -5,7 +5,7 @@ import logging
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from sensei.config import settings
 
@@ -22,6 +22,7 @@ class Session:
         created_at: float | None = None,
         last_active: float | None = None,
         data: dict[str, Any] | None = None,
+        on_change: Callable[["Session"], None] | None = None,
     ):
         self.session_id = session_id
         self.user_id = user_id
@@ -29,6 +30,12 @@ class Session:
         self.last_active = last_active or time.time()
         self.data: dict[str, Any] = data or {}
         self._conversations: list[dict[str, Any]] = []
+        # Called whenever the session mutates so the manager can persist it.
+        self._on_change = on_change
+
+    def _changed(self) -> None:
+        if self._on_change is not None:
+            self._on_change(self)
 
     def touch(self) -> None:
         self.last_active = time.time()
@@ -43,6 +50,7 @@ class Session:
             "timestamp": time.time(),
         })
         self.touch()
+        self._changed()
 
     def get_messages(self) -> list[dict[str, Any]]:
         return list(self._conversations)
@@ -51,6 +59,7 @@ class Session:
         self._conversations.clear()
         self.data.clear()
         self.touch()
+        self._changed()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -63,13 +72,18 @@ class Session:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Session:
+    def from_dict(
+        cls,
+        data: dict[str, Any],
+        on_change: Callable[["Session"], None] | None = None,
+    ) -> Session:
         sess = cls(
             session_id=data["session_id"],
             user_id=data.get("user_id", "default"),
             created_at=data.get("created_at"),
             last_active=data.get("last_active"),
             data=data.get("data", {}),
+            on_change=on_change,
         )
         sess._conversations = data.get("conversations", [])
         return sess
@@ -92,7 +106,7 @@ class SessionManager:
     def create_session(self, user_id: str = "default") -> Session:
         """Create a new isolated session for a user."""
         session_id = str(uuid.uuid4())
-        session = Session(session_id=session_id, user_id=user_id)
+        session = Session(session_id=session_id, user_id=user_id, on_change=self._save_session)
         self._sessions[session_id] = session
         self._save_session(session)
         logger.info("Created session %s for user %s", session_id, user_id)
@@ -176,7 +190,7 @@ class SessionManager:
         for path in self.session_dir.glob("*.json"):
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
-                session = Session.from_dict(data)
+                session = Session.from_dict(data, on_change=self._save_session)
                 if not session.is_expired(self.timeout_minutes):
                     self._sessions[session.session_id] = session
                 else:

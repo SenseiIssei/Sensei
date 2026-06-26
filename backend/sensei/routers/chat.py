@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
@@ -203,27 +202,3 @@ async def chat_stream(ws: WebSocket) -> None:
             await ws.close()
         except Exception:
             pass
-
-
-@router.get("/conversations")
-async def list_conversations() -> list[dict[str, Any]]:
-    """List all conversations."""
-    if _memory is None:
-        return []
-    return _memory.list_conversations()
-
-
-@router.get("/conversations/{conv_id}")
-async def get_conversation(conv_id: str) -> dict[str, Any] | None:
-    """Get a conversation by ID."""
-    if _memory is None:
-        return None
-    return _memory.get_conversation(conv_id)
-
-
-@router.delete("/conversations/{conv_id}")
-async def delete_conversation(conv_id: str) -> dict[str, bool]:
-    """Delete a conversation."""
-    if _memory is None:
-        return {"deleted": False}
-    return {"deleted": _memory.delete_conversation(conv_id)}

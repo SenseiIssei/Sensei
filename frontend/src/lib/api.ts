@@ -28,15 +28,15 @@ export const api = {
   },
 
   async listConversations(): Promise<Conversation[]> {
-    return fetchJSON(`${API_BASE}/chat/conversations`);
+    return fetchJSON(`${API_BASE}/conversations`);
   },
 
   async getConversation(id: string): Promise<ConversationDetail> {
-    return fetchJSON(`${API_BASE}/chat/conversations/${id}`);
+    return fetchJSON(`${API_BASE}/conversations/${id}`);
   },
 
   async deleteConversation(id: string): Promise<{ deleted: boolean }> {
-    return fetchJSON(`${API_BASE}/chat/conversations/${id}`, { method: "DELETE" });
+    return fetchJSON(`${API_BASE}/conversations/${id}`, { method: "DELETE" });
   },
 
   async chat(message: string, conversationId?: string, model?: string): Promise<{

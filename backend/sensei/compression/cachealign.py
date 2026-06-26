@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 from collections import OrderedDict
 from typing import Any
 
@@ -26,9 +27,13 @@ class CacheAligner:
     - Cache aligned prefixes for reuse
     """
 
-    # Patterns to strip from system messages (volatile content)
+    # Patterns to strip from system messages (volatile content). Order matters:
+    # full ISO datetimes are consumed before bare date / time fragments.
     VOLATILE_PATTERNS = [
-        r"\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[.\d]*Z?\b",  # ISO timestamps
+        r"\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[.\d]*Z?\b",  # ISO datetimes
+        r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",  # UUIDs
+        r"\b\d{4}-\d{2}-\d{2}\b",  # dates YYYY-MM-DD
+        r"\b\d{1,2}:\d{2}:\d{2}\b",  # times HH:MM:SS
         r"\brequest[_-]?id[:\s]+[\w-]+\b",  # Request IDs
         r"\bsession[_-]?id[:\s]+[\w-]+\b",  # Session IDs
         r"\btrace[_-]?id[:\s]+[\w-]+\b",  # Trace IDs
@@ -36,6 +41,13 @@ class CacheAligner:
 
     def __init__(self) -> None:
         self._prefix_cache: OrderedDict[str, list[dict[str, str]]] = OrderedDict()
+
+    def _strip_volatile(self, text: str) -> str:
+        """Remove volatile fragments (timestamps, dates, UUIDs, request IDs)
+        so the prompt prefix stays byte-stable across requests."""
+        for pattern in self.VOLATILE_PATTERNS:
+            text = re.sub(pattern, "", text, flags=re.IGNORECASE)
+        return text
 
     def align(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
         """Align messages for optimal KV cache hit rates.
@@ -75,16 +87,13 @@ class CacheAligner:
         other_msgs = [m for m in messages if m.get("role") != "system"]
 
         # Sort system messages by content hash for canonical ordering
-        system_msgs.sort(key=lambda m: hashlib.md5(m.get("content", "").encode()).hexdigest())
+        system_msgs.sort(
+            key=lambda m: hashlib.md5((m.get("content") or "").encode()).hexdigest()
+        )
 
         # Strip volatile patterns from system messages
         for msg in system_msgs:
-            content = msg.get("content", "")
-            for pattern in self.VOLATILE_PATTERNS:
-                import re
-
-                content = re.sub(pattern, "", content, flags=re.IGNORECASE)
-            content = content.strip()
+            content = self._strip_volatile(msg.get("content") or "").strip()
             if content:
                 result.append({"role": "system", "content": content, **{
                     k: v for k, v in msg.items() if k not in ("role", "content")
@@ -93,7 +102,7 @@ class CacheAligner:
         # Add other messages in order
         for msg in other_msgs:
             # Ensure consistent whitespace
-            content = msg.get("content", "").strip()
+            content = (msg.get("content") or "").strip()
             result.append({"role": msg.get("role", "user"), "content": content, **{
                 k: v for k, v in msg.items() if k not in ("role", "content")
             }})
@@ -105,6 +114,6 @@ class CacheAligner:
         parts = []
         for msg in messages:
             role = msg.get("role", "")
-            content_len = len(msg.get("content", ""))
+            content_len = len(msg.get("content") or "")
             parts.append(f"{role}:{content_len}")
         return hashlib.md5("|".join(parts).encode()).hexdigest()

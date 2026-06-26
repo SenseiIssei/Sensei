@@ -64,16 +64,30 @@ def _detect_code(text: str) -> bool:
     if text.strip().startswith("```"):
         return True
 
-    code_indicators = [
-        r"^\s*(def |class |import |from |func |fn |public |private |void |int |const |let |var )",
-        r"^\s*(#include|package |using |require\(|module )",
+    lines = text.split("\n")[:20]
+
+    # Strong signals — a single match is enough to classify as code.
+    strong_indicators = [
+        r"^\s*(def |async def |class )",
+        r"^\s*(function |func |fn )\w",
+        r"^\s*import \w",
+        r"^\s*from \S+ import ",
+        r"^\s*(#include|package |using )",
+        r"^\s*(public |private |protected )\w",
+    ]
+    if any(re.search(p, line) for line in lines for p in strong_indicators):
+        return True
+
+    # Weaker signals — need at least two to classify as code.
+    weak_indicators = [
         r";\s*$",  # statement terminators
         r"^\s*\}\s*$",  # closing braces
         r"^\s*\{[^}]*\}",  # inline blocks
+        r"=>\s*[{(]",  # arrow functions
+        r"->\s*\w+",  # return-type arrows
+        r"\b(const|let|var|return|print|console\.log)\b",
     ]
-
-    lines = text.split("\n")
-    matches = sum(1 for line in lines[:20] if any(re.search(p, line) for p in code_indicators))
+    matches = sum(1 for line in lines if any(re.search(p, line) for p in weak_indicators))
     return matches >= 2
 
 
