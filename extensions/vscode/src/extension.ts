@@ -166,9 +166,7 @@ async function setApiKeyFlow(): Promise<SettingsSnapshot | null> {
   });
   if (key === undefined) return null;
 
-  const model = await vscode.window.showQuickPick(provider.models, {
-    placeHolder: "Choose a model",
-  });
+  const model = await vscode.window.showQuickPick(provider.models, { placeHolder: "Choose a model" });
   if (!model) return null;
 
   const updated = await putSettings({ provider: provider.id, api_key: key, model });
@@ -187,7 +185,10 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
-    view.webview.options = { enableScripts: true };
+    view.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, "media")],
+    };
     view.webview.html = this.html(view.webview);
 
     view.webview.onDidReceiveMessage(async (msg) => {
@@ -214,6 +215,10 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
         case "setKey":
           await setApiKeyFlow();
           await this.sendInit();
+          break;
+        case "copy":
+          await vscode.env.clipboard.writeText(msg.text ?? "");
+          vscode.window.setStatusBarMessage("Sensei: copied to clipboard", 1500);
           break;
       }
     });
@@ -266,19 +271,21 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   private html(webview: vscode.Webview): string {
-    const nonce = Math.random().toString(36).slice(2);
+    const scriptUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, "media", "chat.js")
+    );
     const csp =
-      `default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';`;
+      `default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource};`;
     return /* html */ `<!DOCTYPE html><html><head>
 <meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="${csp}">
 <style>
   body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); margin:0; padding:8px;
          display:flex; flex-direction:column; height:100vh; box-sizing:border-box; }
   #bar { display:flex; gap:6px; align-items:center; margin-bottom:6px; }
-  #log { flex:1; overflow-y:auto; font-size:13px; }
-  .msg { margin:6px 0; padding:6px 8px; border-radius:6px; white-space:pre-wrap; }
-  .user { background: var(--vscode-input-background); }
-  .bot  { background: var(--vscode-editorWidget-background); }
+  #log { flex:1; overflow-y:auto; font-size:13px; line-height:1.45; }
+  .msg { margin:6px 0; padding:6px 10px; border-radius:6px; word-wrap:break-word; }
+  .msg.user { white-space:pre-wrap; background: var(--vscode-input-background); }
+  .msg.bot  { background: var(--vscode-editorWidget-background); }
   .meta { font-size:10px; opacity:0.6; margin-top:3px; }
   .row { display:flex; gap:6px; margin-top:6px; }
   textarea { flex:1; resize:none; background:var(--vscode-input-background); color:var(--vscode-input-foreground);
@@ -287,6 +294,20 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
                    border:none; border-radius:4px; padding:4px 8px; cursor:pointer; font-size:12px; }
   select { background:var(--vscode-dropdown-background); color:var(--vscode-dropdown-foreground); flex:1; }
   #warn { font-size:11px; color:var(--vscode-editorWarning-foreground); margin-bottom:4px; display:none; }
+  .cb { margin:6px 0; border:1px solid var(--vscode-panel-border); border-radius:6px; overflow:hidden; }
+  .cbh { display:flex; justify-content:space-between; align-items:center; padding:2px 8px;
+         background:var(--vscode-editorGroupHeader-tabsBackground); font-size:10px; opacity:0.85; }
+  .cbh button { padding:1px 6px; font-size:10px; }
+  .cb pre { margin:0; padding:8px; overflow-x:auto; background:var(--vscode-textCodeBlock-background); }
+  code { font-family: var(--vscode-editor-font-family, monospace); font-size:12px; }
+  .ic { background:var(--vscode-textCodeBlock-background); padding:1px 4px; border-radius:3px; }
+  h1,h2,h3 { margin:6px 0 4px; } h1{font-size:16px;} h2{font-size:15px;} h3{font-size:14px;}
+  li { margin-left:16px; }
+  a { color: var(--vscode-textLink-foreground); }
+  .k { color: var(--vscode-symbolIcon-keywordForeground, #c586c0); }
+  .s { color: var(--vscode-debugTokenExpression-string, #ce9178); }
+  .c { color: var(--vscode-descriptionForeground, #6a9955); font-style:italic; }
+  .n { color: var(--vscode-debugTokenExpression-number, #b5cea8); }
 </style></head><body>
   <div id="bar">
     <select id="model" title="Model"></select>
@@ -300,44 +321,8 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
     <textarea id="input" rows="2" placeholder="Ask Sensei…  (prompts are compressed before sending)"></textarea>
     <button id="send">Send</button>
   </div>
-<script nonce="${nonce}">
-  const vscode = acquireVsCodeApi();
-  const log = document.getElementById('log');
-  const input = document.getElementById('input');
-  const modelSel = document.getElementById('model');
-  const warn = document.getElementById('warn');
-  function add(text, cls, meta) {
-    const d = document.createElement('div'); d.className = 'msg ' + cls; d.textContent = text;
-    if (meta) { const m = document.createElement('div'); m.className='meta'; m.textContent = meta; d.appendChild(m); }
-    log.appendChild(d); log.scrollTop = log.scrollHeight;
-  }
-  function send() {
-    const text = input.value.trim(); if (!text) return;
-    add(text, 'user'); input.value = '';
-    vscode.postMessage({ type:'send', text, model: modelSel.value || undefined });
-  }
-  document.getElementById('send').addEventListener('click', send);
-  document.getElementById('new').addEventListener('click', () => { log.innerHTML=''; vscode.postMessage({type:'newChat'}); });
-  document.getElementById('history').addEventListener('click', () => vscode.postMessage({type:'history'}));
-  document.getElementById('key').addEventListener('click', () => vscode.postMessage({type:'setKey'}));
-  modelSel.addEventListener('change', () => vscode.postMessage({ type:'setModel', model: modelSel.value }));
-  input.addEventListener('keydown', (e) => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
-  window.addEventListener('message', (e) => {
-    const m = e.data;
-    if (m.type === 'init') {
-      modelSel.innerHTML = (m.models||[]).map(x => '<option'+(x===m.model?' selected':'')+'>'+x+'</option>').join('');
-      warn.style.display = m.keySet ? 'none' : 'block';
-    } else if (m.type === 'reply') {
-      add(m.text, 'bot', m.tokensSaved ? ('saved '+m.tokensSaved+' tokens') : '');
-    } else if (m.type === 'error') {
-      add('⚠ ' + m.text, 'bot');
-    } else if (m.type === 'load') {
-      log.innerHTML='';
-      (m.messages||[]).forEach(x => add(x.content, x.role === 'user' ? 'user' : 'bot'));
-    }
-  });
-  vscode.postMessage({ type:'ready' });
-</script></body></html>`;
+  <script src="${scriptUri}"></script>
+</body></html>`;
   }
 }
 
