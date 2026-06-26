@@ -222,9 +222,38 @@ class TestLocalCrypto:
         path = tmp_path / "test.enc"
         content = "Secret data to encrypt"
         crypto.encrypt_file(path, content)
-        assert path.read_bytes().startswith(b"SENSEI_ENC:")
+        assert path.read_bytes().startswith(b"SENSEI_ENC2:")
         decrypted = crypto.decrypt_file(path)
         assert decrypted == content
+
+    def test_uses_aes_when_available(self):
+        from sensei.security import crypto as cryptomod
+
+        c = LocalCrypto(key=b"k" * 32)
+        enc = c.encrypt("hello world")
+        expected_tag = b"A" if cryptomod._HAS_AES else b"X"
+        assert enc[:1] == expected_tag
+        assert c.decrypt(enc) == "hello world"
+
+    def test_aes_detects_tampering(self):
+        from sensei.security import crypto as cryptomod
+
+        if not cryptomod._HAS_AES:
+            return  # XOR has no integrity check
+        c = LocalCrypto(key=b"k" * 32)
+        enc = bytearray(c.encrypt("important"))
+        enc[-1] ^= 0x01  # flip a ciphertext bit
+        import pytest
+
+        with pytest.raises(Exception):
+            c.decrypt(bytes(enc))
+
+    def test_reads_legacy_xor_file(self, tmp_path):
+        # A file written by the pre-AES version (SENSEI_ENC: + raw XOR).
+        c = LocalCrypto(key=b"test-key-32-bytes-long-1234567890")
+        path = tmp_path / "legacy.enc"
+        path.write_bytes(b"SENSEI_ENC:" + c._xor("legacy secret".encode()))
+        assert c.decrypt_file(path) == "legacy secret"
 
     def test_decrypt_unencrypted_file(self, tmp_path):
         crypto = LocalCrypto(key=b"test-key-32-bytes-long-1234567890")

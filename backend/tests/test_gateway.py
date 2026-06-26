@@ -104,7 +104,10 @@ class TestGatewayEndpoints:
 
 
 class TestCompressAnthropic:
-    def test_compresses_system_and_messages(self):
+    def test_compresses_system_and_messages(self, monkeypatch):
+        from sensei.config import settings
+
+        monkeypatch.setattr(settings, "gateway_compress_system", True)
         system, messages, savings = compress_anthropic_request(
             _compressible_json(),  # a big "system" prompt
             [

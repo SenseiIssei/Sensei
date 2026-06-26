@@ -2,6 +2,19 @@
 
 This document outlines planned features, future directions, and monetization ideas for Sensei.
 
+## Recently shipped (2026-06)
+
+- [x] **Verified 79% real token savings** (tiktoken) — CSV-schema JSON compaction + log triage; reproducible benchmark + ≥60% guardrail test
+- [x] **OpenAI + Anthropic compression gateway** — drop-in proxy (`/v1/chat/completions`, `/v1/messages`) with client-key passthrough; routes Claude Code / Codex / Cursor / any SDK
+- [x] **Agent-aware compression** — compresses `tool_result` payloads (cache-safe), leaves the system prompt byte-exact
+- [x] **Money-saved dashboard** — `SavingsTracker` + `/api/stats`, web StatsPanel hero, VS Code status bar
+- [x] **VS Code extension** — chat panel, model selector, chat history, API-key entry, one-click tool routing
+- [x] **Runtime settings API** (`/api/settings`) — provider/model/API key with no restart; persisted to `.env`
+- [x] **Rust accelerator** (`sensei_core`, PyO3) — CSV hot path ~2× faster, byte-parity, optional
+- [x] **AES-256-GCM encryption at rest** (XOR fallback) — authenticated, tamper-detecting
+- [x] **Background-server logging** + Windows auto-start; console + `.exe` installers
+- [x] **Sensei-Compressor** training scaffold (LLMLingua-2-style, trains on a 16 GB GPU)
+
 ## Current Status (v0.1.0)
 
 - [x] Token compression pipeline (SmartCrusher, CodeCompressor, TextCompressor, CacheAligner, CCR)
