@@ -23,6 +23,19 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
 )
+
+# Optional rotating file log for the background server.
+if settings.log_file:
+    from logging.handlers import RotatingFileHandler
+    from pathlib import Path as _Path
+
+    _Path(settings.log_file).expanduser().parent.mkdir(parents=True, exist_ok=True)
+    _fh = RotatingFileHandler(
+        settings.log_file, maxBytes=5_000_000, backupCount=3, encoding="utf-8"
+    )
+    _fh.setFormatter(logging.Formatter("%(asctime)s [%(name)s] %(levelname)s: %(message)s"))
+    for _name in ("", "uvicorn", "uvicorn.error", "uvicorn.access"):
+        logging.getLogger(_name).addHandler(_fh)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
@@ -137,12 +150,14 @@ from sensei.routers.chat import router as chat_router  # noqa: E402
 from sensei.routers.conversations import router as conversations_router  # noqa: E402
 from sensei.routers.gateway import router as gateway_router  # noqa: E402
 from sensei.routers.models import router as models_router  # noqa: E402
+from sensei.routers.settings import router as settings_router  # noqa: E402
 from sensei.routers.stats import router as stats_router  # noqa: E402
 
 app.include_router(auth_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
+app.include_router(settings_router, prefix="/api")
 app.include_router(stats_router, prefix="/api")
 
 # OpenAI-compatible compression gateway — mounted at the root so clients can use

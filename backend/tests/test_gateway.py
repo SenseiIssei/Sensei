@@ -66,9 +66,12 @@ class TestGatewayEndpoints:
         assert resp.status_code == 400
         assert resp.json()["error"]["type"] == "invalid_request_error"
 
-    def test_chat_completions_requires_upstream_key(self, client):
-        # No upstream API key is configured in the test environment, so the
-        # gateway should fail cleanly (502) rather than crash.
+    def test_chat_completions_requires_upstream_key(self, client, monkeypatch):
+        # Force "no key" regardless of any local .env so the test is deterministic.
+        from sensei.config import settings
+
+        monkeypatch.setattr(settings, "api_provider", "openrouter")
+        monkeypatch.setattr(settings, "openrouter_api_key", "")
         resp = client.post(
             "/v1/chat/completions",
             json={"messages": [{"role": "user", "content": _compressible_json()}]},
@@ -82,7 +85,10 @@ class TestGatewayEndpoints:
         resp = client.post("/v1/messages", json={"messages": "nope"})
         assert resp.status_code == 400
 
-    def test_messages_requires_key(self, client):
+    def test_messages_requires_key(self, client, monkeypatch):
+        from sensei.config import settings
+
+        monkeypatch.setattr(settings, "anthropic_api_key", "")
         resp = client.post(
             "/v1/messages",
             json={

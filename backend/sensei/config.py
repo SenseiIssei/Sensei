@@ -7,11 +7,15 @@ from typing import Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Load .env from the repo root regardless of the process working directory, so
+# the settings API and the server agree on one file.
+ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="SENSEI_",
-        env_file=".env",
+        env_file=str(ENV_PATH),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -125,6 +129,8 @@ class Settings(BaseSettings):
     # Server
     host: str = "0.0.0.0"
     port: int = 7000
+    # Optional rotating log file for the (often hidden) background server.
+    log_file: str = ""
     cors_origins: str = "http://localhost:5173,http://localhost:7000"
 
     # Security
