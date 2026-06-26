@@ -27,6 +27,7 @@ from sensei.compression.router import ContentRouter
 from sensei.config import settings
 from sensei.models.api import APIModelProvider
 from sensei.savings import get_savings_tracker
+from sensei.security.filtering import check_policy
 from sensei.security.redaction import redact_payload
 
 logger = logging.getLogger(__name__)
@@ -347,6 +348,10 @@ async def chat_completions(request: Request) -> Any:
         payload, red_counts = redact_payload(payload)
         red_total = sum(red_counts.values())
 
+    reason = check_policy(payload)
+    if reason:
+        return _error(403, reason, "blocked_by_policy", _savings_headers(savings))
+
     return await _forward(
         base_url=provider.base_url,
         path="/chat/completions",
@@ -416,6 +421,10 @@ async def messages_anthropic(request: Request) -> Any:
     if settings.redaction_enabled:
         payload, red_counts = redact_payload(payload)
         red_total = sum(red_counts.values())
+
+    reason = check_policy(payload)
+    if reason:
+        return _error(403, reason, "blocked_by_policy", _savings_headers(savings))
 
     return await _forward(
         base_url=settings.anthropic_api_base_url,
