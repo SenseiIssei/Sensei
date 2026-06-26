@@ -2,6 +2,13 @@ from __future__ import annotations
 
 import re
 
+# Optional Rust accelerator (rust/sensei_core). Byte-compatible with the Python
+# path below; soft-imported so installs without the wheel still work.
+try:  # pragma: no cover - depends on whether the wheel was built
+    import sensei_core as _core
+except ImportError:
+    _core = None
+
 
 class LogCompressor:
     """Compress log / build / test output by keeping what matters.
@@ -45,6 +52,10 @@ class LogCompressor:
         self.tail = tail
 
     def compress(self, text: str) -> str:
+        # Fast path: Rust accelerator (byte-identical output) when available.
+        if _core is not None:
+            return _core.compress_logs(text, self.context_after, self.head, self.tail)
+
         lines = text.split("\n")
         n = len(lines)
         if n < 10:
