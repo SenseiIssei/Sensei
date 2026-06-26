@@ -149,6 +149,9 @@ class Settings(BaseSettings):
     # Audit log (metadata only — never prompt contents).
     audit_enabled: bool = True
     audit_file: str = ".sensei_audit.jsonl"
+    # DLP: redact secrets (and optionally PII) before prompts leave the machine.
+    redaction_enabled: bool = False
+    redaction_pii: bool = False
     # Encrypted API-key vault. Optional master password; otherwise machine key.
     vault_file: str = ".sensei_vault.json"
     vault_password: str = ""
