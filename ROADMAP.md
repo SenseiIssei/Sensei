@@ -87,7 +87,7 @@ This document outlines planned features, future directions, and monetization ide
 - [ ] **Tor / I2P support** — Route API requests through Tor for anonymity
 - [ ] **Corporate proxy compatibility** — HTTP_PROXY / HTTPS_PROXY support
 - [ ] **Request filtering** — Block specific models, providers, or content patterns
-- [ ] **Response filtering** — Redact sensitive data before sending to model
+- [x] **Request filtering (DLP redaction)** — Redact secrets (keys, tokens, private keys, JWTs) and optional PII (email/IP) before prompts leave the machine; counts in X-Sensei-Redactions + audit
 
 ### OpenClaw-style Multi-Channel
 - [ ] **Discord bot integration** — Chat with Sensei from Discord servers

@@ -19,7 +19,10 @@ def _compressible_json() -> str:
 
 
 class TestCompressRequestMessages:
-    def test_reduces_tokens_and_preserves_structure(self):
+    def test_reduces_tokens_and_preserves_structure(self, monkeypatch):
+        from sensei.config import settings
+
+        monkeypatch.setattr(settings, "gateway_preserve_cache", False)
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": _compressible_json()},
@@ -122,6 +125,7 @@ class TestCompressAnthropic:
         from sensei.config import settings
 
         monkeypatch.setattr(settings, "gateway_compress_system", True)
+        monkeypatch.setattr(settings, "gateway_preserve_cache", False)
         system, messages, savings = compress_anthropic_request(
             _compressible_json(),  # a big "system" prompt
             [
