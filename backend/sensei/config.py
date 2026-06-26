@@ -152,6 +152,10 @@ class Settings(BaseSettings):
     # DLP: redact secrets (and optionally PII) before prompts leave the machine.
     redaction_enabled: bool = False
     redaction_pii: bool = False
+    # Request policy: block models (comma-separated substrings) or content
+    # (comma-separated regexes) at the gateway. Empty = allow everything.
+    blocked_models: str = ""
+    blocked_patterns: str = ""
     # Encrypted API-key vault. Optional master password; otherwise machine key.
     vault_file: str = ".sensei_vault.json"
     vault_password: str = ""
