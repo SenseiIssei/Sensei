@@ -22,9 +22,11 @@ class CCRStore:
     The store uses a simple file-based cache with TTL expiration.
     """
 
-    def __init__(self, cache_dir: Path | None = None, ttl_hours: int | None = None):
-        self.cache_dir = cache_dir or settings.ccr_cache_path
-        self.ttl_seconds = (ttl_hours or settings.ccr_ttl_hours) * 3600
+    def __init__(self, cache_dir: Path | str | None = None, ttl_hours: int | None = None):
+        self.cache_dir = Path(cache_dir) if cache_dir is not None else settings.ccr_cache_path
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        ttl = ttl_hours if ttl_hours is not None else settings.ccr_ttl_hours
+        self.ttl_seconds = ttl * 3600
         self._index: dict[str, dict[str, Any]] = {}
         self._load_index()
 
@@ -32,7 +34,7 @@ class CCRStore:
         self,
         original: str,
         compressed: str,
-        content_type: str,
+        content_type: str = "text",
         metadata: dict[str, Any] | None = None,
     ) -> str:
         """Store an original and return a CCR ID for retrieval."""

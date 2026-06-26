@@ -17,14 +17,20 @@ def init_stats_deps(ccr_store: CCRStore) -> None:
     _ccr_store = ccr_store
 
 
+def _get_ccr_store() -> CCRStore:
+    """Return the wired CCR store, lazily creating one if startup hasn't run."""
+    global _ccr_store
+    if _ccr_store is None:
+        _ccr_store = CCRStore()
+    return _ccr_store
+
+
 @router.get("")
 async def get_stats() -> dict[str, Any]:
     """Get compression and cache statistics."""
-    if _ccr_store is None:
-        return {"error": "Stats not initialized"}
-
-    ccr_stats = _ccr_store.stats()
-    evicted = _ccr_store.cleanup()
+    store = _get_ccr_store()
+    ccr_stats = store.stats()
+    evicted = store.cleanup()
 
     return {
         "compression_enabled": settings.compression_enabled,
@@ -37,9 +43,7 @@ async def get_stats() -> dict[str, Any]:
 @router.get("/ccr/{ccr_id}")
 async def get_ccr_info(ccr_id: str) -> dict[str, Any]:
     """Get info about a specific CCR entry."""
-    if _ccr_store is None:
-        return {"error": "CCR store not initialized"}
-    info = _ccr_store.get_info(ccr_id)
+    info = _get_ccr_store().get_info(ccr_id)
     if info is None:
         return {"error": "CCR entry not found or expired"}
     return info
@@ -48,9 +52,7 @@ async def get_ccr_info(ccr_id: str) -> dict[str, Any]:
 @router.get("/ccr/{ccr_id}/original")
 async def retrieve_original(ccr_id: str) -> dict[str, Any]:
     """Retrieve the original uncompressed content for a CCR entry."""
-    if _ccr_store is None:
-        return {"error": "CCR store not initialized"}
-    original = _ccr_store.retrieve(ccr_id)
+    original = _get_ccr_store().retrieve(ccr_id)
     if original is None:
         return {"error": "CCR entry not found or expired"}
     return {"content": original}
