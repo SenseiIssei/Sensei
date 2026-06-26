@@ -1,0 +1,22 @@
+# Sensei-Compressor training config (tuned for a single 16 GB GPU, e.g. RTX 4080)
+
+# Model
+base_model: distilbert-base-uncased
+max_length: 256
+
+# Data generation (self-distilled from the rule-based TextCompressor)
+num_synthetic: 5000
+input_dir: ""                       # optional: extra .txt/.md files to label
+data_path: G:/Projects/Sensei/training/compression_model/data/tokens.jsonl
+
+# Training
+output_dir: G:/Projects/Sensei/models/sensei-compressor
+epochs: 3
+batch_size: 32
+learning_rate: 0.00005
+weight_decay: 0.01
+fp16: true
+seed: 42
+
+# Inference
+keep_threshold: 0.5                 # keep tokens with P(keep) >= this

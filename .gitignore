@@ -25,6 +25,10 @@ frontend/node_modules/
 *.gguf
 *.safetensors
 
+# Training artifacts
+training/compression_model/data/
+.hf-cache/
+
 # Environment
 .env
 .env.local
