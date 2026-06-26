@@ -114,6 +114,9 @@ class Settings(BaseSettings):
     output_shaper: bool = False
     # Price assumption for the "money saved" dashboard (USD per 1M input tokens).
     usd_per_million_tokens: float = 3.0
+    # Compress system prompts at the gateway too (where IDE tools hide most of
+    # their tokens). Lossy — disable for byte-exact system prompts.
+    gateway_compress_system: bool = True
 
     # Memory
     memory_enabled: bool = True
