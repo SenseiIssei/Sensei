@@ -138,7 +138,7 @@ This document outlines planned features, future directions, and monetization ide
 - [ ] **Conversation branching** — Fork conversations at any point
 - [ ] **Prompt templates** — Save and reuse prompt templates
 - [ ] **Shared conversations** — Export and import conversation files
-- [ ] **Multi-model comparison** — Send same prompt to multiple models, compare outputs
+- [x] **Multi-model comparison** — POST /api/chat/compare runs one compressed prompt across up to 6 models concurrently; "Sensei: Compare models" command renders a side-by-side markdown report
 - [ ] **Token budget alerts** — Warn when approaching API limits
 - [ ] **Offline mode** — Queue messages when no provider is available
 - [ ] **Voice input/output** — Whisper integration for speech-to-text

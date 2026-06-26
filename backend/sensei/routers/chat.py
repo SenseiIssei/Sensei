@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import time
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -159,6 +161,78 @@ async def chat_stream_sse(request: ChatRequest) -> StreamingResponse:
         yield _sse("done", {"tokens_saved": total_saved})
 
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+class CompareRequest(BaseModel):
+    message: str
+    models: list[str]
+    system_prompt: str | None = None
+    temperature: float = 0.7
+    max_tokens: int = 1024
+
+
+class CompareResult(BaseModel):
+    model: str
+    content: str = ""
+    latency_ms: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    error: str | None = None
+
+
+class CompareResponse(BaseModel):
+    tokens_saved: int = 0
+    results: list[CompareResult]
+
+
+@router.post("/compare", response_model=CompareResponse)
+async def compare(request: CompareRequest) -> CompareResponse:
+    """Send one (compressed) prompt to several models and compare the replies."""
+    if not request.models:
+        raise HTTPException(status_code=400, detail="At least one model is required.")
+
+    messages: list[ChatMessage] = []
+    if request.system_prompt:
+        messages.append(ChatMessage(role=Role.system, content=request.system_prompt))
+    messages.append(ChatMessage(role=Role.user, content=request.message))
+
+    # Compress the shared prompt once — every model gets the same savings.
+    msg_dicts = [{"role": m.role.value, "content": m.content} for m in messages]
+    total_saved = 0
+    if settings.compression_enabled and _content_router:
+        compressed_msgs, results = _content_router.compress_messages(msg_dicts)
+        total_saved = sum(r.tokens_saved for r in results)
+        messages = [ChatMessage(role=Role(m["role"]), content=m["content"]) for m in compressed_msgs]
+
+    provider = await get_provider()
+
+    async def run(model: str) -> CompareResult:
+        start = time.perf_counter()
+        try:
+            completion = await provider.chat(
+                messages=messages,
+                model=model,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+            )
+            return CompareResult(
+                model=model,
+                content=completion.content,
+                latency_ms=int((time.perf_counter() - start) * 1000),
+                prompt_tokens=completion.usage.prompt_tokens,
+                completion_tokens=completion.usage.completion_tokens,
+            )
+        except Exception as e:  # noqa: BLE001
+            return CompareResult(
+                model=model, error=str(e), latency_ms=int((time.perf_counter() - start) * 1000)
+            )
+
+    results = await asyncio.gather(*[run(m) for m in request.models[:6]])
+
+    from sensei.audit import get_audit_log
+
+    get_audit_log().record("compare.request", models=request.models[:6], tokens_saved=total_saved)
+    return CompareResponse(tokens_saved=total_saved, results=list(results))
 
 
 @router.websocket("/ws")
