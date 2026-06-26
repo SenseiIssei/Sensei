@@ -168,6 +168,11 @@ class Settings(BaseSettings):
     session_timeout_minutes: int = 60
     session_dir: str = ".sensei_sessions"
 
+    # Webhook API: an authenticated entry point for external platforms (Slack,
+    # Zapier, bots). Disabled unless both are set.
+    webhook_enabled: bool = False
+    webhook_token: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
