@@ -1,0 +1,8 @@
+# Sensei-Compressor training deps. Install the CUDA build of torch that matches
+# your driver from https://pytorch.org (the 4080 wants a recent cu12x wheel).
+torch>=2.5.0
+transformers>=4.46.0
+datasets>=3.0.0
+accelerate>=1.0.0
+scikit-learn>=1.5.0
+pyyaml>=6.0
