@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from sensei.main import app
-from sensei.routers.gateway import compress_request_messages
+from sensei.routers.gateway import compress_anthropic_request, compress_request_messages
 
 
 def _compressible_json() -> str:
@@ -77,3 +77,45 @@ class TestGatewayEndpoints:
         assert resp.json()["error"]["type"] == "upstream_not_configured"
         # Savings are computed before forwarding, so the header is present.
         assert "x-sensei-tokens-saved" in {k.lower() for k in resp.headers}
+
+    def test_messages_invalid(self, client):
+        resp = client.post("/v1/messages", json={"messages": "nope"})
+        assert resp.status_code == 400
+
+    def test_messages_requires_key(self, client):
+        resp = client.post(
+            "/v1/messages",
+            json={
+                "model": "claude-3-5-sonnet",
+                "max_tokens": 100,
+                "system": "You are helpful.",
+                "messages": [{"role": "user", "content": _compressible_json()}],
+            },
+        )
+        assert resp.status_code == 502
+        assert resp.json()["error"]["type"] == "upstream_not_configured"
+        assert "x-sensei-tokens-saved" in {k.lower() for k in resp.headers}
+
+
+class TestCompressAnthropic:
+    def test_compresses_system_and_messages(self):
+        system, messages, savings = compress_anthropic_request(
+            _compressible_json(),  # a big "system" prompt
+            [
+                {"role": "user", "content": _compressible_json()},
+                {"role": "assistant", "content": [{"type": "text", "text": _compressible_json()}]},
+            ],
+        )
+        assert savings["tokens_saved"] > 0
+        assert savings["blocks_compressed"] == 3  # system + user str + assistant block
+        assert len(system) < len(_compressible_json())
+        # Block structure preserved.
+        assert messages[1]["content"][0]["type"] == "text"
+
+    def test_passes_through_non_text_blocks(self):
+        _, messages, savings = compress_anthropic_request(
+            None,
+            [{"role": "user", "content": [{"type": "image", "source": {"x": 1}}]}],
+        )
+        assert messages[0]["content"][0]["type"] == "image"
+        assert savings["blocks_compressed"] == 0

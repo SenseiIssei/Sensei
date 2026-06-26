@@ -1,13 +1,17 @@
-"""OpenAI-compatible compression gateway.
+"""Compression gateway — OpenAI- and Anthropic-compatible.
 
-Point any OpenAI-compatible client (the OpenAI SDK, Cursor, Continue, Aider,
-LangChain, ...) at ``http://<host>:<port>/v1`` and Sensei will transparently
-compress each prompt before forwarding it to the configured upstream provider.
-The client sees a normal OpenAI response; Sensei adds the tokens it saved in the
-``X-Sensei-*`` response headers and a ``sensei`` block in the JSON body.
+Point any tool at Sensei as its API base URL and Sensei transparently compresses
+each prompt before forwarding it upstream, then returns a normal response.
 
-This is the project's core wedge: a drop-in proxy that cuts token spend on *any*
-existing tool with a one-line base-URL change.
+- OpenAI clients (OpenAI SDK, Codex, Copilot, Cursor, Continue, Aider,
+  LangChain): base URL ``http://<host>:<port>/v1`` → ``/v1/chat/completions``.
+- Anthropic clients (Claude Code, Anthropic SDK): ``ANTHROPIC_BASE_URL`` →
+  ``http://<host>:<port>`` → ``/v1/messages``.
+
+Auth is pass-through: whatever key the client sends (``Authorization: Bearer`` or
+``x-api-key``) is forwarded upstream, so tools keep using their own credentials.
+If the client sends no key, Sensei falls back to a server-configured one. Savings
+are reported in ``X-Sensei-*`` headers and a ``sensei`` block in JSON responses.
 """
 from __future__ import annotations
 
@@ -28,8 +32,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["gateway"])
 
-# Don't compress messages below this length — overhead isn't worth it.
+# Don't compress content below this length — overhead isn't worth it.
 _MIN_COMPRESS_LEN = 100
+_ANTHROPIC_VERSION = "2023-06-01"
 
 _content_router: ContentRouter | None = None
 
@@ -47,6 +52,9 @@ def _router() -> ContentRouter:
     return _content_router
 
 
+# ─── savings bookkeeping ─────────────────────────────────────────────────────
+
+
 def _no_savings() -> dict[str, Any]:
     return {
         "compression_enabled": False,
@@ -58,60 +66,15 @@ def _no_savings() -> dict[str, Any]:
     }
 
 
-def compress_request_messages(
-    messages: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Compress the content of OpenAI-style chat messages.
-
-    Order, roles, and any extra fields are preserved exactly (no reordering or
-    volatile-stripping — this is a transparent proxy). System messages and short
-    messages are passed through untouched. Returns ``(messages, savings)``.
-    """
-    if not settings.compression_enabled:
-        return messages, _no_savings()
-
-    cr = _router()
-    out: list[dict[str, Any]] = []
-    saved = before = after = blocks = 0
-
-    for msg in messages:
-        content = msg.get("content")
-        role = msg.get("role", "user")
-        # Only compress plain string content; skip system, short, and
-        # structured (vision / tool-call) content blocks.
-        if role == "system" or not isinstance(content, str) or len(content) < _MIN_COMPRESS_LEN:
-            out.append(msg)
-            continue
-
-        result = cr.compress(content)
-        before += result.original_tokens
-        after += result.compressed_tokens
-        saved += result.tokens_saved
-        blocks += 1
-        new_msg = dict(msg)
-        new_msg["content"] = result.compressed
-        out.append(new_msg)
-
-    ratio = round(after / before, 4) if before else 1.0
-    return out, {
+def _savings(before: int, after: int, saved: int, blocks: int) -> dict[str, Any]:
+    return {
         "compression_enabled": True,
         "tokens_saved": saved,
         "blocks_compressed": blocks,
         "prompt_tokens_before": before,
         "prompt_tokens_after": after,
-        "compression_ratio": ratio,
+        "compression_ratio": round(after / before, 4) if before else 1.0,
     }
-
-
-def _upstream_client(provider: APIModelProvider) -> httpx.AsyncClient:
-    return httpx.AsyncClient(
-        base_url=provider.base_url,
-        headers={
-            "Authorization": f"Bearer {provider.api_key}",
-            "Content-Type": "application/json",
-        },
-        timeout=httpx.Timeout(120.0, connect=10.0),
-    )
 
 
 def _savings_headers(savings: dict[str, Any]) -> dict[str, str]:
@@ -120,6 +83,158 @@ def _savings_headers(savings: dict[str, Any]) -> dict[str, str]:
         "X-Sensei-Compression-Ratio": str(savings.get("compression_ratio", 1.0)),
         "X-Sensei-Compression-Enabled": str(savings.get("compression_enabled", False)).lower(),
     }
+
+
+# ─── compression of request bodies ───────────────────────────────────────────
+
+
+def _compress_text(text: Any) -> tuple[Any, int, int, int, int]:
+    """Compress a single string; return (text, before, after, saved, blocks)."""
+    if not isinstance(text, str) or len(text) < _MIN_COMPRESS_LEN:
+        return text, 0, 0, 0, 0
+    r = _router().compress(text)
+    return r.compressed, r.original_tokens, r.compressed_tokens, r.tokens_saved, 1
+
+
+def compress_request_messages(
+    messages: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Compress OpenAI-style chat messages, preserving order/roles/extra fields.
+
+    System messages are compressed only when ``gateway_compress_system`` is on
+    (and long enough). Short and structured (vision/tool) content pass through.
+    """
+    if not settings.compression_enabled:
+        return messages, _no_savings()
+
+    out: list[dict[str, Any]] = []
+    before = after = saved = blocks = 0
+    for msg in messages:
+        role = msg.get("role", "user")
+        content = msg.get("content")
+        skip_system = role == "system" and not settings.gateway_compress_system
+        if skip_system or not isinstance(content, str):
+            out.append(msg)
+            continue
+        new_content, b, a, s, bl = _compress_text(content)
+        before, after, saved, blocks = before + b, after + a, saved + s, blocks + bl
+        new_msg = dict(msg)
+        new_msg["content"] = new_content
+        out.append(new_msg)
+
+    if not before:
+        return out, _no_savings() if not blocks else _savings(0, 0, 0, blocks)
+    return out, _savings(before, after, saved, blocks)
+
+
+def _compress_anthropic_content(content: Any) -> tuple[Any, int, int, int, int]:
+    """Compress an Anthropic ``content`` value (string or list of blocks)."""
+    if isinstance(content, str):
+        return _compress_text(content)
+    if isinstance(content, list):
+        before = after = saved = blocks = 0
+        out = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                nt, b, a, s, bl = _compress_text(block.get("text"))
+                nb = dict(block)
+                nb["text"] = nt
+                out.append(nb)
+                before, after, saved, blocks = before + b, after + a, saved + s, blocks + bl
+            else:
+                out.append(block)
+        return out, before, after, saved, blocks
+    return content, 0, 0, 0, 0
+
+
+def compress_anthropic_request(
+    system: Any, messages: list[dict[str, Any]]
+) -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
+    """Compress an Anthropic Messages request (top-level ``system`` + messages)."""
+    if not settings.compression_enabled:
+        return system, messages, _no_savings()
+
+    before = after = saved = blocks = 0
+    new_system = system
+    if system is not None and settings.gateway_compress_system:
+        new_system, b, a, s, bl = _compress_anthropic_content(system)
+        before, after, saved, blocks = before + b, after + a, saved + s, blocks + bl
+
+    new_messages = []
+    for msg in messages:
+        nc, b, a, s, bl = _compress_anthropic_content(msg.get("content"))
+        nm = dict(msg)
+        nm["content"] = nc
+        new_messages.append(nm)
+        before, after, saved, blocks = before + b, after + a, saved + s, blocks + bl
+
+    savings = _savings(before, after, saved, blocks) if before else _no_savings()
+    if blocks and not before:
+        savings = _savings(0, 0, 0, blocks)
+    return new_system, new_messages, savings
+
+
+# ─── upstream forwarding ─────────────────────────────────────────────────────
+
+
+def _incoming_bearer(request: Request) -> str | None:
+    auth = request.headers.get("authorization", "")
+    return auth[7:].strip() if auth.lower().startswith("bearer ") else None
+
+
+def _client(base_url: str, headers: dict[str, str]) -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        base_url=base_url.rstrip("/"),
+        headers=headers,
+        timeout=httpx.Timeout(300.0, connect=10.0),
+    )
+
+
+def _error(status: int, message: str, etype: str, headers: dict[str, str]) -> JSONResponse:
+    return JSONResponse(
+        status_code=status, headers=headers, content={"error": {"message": message, "type": etype}}
+    )
+
+
+async def _forward(
+    *,
+    base_url: str,
+    path: str,
+    payload: dict[str, Any],
+    up_headers: dict[str, str],
+    savings: dict[str, Any],
+    stream: bool,
+) -> Any:
+    headers = _savings_headers(savings)
+    get_savings_tracker().record(savings)
+
+    if stream:
+        async def event_stream():
+            async with _client(base_url, up_headers) as client:
+                async with client.stream("POST", path, json=payload) as resp:
+                    async for chunk in resp.aiter_bytes():
+                        yield chunk
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
+
+    try:
+        async with _client(base_url, up_headers) as client:
+            resp = await client.post(path, json=payload)
+    except httpx.HTTPError as exc:
+        logger.warning("Gateway upstream request failed: %s", exc)
+        return _error(502, f"Upstream request failed: {exc}", "upstream_error", headers)
+
+    if resp.headers.get("content-type", "").startswith("application/json"):
+        data = resp.json()
+        if isinstance(data, dict):
+            data["sensei"] = savings
+        return JSONResponse(status_code=resp.status_code, content=data, headers=headers)
+    return JSONResponse(
+        status_code=resp.status_code, content={"raw": resp.text, "sensei": savings}, headers=headers
+    )
+
+
+# ─── OpenAI-compatible endpoints ─────────────────────────────────────────────
 
 
 @router.get("/v1/models")
@@ -142,40 +257,27 @@ async def list_models_openai() -> dict[str, Any]:
 
 @router.post("/v1/chat/completions")
 async def chat_completions(request: Request) -> Any:
-    """OpenAI-compatible chat completions, with transparent prompt compression."""
+    """OpenAI-compatible chat completions with transparent prompt compression."""
     try:
         body = await request.json()
     except Exception:
-        return JSONResponse(
-            status_code=400,
-            content={"error": {"message": "Invalid JSON body", "type": "invalid_request_error"}},
-        )
+        return _error(400, "Invalid JSON body", "invalid_request_error", {})
 
     messages = body.get("messages")
     if not isinstance(messages, list):
-        return JSONResponse(
-            status_code=400,
-            content={"error": {"message": "'messages' must be a list", "type": "invalid_request_error"}},
-        )
+        return _error(400, "'messages' must be a list", "invalid_request_error", {})
 
     compressed, savings = compress_request_messages(messages)
-    headers = _savings_headers(savings)
 
     provider = APIModelProvider()
-    if not provider.api_key:
-        return JSONResponse(
-            status_code=502,
-            headers=headers,
-            content={
-                "error": {
-                    "message": (
-                        f"No upstream API key configured for provider "
-                        f"'{provider.provider_name}'. Set "
-                        f"SENSEI_{provider.provider_name.upper()}_API_KEY."
-                    ),
-                    "type": "upstream_not_configured",
-                }
-            },
+    api_key = _incoming_bearer(request) or provider.api_key
+    if not api_key:
+        return _error(
+            502,
+            f"No API key. Send Authorization: Bearer <key> or set "
+            f"SENSEI_{provider.provider_name.upper()}_API_KEY.",
+            "upstream_not_configured",
+            _savings_headers(savings),
         )
 
     payload = dict(body)
@@ -183,38 +285,60 @@ async def chat_completions(request: Request) -> Any:
     if not payload.get("model"):
         payload["model"] = provider.model
 
-    # Real traffic is about to be forwarded — fold its savings into the dashboard.
-    get_savings_tracker().record(savings)
+    return await _forward(
+        base_url=provider.base_url,
+        path="/chat/completions",
+        payload=payload,
+        up_headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        savings=savings,
+        stream=bool(payload.get("stream")),
+    )
 
-    if payload.get("stream"):
-        async def event_stream():
-            async with _upstream_client(provider) as client:
-                async with client.stream("POST", "/chat/completions", json=payload) as resp:
-                    async for chunk in resp.aiter_bytes():
-                        yield chunk
 
-        return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
+# ─── Anthropic-compatible endpoint (Claude Code) ─────────────────────────────
 
+
+@router.post("/v1/messages")
+async def messages_anthropic(request: Request) -> Any:
+    """Anthropic Messages API with transparent prompt compression."""
     try:
-        async with _upstream_client(provider) as client:
-            resp = await client.post("/chat/completions", json=payload)
-    except httpx.HTTPError as exc:
-        logger.warning("Gateway upstream request failed: %s", exc)
-        return JSONResponse(
-            status_code=502,
-            headers=headers,
-            content={"error": {"message": f"Upstream request failed: {exc}", "type": "upstream_error"}},
+        body = await request.json()
+    except Exception:
+        return _error(400, "Invalid JSON body", "invalid_request_error", {})
+
+    messages = body.get("messages")
+    if not isinstance(messages, list):
+        return _error(400, "'messages' must be a list", "invalid_request_error", {})
+
+    new_system, new_messages, savings = compress_anthropic_request(body.get("system"), messages)
+
+    api_key = request.headers.get("x-api-key") or _incoming_bearer(request) or settings.anthropic_api_key
+    if not api_key:
+        return _error(
+            502,
+            "No API key. Send x-api-key: <key> or set SENSEI_ANTHROPIC_API_KEY.",
+            "upstream_not_configured",
+            _savings_headers(savings),
         )
 
-    content_type = resp.headers.get("content-type", "")
-    if content_type.startswith("application/json"):
-        data = resp.json()
-        if isinstance(data, dict):
-            data["sensei"] = savings
-        return JSONResponse(status_code=resp.status_code, content=data, headers=headers)
+    payload = dict(body)
+    if new_system is not None:
+        payload["system"] = new_system
+    payload["messages"] = new_messages
 
-    return JSONResponse(
-        status_code=resp.status_code,
-        content={"raw": resp.text, "sensei": savings},
-        headers=headers,
+    up_headers = {
+        "x-api-key": api_key,
+        "anthropic-version": request.headers.get("anthropic-version", _ANTHROPIC_VERSION),
+        "content-type": "application/json",
+    }
+    if beta := request.headers.get("anthropic-beta"):
+        up_headers["anthropic-beta"] = beta
+
+    return await _forward(
+        base_url=settings.anthropic_api_base_url,
+        path="/messages",
+        payload=payload,
+        up_headers=up_headers,
+        savings=savings,
+        stream=bool(payload.get("stream")),
     )
