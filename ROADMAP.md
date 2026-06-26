@@ -65,7 +65,7 @@ This document outlines planned features, future directions, and monetization ide
 - [ ] **Input sanitization layer** — XSS prevention, prompt injection detection
 - [ ] **Rate limit per-user and per-IP** — Granular control
 - [ ] **Session token rotation** — Prevent token replay attacks
-- [ ] **Data auto-purge** — Configurable TTL for sessions, cache, memory
+- [x] **Data auto-purge** — Background loop drops expired sessions/CCR + audit entries older than N days; manual POST /api/maintenance/purge
 - [ ] **Zero-knowledge mode** — Provider can never see uncompressed data
 
 ### Low Latency & Performance

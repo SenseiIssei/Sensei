@@ -45,6 +45,34 @@ class AuditLog:
                 continue
         return out
 
+    def trim(self, max_days: int) -> int:
+        """Drop audit entries older than ``max_days``. Returns the count removed."""
+        if max_days <= 0 or not self.path.exists():
+            return 0
+        cutoff = time.time() - max_days * 86400
+        with self._lock:
+            try:
+                lines = self.path.read_text(encoding="utf-8").splitlines()
+            except OSError:
+                return 0
+            kept: list[str] = []
+            removed = 0
+            for line in lines:
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if entry.get("ts", 0) >= cutoff:
+                    kept.append(line)
+                else:
+                    removed += 1
+            if removed:
+                try:
+                    self.path.write_text("\n".join(kept) + ("\n" if kept else ""), encoding="utf-8")
+                except OSError:
+                    return 0
+            return removed
+
 
 _audit: AuditLog | None = None
 
