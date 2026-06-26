@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import FastAPI, Request
@@ -47,6 +48,7 @@ app = FastAPI(
 
 # Global session manager
 session_manager: SessionManager | None = None
+_purge_task: asyncio.Task | None = None
 
 
 @app.on_event("startup")
@@ -84,6 +86,21 @@ async def startup() -> None:
     init_gateway_deps(content_router=content_router)
     init_stats_deps(ccr_store=ccr_store)
 
+    # Data auto-purge background loop.
+    global _purge_task
+    if settings.purge_interval_minutes > 0:
+        from sensei.purge import purge_expired
+
+        async def _purge_loop() -> None:
+            while True:
+                try:
+                    purge_expired()
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug("purge loop error: %s", exc)
+                await asyncio.sleep(max(60, settings.purge_interval_minutes * 60))
+
+        _purge_task = asyncio.create_task(_purge_loop())
+
     logger.info(
         "Sensei initialized — compression: %s, memory: %s, auth: %s, rate_limit: %s",
         settings.compression_enabled,
@@ -98,6 +115,8 @@ async def shutdown() -> None:
     if session_manager:
         expired = session_manager.cleanup_expired()
         logger.info("Cleaned up %d expired sessions", expired)
+    if _purge_task:
+        _purge_task.cancel()
     from sensei.routers.gateway import close_clients
 
     await close_clients()
@@ -160,6 +179,7 @@ from sensei.routers.auth import router as auth_router  # noqa: E402
 from sensei.routers.chat import router as chat_router  # noqa: E402
 from sensei.routers.conversations import router as conversations_router  # noqa: E402
 from sensei.routers.gateway import router as gateway_router  # noqa: E402
+from sensei.routers.maintenance import router as maintenance_router  # noqa: E402
 from sensei.routers.models import router as models_router  # noqa: E402
 from sensei.routers.settings import router as settings_router  # noqa: E402
 from sensei.routers.stats import router as stats_router  # noqa: E402
@@ -168,6 +188,7 @@ app.include_router(audit_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api")
+app.include_router(maintenance_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(stats_router, prefix="/api")
