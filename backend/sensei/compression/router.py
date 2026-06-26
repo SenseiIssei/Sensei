@@ -8,6 +8,7 @@ from typing import Any
 from sensei.compression.cachealign import CacheAligner
 from sensei.compression.ccr import CCRStore
 from sensei.compression.codecomp import CodeCompressor
+from sensei.compression.logcomp import LogCompressor
 from sensei.compression.smartcrusher import SmartCrusher
 from sensei.compression.textcomp import TextCompressor
 
@@ -15,6 +16,7 @@ from sensei.compression.textcomp import TextCompressor
 class ContentType(str, Enum):
     json = "json"
     code = "code"
+    logs = "logs"
     text = "text"
     mixed = "mixed"
 
@@ -57,6 +59,24 @@ def _detect_json(text: str) -> bool:
         return True
     except (json.JSONDecodeError, ValueError):
         return False
+
+
+_LOG_LEVEL_RE = re.compile(r"\b(INFO|DEBUG|WARN(?:ING)?|ERROR|TRACE|FATAL|CRITICAL)\b")
+_LOG_LINE_START = re.compile(
+    r'^\s*(\[?\d{4}-\d{2}-\d{2}|\d{2}:\d{2}:\d{2}|'
+    r'\[(?:INFO|DEBUG|WARN|ERROR|TRACE|FATAL)\]|'
+    r'(?:INFO|DEBUG|WARN|ERROR|TRACE|FATAL):|at |File "|Traceback)'
+)
+
+
+def _detect_logs(text: str) -> bool:
+    """Heuristic: many lines that look like log records (levels/timestamps/frames)."""
+    lines = text.split("\n")
+    if len(lines) < 8:
+        return False
+    sample = lines[:80]
+    hits = sum(1 for line in sample if _LOG_LEVEL_RE.search(line) or _LOG_LINE_START.match(line))
+    return hits >= max(4, int(len(sample) * 0.25))
 
 
 def _detect_code(text: str) -> bool:
@@ -107,6 +127,7 @@ class ContentRouter:
         self.smart_crusher = SmartCrusher()
         self.code_compressor = CodeCompressor()
         self.text_compressor = TextCompressor()
+        self.log_compressor = LogCompressor()
         self.cache_aligner = CacheAligner()
         self.ccr_store = ccr_store
         self.enable_caching = enable_caching
@@ -115,6 +136,8 @@ class ContentRouter:
         """Detect the content type of a text block."""
         if _detect_json(content):
             return ContentType.json
+        if _detect_logs(content):
+            return ContentType.logs
         if _detect_code(content):
             return ContentType.code
         return ContentType.text
@@ -139,6 +162,9 @@ class ContentRouter:
             case ContentType.code:
                 compressed = self.code_compressor.compress(content)
                 compressor = "codecompressor"
+            case ContentType.logs:
+                compressed = self.log_compressor.compress(content)
+                compressor = "logcompressor"
             case _:
                 compressed = self.text_compressor.compress(content)
                 compressor = "textcompressor"
