@@ -64,6 +64,45 @@ Sensei is a **free, open-source, self-hosted AI workspace** that combines:
 
 All your data stays on your machine. No tracking, no telemetry, no cloud dependency. Your thoughts never leave your orbit.
 
+## Verified performance
+
+These numbers are **measured, not claimed** — reproduce them with
+[`backend/benchmarks/compression_benchmark.py`](backend/benchmarks/compression_benchmark.py)
+(real `tiktoken` counts on a representative corpus of tool outputs, logs, code, and prose):
+
+| Content | Real token reduction |
+|---|---|
+| JSON tool output (20-record array) | **79%** |
+| JSON search results | **69%** |
+| Build / test logs | **88%** |
+| Stack traces | **61%** |
+| Source code | 40% |
+| Prose | 44% |
+| **Aggregate** | **79%** |
+
+The JSON and log wins are **lossless** (CSV-schema tabular compaction + log
+triage). An optional [Rust accelerator](rust/sensei_core) (`sensei_core`) runs the
+hottest path ~2× faster, byte-for-byte identical to the Python path.
+
+## Use it as a drop-in gateway (save tokens on the tools you already use)
+
+Sensei speaks both the **OpenAI** and **Anthropic** APIs, so point any tool's
+base URL at it and prompts are compressed transparently — the tool keeps its own key:
+
+```bash
+# OpenAI tools (Codex, Cursor, Continue, Aider, the OpenAI SDK)
+export OPENAI_BASE_URL=http://localhost:7000/v1
+# Claude Code / Anthropic SDK
+export ANTHROPIC_BASE_URL=http://localhost:7000
+```
+
+Or install the **[VS Code extension](extensions/vscode)** — one click routes Claude
+Code / Codex through Sensei, shows live `% saved · $ saved` in the status bar, and
+adds a Sensei chat panel. Every response carries `X-Sensei-Tokens-Saved` headers,
+and the web UI's Stats panel shows total tokens and dollars saved.
+
+See [packaging/README.md](packaging/README.md) for console / `.exe` / Marketplace install.
+
 ## Features
 
 <!-- Glassmorphism-inspired feature sections -->
