@@ -1,0 +1,63 @@
+{
+  "name": "sensei-tokens",
+  "displayName": "Sensei — Token Saver",
+  "description": "Compress prompts for Claude Code, Codex, Copilot and any AI tool. Saves tokens in the background and adds a Sensei chat panel.",
+  "version": "0.1.0",
+  "publisher": "senseiissei",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/SenseiIssei/Sensei" },
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["AI", "Machine Learning", "Other"],
+  "keywords": ["claude", "copilot", "codex", "tokens", "compression", "llm", "proxy"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        { "id": "sensei", "title": "Sensei", "icon": "media/sensei.svg" }
+      ]
+    },
+    "views": {
+      "sensei": [
+        { "type": "webview", "id": "sensei.chatView", "name": "Chat" }
+      ]
+    },
+    "commands": [
+      { "command": "sensei.openChat", "title": "Sensei: Open Chat" },
+      { "command": "sensei.routeClaudeCode", "title": "Sensei: Route Claude Code through Sensei" },
+      { "command": "sensei.routeCodex", "title": "Sensei: Route OpenAI Codex / CLI through Sensei" },
+      { "command": "sensei.unroute", "title": "Sensei: Stop routing tools through Sensei" },
+      { "command": "sensei.showSavings", "title": "Sensei: Show token savings" }
+    ],
+    "configuration": {
+      "title": "Sensei",
+      "properties": {
+        "sensei.gatewayUrl": {
+          "type": "string",
+          "default": "http://localhost:7000",
+          "description": "Base URL of the Sensei compression gateway."
+        },
+        "sensei.backendUrl": {
+          "type": "string",
+          "default": "http://localhost:7000",
+          "description": "Base URL of the Sensei backend API (chat, stats)."
+        },
+        "sensei.pollSeconds": {
+          "type": "number",
+          "default": 15,
+          "description": "How often to refresh the status-bar savings counter."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}
