@@ -107,13 +107,18 @@ def compress_request_messages(
     if not settings.compression_enabled:
         return messages, _no_savings()
 
+    # Cache-preserving mode: only touch the last message so the cached prefix
+    # (everything before it) stays byte-identical.
+    preserve = settings.gateway_preserve_cache
+    last_idx = len(messages) - 1
+
     out: list[dict[str, Any]] = []
     before = after = saved = blocks = 0
-    for msg in messages:
+    for idx, msg in enumerate(messages):
         role = msg.get("role", "user")
         content = msg.get("content")
         skip_system = role == "system" and not settings.gateway_compress_system
-        if skip_system or not isinstance(content, str):
+        if (preserve and idx != last_idx) or skip_system or not isinstance(content, str):
             out.append(msg)
             continue
         new_content, b, a, s, bl = _compress_text(content)
@@ -163,14 +168,21 @@ def compress_anthropic_request(
     if not settings.compression_enabled:
         return system, messages, _no_savings()
 
+    preserve = settings.gateway_preserve_cache
     before = after = saved = blocks = 0
     new_system = system
-    if system is not None and settings.gateway_compress_system:
+    # In cache-preserving mode the system prompt is part of the cached prefix —
+    # never touch it.
+    if system is not None and settings.gateway_compress_system and not preserve:
         new_system, b, a, s, bl = _compress_anthropic_content(system)
         before, after, saved, blocks = before + b, after + a, saved + s, blocks + bl
 
     new_messages = []
-    for msg in messages:
+    last_idx = len(messages) - 1
+    for idx, msg in enumerate(messages):
+        if preserve and idx != last_idx:
+            new_messages.append(msg)  # keep the cached prefix byte-exact
+            continue
         nc, b, a, s, bl = _compress_anthropic_content(msg.get("content"))
         nm = dict(msg)
         nm["content"] = nc
@@ -191,12 +203,37 @@ def _incoming_bearer(request: Request) -> str | None:
     return auth[7:].strip() if auth.lower().startswith("bearer ") else None
 
 
-def _client(base_url: str, headers: dict[str, str]) -> httpx.AsyncClient:
-    return httpx.AsyncClient(
-        base_url=base_url.rstrip("/"),
-        headers=headers,
-        timeout=httpx.Timeout(300.0, connect=10.0),
-    )
+# Persistent, connection-pooled clients per upstream. Reusing keep-alive
+# connections avoids a fresh TCP+TLS handshake on every request — the dominant
+# added latency for a proxy. Auth headers are passed per-request, so a single
+# pooled client safely serves requests carrying different keys.
+_clients: dict[str, httpx.AsyncClient] = {}
+_LIMITS = httpx.Limits(max_keepalive_connections=20, max_connections=100, keepalive_expiry=90.0)
+
+
+def _pooled_client(base_url: str) -> httpx.AsyncClient:
+    base = base_url.rstrip("/")
+    client = _clients.get(base)
+    if client is None or client.is_closed:
+        try:
+            client = httpx.AsyncClient(
+                base_url=base, timeout=httpx.Timeout(300.0, connect=10.0), limits=_LIMITS, http2=True
+            )
+        except ImportError:  # `h2` not installed — pooled HTTP/1.1 keep-alive
+            client = httpx.AsyncClient(
+                base_url=base, timeout=httpx.Timeout(300.0, connect=10.0), limits=_LIMITS
+            )
+        _clients[base] = client
+    return client
+
+
+async def close_clients() -> None:
+    for client in _clients.values():
+        try:
+            await client.aclose()
+        except Exception:
+            pass
+    _clients.clear()
 
 
 def _error(status: int, message: str, etype: str, headers: dict[str, str]) -> JSONResponse:
@@ -222,18 +259,18 @@ async def _forward(
 
         get_audit_log().record("gateway.request", **meta)
 
+    client = _pooled_client(base_url)
+
     if stream:
         async def event_stream():
-            async with _client(base_url, up_headers) as client:
-                async with client.stream("POST", path, json=payload) as resp:
-                    async for chunk in resp.aiter_bytes():
-                        yield chunk
+            async with client.stream("POST", path, json=payload, headers=up_headers) as resp:
+                async for chunk in resp.aiter_bytes():
+                    yield chunk
 
         return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
 
     try:
-        async with _client(base_url, up_headers) as client:
-            resp = await client.post(path, json=payload)
+        resp = await client.post(path, json=payload, headers=up_headers)
     except httpx.HTTPError as exc:
         logger.warning("Gateway upstream request failed: %s", exc)
         return _error(502, f"Upstream request failed: {exc}", "upstream_error", headers)

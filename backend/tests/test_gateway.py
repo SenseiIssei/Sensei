@@ -47,6 +47,20 @@ class TestCompressRequestMessages:
         assert out == messages
         assert savings["blocks_compressed"] == 0
 
+    def test_preserve_cache_only_compresses_last(self, monkeypatch):
+        from sensei.config import settings
+
+        monkeypatch.setattr(settings, "gateway_preserve_cache", True)
+        big = _compressible_json()
+        messages = [
+            {"role": "user", "content": big},  # earlier turn — cached prefix
+            {"role": "user", "content": big},  # newest turn — compressed
+        ]
+        out, savings = compress_request_messages(messages)
+        assert out[0]["content"] == big  # byte-exact (cache hit preserved)
+        assert len(out[1]["content"]) < len(big)  # newest compressed
+        assert savings["blocks_compressed"] == 1
+
 
 class TestGatewayEndpoints:
     @pytest.fixture
@@ -154,3 +168,20 @@ class TestCompressAnthropic:
         inner = messages[0]["content"][0]["content"][0]
         assert inner["type"] == "text"
         assert len(inner["text"]) < len(big)
+
+    def test_preserve_cache_keeps_prefix_byte_exact(self, monkeypatch):
+        from sensei.config import settings
+
+        monkeypatch.setattr(settings, "gateway_preserve_cache", True)
+        big = _compressible_json()
+        system, messages, savings = compress_anthropic_request(
+            big,  # system is part of the cached prefix — must stay byte-exact
+            [
+                {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "a", "content": big}]},
+                {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "b", "content": big}]},
+            ],
+        )
+        assert system == big  # system untouched
+        assert messages[0]["content"][0]["content"] == big  # earlier turn untouched
+        assert len(messages[1]["content"][0]["content"]) < len(big)  # newest compressed
+        assert savings["blocks_compressed"] == 1

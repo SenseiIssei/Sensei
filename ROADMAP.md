@@ -69,7 +69,7 @@ This document outlines planned features, future directions, and monetization ide
 - [ ] **Zero-knowledge mode** — Provider can never see uncompressed data
 
 ### Low Latency & Performance
-- [ ] **HTTP/2 connection pooling** — Reuse connections to model providers
+- [x] **HTTP/2 connection pooling** — Pooled keep-alive clients per upstream (~150 ms/request saved) + cache-preserving compression mode
 - [ ] **Response prefetch** — Start compression while user is still typing
 - [ ] **CCR cache warming** — Pre-populate cache on startup from last session
 - [ ] **Streaming decompression** — Decompress CCR entries on-the-fly

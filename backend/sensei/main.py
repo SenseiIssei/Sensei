@@ -98,6 +98,9 @@ async def shutdown() -> None:
     if session_manager:
         expired = session_manager.cleanup_expired()
         logger.info("Cleaned up %d expired sessions", expired)
+    from sensei.routers.gateway import close_clients
+
+    await close_clients()
     logger.info("Sensei shutting down...")
 
 
