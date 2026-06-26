@@ -1,0 +1,18 @@
+[package]
+name = "sensei_core"
+version = "0.1.0"
+edition = "2021"
+description = "Low-level Rust hot paths for Sensei compression (optional accelerator)."
+license = "MIT"
+
+[lib]
+name = "sensei_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"] }
+serde_json = "1"
+
+[profile.release]
+lto = true
+codegen-units = 1
