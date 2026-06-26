@@ -125,3 +125,29 @@ class TestCompressAnthropic:
         )
         assert messages[0]["content"][0]["type"] == "image"
         assert savings["blocks_compressed"] == 0
+
+    def test_compresses_tool_results(self):
+        # Claude-Code-style: a tool_result block carrying a big JSON payload.
+        big = _compressible_json()
+        _, messages, savings = compress_anthropic_request(
+            "You are an agent.",
+            [{"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": big}]}],
+        )
+        assert savings["tokens_saved"] > 0
+        block = messages[0]["content"][0]
+        assert block["type"] == "tool_result"  # block preserved
+        assert len(block["content"]) < len(big)  # payload compressed
+
+    def test_compresses_tool_result_text_blocks(self):
+        big = _compressible_json()
+        _, messages, _ = compress_anthropic_request(
+            None,
+            [{
+                "role": "user",
+                "content": [{"type": "tool_result", "tool_use_id": "t2",
+                             "content": [{"type": "text", "text": big}]}],
+            }],
+        )
+        inner = messages[0]["content"][0]["content"][0]
+        assert inner["type"] == "text"
+        assert len(inner["text"]) < len(big)
