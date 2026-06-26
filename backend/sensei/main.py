@@ -13,6 +13,7 @@ from sensei.compression.router import ContentRouter
 from sensei.config import settings
 from sensei.routers.chat import init_chat_deps
 from sensei.routers.conversations import init_conversations_deps
+from sensei.routers.gateway import init_gateway_deps
 from sensei.routers.stats import init_stats_deps
 from sensei.security.auth import AuthMiddleware
 from sensei.security.rate_limit import rate_limiter
@@ -60,6 +61,7 @@ async def startup() -> None:
     # Wire dependencies into routers
     init_chat_deps(memory=memory, tools=tools, router_c=content_router)
     init_conversations_deps(memory=memory)
+    init_gateway_deps(content_router=content_router)
     init_stats_deps(ccr_store=ccr_store)
 
     logger.info(
@@ -133,6 +135,7 @@ async def health() -> dict[str, str]:
 from sensei.routers.auth import router as auth_router  # noqa: E402
 from sensei.routers.chat import router as chat_router  # noqa: E402
 from sensei.routers.conversations import router as conversations_router  # noqa: E402
+from sensei.routers.gateway import router as gateway_router  # noqa: E402
 from sensei.routers.models import router as models_router  # noqa: E402
 from sensei.routers.stats import router as stats_router  # noqa: E402
 
@@ -141,6 +144,10 @@ app.include_router(chat_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
 app.include_router(stats_router, prefix="/api")
+
+# OpenAI-compatible compression gateway — mounted at the root so clients can use
+# http://<host>:<port>/v1 as a drop-in OpenAI base URL.
+app.include_router(gateway_router)
 
 
 @app.get("/")
