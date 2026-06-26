@@ -139,10 +139,19 @@ def _compress_anthropic_content(content: Any) -> tuple[Any, int, int, int, int]:
                 nt, b, a, s, bl = _compress_text(block.get("text"))
                 nb = dict(block)
                 nb["text"] = nt
-                out.append(nb)
-                before, after, saved, blocks = before + b, after + a, saved + s, blocks + bl
+            elif isinstance(block, dict) and block.get("type") == "tool_result":
+                # Tool outputs (file reads, command output, search results) are
+                # where agents like Claude Code spend most tokens — and they
+                # aren't part of the cached prefix, so compressing them is both
+                # high-value and prompt-cache-safe.
+                ni, b, a, s, bl = _compress_anthropic_content(block.get("content"))
+                nb = dict(block)
+                nb["content"] = ni
             else:
                 out.append(block)
+                continue
+            out.append(nb)
+            before, after, saved, blocks = before + b, after + a, saved + s, blocks + bl
         return out, before, after, saved, blocks
     return content, 0, 0, 0, 0
 
@@ -312,8 +321,25 @@ async def messages_anthropic(request: Request) -> Any:
 
     new_system, new_messages, savings = compress_anthropic_request(body.get("system"), messages)
 
-    api_key = request.headers.get("x-api-key") or _incoming_bearer(request) or settings.anthropic_api_key
-    if not api_key:
+    # Forward the client's auth verbatim so both API-key and OAuth (Claude
+    # subscription) modes work; fall back to a server-configured key.
+    up_headers = {
+        "anthropic-version": request.headers.get("anthropic-version", _ANTHROPIC_VERSION),
+        "content-type": "application/json",
+    }
+    has_auth = False
+    if xk := request.headers.get("x-api-key"):
+        up_headers["x-api-key"] = xk
+        has_auth = True
+    if auth := request.headers.get("authorization"):
+        up_headers["authorization"] = auth
+        has_auth = True
+    if beta := request.headers.get("anthropic-beta"):
+        up_headers["anthropic-beta"] = beta
+    if not has_auth and settings.anthropic_api_key:
+        up_headers["x-api-key"] = settings.anthropic_api_key
+        has_auth = True
+    if not has_auth:
         return _error(
             502,
             "No API key. Send x-api-key: <key> or set SENSEI_ANTHROPIC_API_KEY.",
@@ -325,14 +351,6 @@ async def messages_anthropic(request: Request) -> Any:
     if new_system is not None:
         payload["system"] = new_system
     payload["messages"] = new_messages
-
-    up_headers = {
-        "x-api-key": api_key,
-        "anthropic-version": request.headers.get("anthropic-version", _ANTHROPIC_VERSION),
-        "content-type": "application/json",
-    }
-    if beta := request.headers.get("anthropic-beta"):
-        up_headers["anthropic-beta"] = beta
 
     return await _forward(
         base_url=settings.anthropic_api_base_url,
