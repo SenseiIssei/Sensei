@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sensei.compression.router import ContentRouter
 from sensei.config import settings
 from sensei.models.api import APIModelProvider
+from sensei.savings import get_savings_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -181,6 +182,9 @@ async def chat_completions(request: Request) -> Any:
     payload["messages"] = compressed
     if not payload.get("model"):
         payload["model"] = provider.model
+
+    # Real traffic is about to be forwarded — fold its savings into the dashboard.
+    get_savings_tracker().record(savings)
 
     if payload.get("stream"):
         async def event_stream():

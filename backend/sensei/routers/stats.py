@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from sensei.compression.ccr import CCRStore
 from sensei.config import settings
+from sensei.savings import get_savings_tracker
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
@@ -37,6 +38,7 @@ async def get_stats() -> dict[str, Any]:
         "ccr": ccr_stats,
         "evicted_entries": evicted,
         "cache_ttl_hours": settings.ccr_ttl_hours,
+        "savings": get_savings_tracker().snapshot(),
     }
 
 
