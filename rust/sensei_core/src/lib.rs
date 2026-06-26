@@ -5,8 +5,10 @@
 //! byte-compatible with `SmartCrusher._to_csv_schema` for the tested shapes.
 
 use pyo3::prelude::*;
+use regex::Regex;
 use serde_json::Value;
 use std::collections::BTreeSet;
+use std::sync::OnceLock;
 
 const MAX_VALUE_LEN: usize = 200;
 
@@ -129,8 +131,132 @@ fn csv_schema(json_str: &str) -> PyResult<Option<String>> {
     Ok(Some(lines.join("\n")))
 }
 
+// ─── Log compressor (parity with Python sensei.compression.logcomp) ──────────
+
+fn important_re() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        Regex::new(
+            r"(?i)(error|fatal|critical|fail(?:ed|ure)?|warn(?:ing)?|exception|traceback|panic|assert|denied|refused|timeout|✗|✘|✖|fixme)",
+        )
+        .unwrap()
+    })
+}
+
+fn summary_re() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        Regex::new(
+            r"(?i)(\b\d+\s+(?:passed|failed|error|warning|skipped)\b|={3,}|-{3,}|\bbuild (?:succeeded|failed|success|complete)\b|\bdone\b|\bsummary\b)",
+        )
+        .unwrap()
+    })
+}
+
+fn frame_re() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| Regex::new(r#"^\s*(at |File ", "|in |\| |#\d+ |\.\.\. )"#).unwrap())
+}
+
+fn ts_re() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| Regex::new(r"\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}\S*").unwrap())
+}
+
+fn hex_re() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| Regex::new(r"\b0x[0-9a-fA-F]+\b").unwrap())
+}
+
+fn num_re() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| Regex::new(r"\b\d+\b").unwrap())
+}
+
+fn normalize(line: &str) -> String {
+    let s = ts_re().replace_all(line, "<ts>");
+    let s = hex_re().replace_all(&s, "<hex>");
+    let s = num_re().replace_all(&s, "<n>");
+    s.trim().to_string()
+}
+
+fn collapse_repeats(lines: Vec<String>) -> String {
+    let mut result: Vec<String> = Vec::new();
+    let mut prev_norm: Option<String> = None;
+    let mut count: usize = 0;
+    for line in lines {
+        let norm = normalize(&line);
+        if Some(&norm) == prev_norm.as_ref() && !norm.trim().is_empty() {
+            count += 1;
+            continue;
+        }
+        if count > 1 {
+            let last = result.len() - 1;
+            result[last] = format!("{} (x{})", result[last], count);
+        }
+        result.push(line);
+        prev_norm = Some(norm);
+        count = 1;
+    }
+    if count > 1 {
+        let last = result.len() - 1;
+        result[last] = format!("{} (x{})", result[last], count);
+    }
+    result.join("\n")
+}
+
+fn do_compress_logs(text: &str, context_after: usize, head: usize, tail: usize) -> String {
+    let lines: Vec<&str> = text.split('\n').collect();
+    let n = lines.len();
+    if n < 10 {
+        return text.to_string();
+    }
+    let mut keep = vec![false; n];
+    for i in 0..head.min(n) {
+        keep[i] = true;
+    }
+    for i in n.saturating_sub(tail)..n {
+        keep[i] = true;
+    }
+    for i in 0..n {
+        if important_re().is_match(lines[i]) || summary_re().is_match(lines[i]) {
+            keep[i] = true;
+            let end = (i + 1 + context_after).min(n);
+            for j in (i + 1)..end {
+                if frame_re().is_match(lines[j]) || !lines[j].trim().is_empty() {
+                    keep[j] = true;
+                }
+            }
+        }
+    }
+
+    let mut out: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < n {
+        if keep[i] {
+            out.push(lines[i].to_string());
+            i += 1;
+        } else {
+            let mut j = i;
+            while j < n && !keep[j] {
+                j += 1;
+            }
+            out.push(format!("… {} lines omitted …", j - i));
+            i = j;
+        }
+    }
+    collapse_repeats(out)
+}
+
+#[pyfunction]
+#[pyo3(signature = (text, context_after=2, head=3, tail=3))]
+fn compress_logs(text: &str, context_after: usize, head: usize, tail: usize) -> PyResult<String> {
+    Ok(do_compress_logs(text, context_after, head, tail))
+}
+
 #[pymodule]
 fn sensei_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(csv_schema, m)?)?;
+    m.add_function(wrap_pyfunction!(compress_logs, m)?)?;
     Ok(())
 }

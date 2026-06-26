@@ -11,8 +11,10 @@ behavior never changes — only speed.
 - [x] `csv_schema(json_str) -> str | None` — JSON dict-array → CSV-schema table
       (the biggest compression hot path). ~2× faster than Python on a 200-row
       table; gap widens with size. Byte-parity verified in CI samples.
-- [ ] `compress_code` / `compress_logs` / `compress_text` — port the remaining
-      compressors (regex-heavy → ideal for Rust).
+- [x] `compress_logs(text, context_after, head, tail) -> str` — log/build/test
+      triage. Byte-identical to the Python `LogCompressor` (parity test in
+      `test_compression.py::TestLogCompressor::test_rust_matches_python`).
+- [ ] `compress_code` / `compress_text` — port the remaining compressors.
 - [ ] streaming tokenizer + KV-cache prefix hashing.
 - [ ] zero-copy CCR store.
 

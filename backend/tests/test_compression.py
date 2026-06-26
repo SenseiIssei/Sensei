@@ -140,6 +140,24 @@ class TestLogCompressor:
         text = "line1\nline2\nERROR boom"  # < 10 lines
         assert comp.compress(text) == text
 
+    def test_rust_matches_python(self):
+        # When the Rust accelerator is built, its output must be byte-identical
+        # to the pure-Python path.
+        import unittest.mock as mock
+
+        from sensei.compression import logcomp
+
+        if logcomp._core is None:
+            return
+        text = "\n".join(
+            [f"2026-01-01 12:00:{i:02d} INFO step {i} ok" for i in range(30)]
+            + ["2026-01-01 12:01:00 ERROR boom", "done"]
+        )
+        rust_out = logcomp.LogCompressor().compress(text)
+        with mock.patch.object(logcomp, "_core", None):
+            py_out = logcomp.LogCompressor().compress(text)
+        assert rust_out == py_out
+
 
 class TestContentRouter:
     def test_detect_json(self):
