@@ -37,7 +37,7 @@ This document outlines planned features, future directions, and monetization ide
 - [ ] **Chat history sidebar** — Searchable, organized by date, pin favorites
 - [ ] **File & image references** — Drag-and-drop PDFs, images, code files into chat
 - [ ] **Model selector dropdown** — Switch between all 14+ providers mid-conversation
-- [ ] **Streaming responses** — Token-by-token streaming with cancel button
+- [x] **Streaming responses** — SSE token-by-token streaming with a Stop button (chat panel)
 - [ ] **Markdown rendering** — Code blocks with syntax highlighting, tables, LaTeX
 - [ ] **Copy / regenerate / edit messages** — Full message control like Claude
 - [ ] **Keyboard-first navigation** — Cmd+K command palette, arrow keys, Enter to send

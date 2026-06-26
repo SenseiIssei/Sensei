@@ -4,6 +4,7 @@ import json
 import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from sensei.agents.memory import MemoryStore
@@ -105,6 +106,59 @@ async def chat(request: ChatRequest) -> ChatResponse:
             else 1.0
         ),
     )
+
+
+def _sse(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@router.post("/stream")
+async def chat_stream_sse(request: ChatRequest) -> StreamingResponse:
+    """Server-Sent Events streaming chat — token-by-token, with compression."""
+    if _memory is None:
+        async def err():
+            yield _sse("error", {"message": "Chat not initialized"})
+
+        return StreamingResponse(err(), media_type="text/event-stream")
+
+    conv_id = request.conversation_id or _memory.create_conversation()
+
+    messages: list[ChatMessage] = []
+    if request.system_prompt:
+        messages.append(ChatMessage(role=Role.system, content=request.system_prompt))
+    for msg in _memory.get_messages(conv_id):
+        messages.append(ChatMessage(role=Role(msg["role"]), content=msg["content"]))
+    messages.append(ChatMessage(role=Role.user, content=request.message))
+    _memory.add_message(conv_id, "user", request.message)
+
+    msg_dicts = [{"role": m.role.value, "content": m.content} for m in messages]
+    total_saved = 0
+    if settings.compression_enabled and _content_router:
+        compressed_msgs, results = _content_router.compress_messages(msg_dicts)
+        total_saved = sum(r.tokens_saved for r in results)
+        messages = [ChatMessage(role=Role(m["role"]), content=m["content"]) for m in compressed_msgs]
+
+    async def gen():
+        yield _sse("meta", {"conversation_id": conv_id, "tokens_saved": total_saved})
+        full = ""
+        try:
+            provider = await get_provider()
+            async for token in provider.stream_chat(
+                messages=messages,
+                model=request.model,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+            ):
+                full += token
+                yield _sse("token", {"t": token})
+        except Exception as e:  # noqa: BLE001
+            logger.error("SSE streaming error: %s", e)
+            yield _sse("error", {"message": str(e)})
+        if full:
+            _memory.add_message(conv_id, "assistant", full)
+        yield _sse("done", {"tokens_saved": total_saved})
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 
 @router.websocket("/ws")

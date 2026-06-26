@@ -65,3 +65,9 @@ class TestAPIEndpoints:
         assert resp.status_code == 200
         data = resp.json()
         assert data["info"]["title"] == "Sensei"
+
+    def test_chat_stream_sse(self, client):
+        resp = client.post("/api/chat/stream", json={"message": "hello"})
+        assert resp.status_code == 200
+        assert "text/event-stream" in resp.headers.get("content-type", "")
+        assert "event:" in resp.text  # SSE frames present
