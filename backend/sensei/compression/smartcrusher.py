@@ -4,6 +4,14 @@ import json
 import re
 from typing import Any
 
+# Optional Rust accelerator (built from rust/sensei_core via maturin). When
+# present, the JSON→CSV-schema hot path runs in Rust; otherwise pure Python is
+# used. Output is byte-compatible, so behavior is identical either way.
+try:  # pragma: no cover - depends on whether the wheel was built
+    import sensei_core as _core
+except ImportError:
+    _core = None
+
 
 class SmartCrusher:
     """Compress JSON content by removing redundancy while preserving semantics.
@@ -24,6 +32,12 @@ class SmartCrusher:
 
     def compress(self, json_str: str) -> str:
         """Compress a JSON string."""
+        # Fast path: let the Rust accelerator handle the tabular case if built.
+        if _core is not None:
+            rendered = _core.csv_schema(json_str)
+            if rendered is not None:
+                return rendered
+
         try:
             data = json.loads(json_str)
         except (json.JSONDecodeError, ValueError):
