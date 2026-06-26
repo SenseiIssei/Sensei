@@ -121,6 +121,11 @@ class Settings(BaseSettings):
     # Compress system prompts at the gateway too (where IDE tools hide most of
     # their tokens). Lossy — disable for byte-exact system prompts.
     gateway_compress_system: bool = True
+    # Cache-preserving mode: only compress the newest message (the fresh tool
+    # output), leaving earlier turns byte-exact so provider prompt caches still
+    # hit. Big latency win for agents like Claude Code; slightly less total
+    # compression. Recommended ON when routing a cache-heavy agent.
+    gateway_preserve_cache: bool = False
 
     # Memory
     memory_enabled: bool = True
