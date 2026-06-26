@@ -98,6 +98,19 @@ class TestGatewayEndpoints:
         # Savings are computed before forwarding, so the header is present.
         assert "x-sensei-tokens-saved" in {k.lower() for k in resp.headers}
 
+    def test_blocks_disallowed_model(self, client, monkeypatch):
+        from sensei.config import settings
+
+        monkeypatch.setattr(settings, "api_provider", "openrouter")
+        monkeypatch.setattr(settings, "openrouter_api_key", "test-key")  # pass auth
+        monkeypatch.setattr(settings, "blocked_models", "gpt-4")
+        resp = client.post(
+            "/v1/chat/completions",
+            json={"model": "gpt-4o", "messages": [{"role": "user", "content": "hi"}]},
+        )
+        assert resp.status_code == 403
+        assert resp.json()["error"]["type"] == "blocked_by_policy"
+
     def test_messages_invalid(self, client):
         resp = client.post("/v1/messages", json={"messages": "nope"})
         assert resp.status_code == 400

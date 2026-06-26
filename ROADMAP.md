@@ -86,7 +86,7 @@ This document outlines planned features, future directions, and monetization ide
 - [ ] **Custom DNS resolution** — Route requests through specific DNS for privacy
 - [ ] **Tor / I2P support** — Route API requests through Tor for anonymity
 - [ ] **Corporate proxy compatibility** — HTTP_PROXY / HTTPS_PROXY support
-- [ ] **Request filtering** — Block specific models, providers, or content patterns
+- [x] **Request filtering** — Block models (substring) or content (regex) at the gateway → 403 blocked_by_policy
 - [x] **Request filtering (DLP redaction)** — Redact secrets (keys, tokens, private keys, JWTs) and optional PII (email/IP) before prompts leave the machine; counts in X-Sensei-Redactions + audit
 
 ### OpenClaw-style Multi-Channel
