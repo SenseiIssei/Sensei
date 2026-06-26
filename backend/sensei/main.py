@@ -55,6 +55,13 @@ async def startup() -> None:
     global session_manager
     logger.info("Starting Sensei v0.1.0...")
 
+    # Load encrypted API keys from the vault into live settings.
+    from sensei.security.vault import get_vault
+
+    applied = get_vault().apply_to_settings()
+    if applied:
+        logger.info("Loaded %d API key(s) from the encrypted vault", applied)
+
     # Initialize CCR store
     ccr_store = CCRStore()
 
@@ -145,6 +152,7 @@ async def health() -> dict[str, str]:
 
 
 # Register routers
+from sensei.routers.audit import router as audit_router  # noqa: E402
 from sensei.routers.auth import router as auth_router  # noqa: E402
 from sensei.routers.chat import router as chat_router  # noqa: E402
 from sensei.routers.conversations import router as conversations_router  # noqa: E402
@@ -153,6 +161,7 @@ from sensei.routers.models import router as models_router  # noqa: E402
 from sensei.routers.settings import router as settings_router  # noqa: E402
 from sensei.routers.stats import router as stats_router  # noqa: E402
 
+app.include_router(audit_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api")

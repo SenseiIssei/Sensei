@@ -213,9 +213,14 @@ async def _forward(
     up_headers: dict[str, str],
     savings: dict[str, Any],
     stream: bool,
+    meta: dict[str, Any] | None = None,
 ) -> Any:
     headers = _savings_headers(savings)
     get_savings_tracker().record(savings)
+    if meta is not None:
+        from sensei.audit import get_audit_log
+
+        get_audit_log().record("gateway.request", **meta)
 
     if stream:
         async def event_stream():
@@ -301,6 +306,12 @@ async def chat_completions(request: Request) -> Any:
         up_headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
         savings=savings,
         stream=bool(payload.get("stream")),
+        meta={
+            "api": "openai",
+            "provider": provider.provider_name,
+            "model": payload.get("model"),
+            "tokens_saved": savings.get("tokens_saved", 0),
+        },
     )
 
 
@@ -359,4 +370,9 @@ async def messages_anthropic(request: Request) -> Any:
         up_headers=up_headers,
         savings=savings,
         stream=bool(payload.get("stream")),
+        meta={
+            "api": "anthropic",
+            "model": payload.get("model"),
+            "tokens_saved": savings.get("tokens_saved", 0),
+        },
     )

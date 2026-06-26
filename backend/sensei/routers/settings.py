@@ -117,7 +117,10 @@ async def update_settings(update: SettingsUpdate) -> dict[str, Any]:
 
     if update.api_key is not None:
         setattr(settings, _key_attr(provider), update.api_key)
-        env_updates[f"SENSEI_{provider.upper()}_API_KEY"] = update.api_key
+        # Store the key in the encrypted vault — never plaintext in .env.
+        from sensei.security.vault import get_vault
+
+        get_vault().set_key(provider, update.api_key)
         # A configured key means we can serve from the API provider deterministically.
         settings.model_provider = "ollama" if provider == "ollama" else "api"  # type: ignore[assignment]
         env_updates["SENSEI_MODEL_PROVIDER"] = settings.model_provider
@@ -138,4 +141,14 @@ async def update_settings(update: SettingsUpdate) -> dict[str, Any]:
         _persist_env(env_updates)
     # Drop cached providers so the next request rebuilds them with new settings.
     registry._provider_cache.clear()
+
+    from sensei.audit import get_audit_log
+
+    get_audit_log().record(
+        "settings.update",
+        provider=provider,
+        model=update.model,
+        api_key_changed=update.api_key is not None,
+        compression_enabled=update.compression_enabled,
+    )
     return _snapshot()

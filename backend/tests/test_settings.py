@@ -19,8 +19,11 @@ def test_get_settings():
 
 
 def test_put_settings_updates_live_and_persists(tmp_path, monkeypatch):
+    import sensei.security.vault as vaultmod
+
     client = TestClient(app)
     monkeypatch.setattr(settings_router, "ENV_PATH", tmp_path / ".env")
+    monkeypatch.setattr(vaultmod, "_vault", vaultmod.KeyVault(tmp_path / "vault.json"))
 
     orig = (
         settings.api_provider,
@@ -40,10 +43,13 @@ def test_put_settings_updates_live_and_persists(tmp_path, monkeypatch):
         assert data["model"] == "llama-3.3-70b-versatile"
         # Live settings updated, so a real request would use the new provider.
         assert settings.api_provider == "groq"
-        # Persisted to the (temp) .env.
+        # Non-secret config goes to .env...
         env_text = (tmp_path / ".env").read_text(encoding="utf-8")
-        assert "SENSEI_GROQ_API_KEY=test-key" in env_text
         assert "SENSEI_API_PROVIDER=groq" in env_text
+        # ...but the API key lives ONLY in the encrypted vault, never plaintext.
+        assert vaultmod.get_vault().get_key("groq") == "test-key"
+        assert "test-key" not in env_text
+        assert b"test-key" not in (tmp_path / "vault.json").read_bytes()
     finally:
         (
             settings.api_provider,
