@@ -183,6 +183,7 @@ from sensei.routers.maintenance import router as maintenance_router  # noqa: E40
 from sensei.routers.models import router as models_router  # noqa: E402
 from sensei.routers.settings import router as settings_router  # noqa: E402
 from sensei.routers.stats import router as stats_router  # noqa: E402
+from sensei.routers.webhook import router as webhook_router  # noqa: E402
 
 app.include_router(audit_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
@@ -192,6 +193,7 @@ app.include_router(maintenance_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(stats_router, prefix="/api")
+app.include_router(webhook_router, prefix="/api")
 
 # OpenAI-compatible compression gateway — mounted at the root so clients can use
 # http://<host>:<port>/v1 as a drop-in OpenAI base URL.

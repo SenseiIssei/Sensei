@@ -96,7 +96,7 @@ This document outlines planned features, future directions, and monetization ide
 - [ ] **WhatsApp bridge** — Connect via WhatsApp Web
 - [ ] **Matrix support** — Federated chat integration
 - [ ] **Email assistant** — Send emails to Sensei, get responses
-- [ ] **Webhook API** — Integrate Sensei into any platform via webhooks
+- [x] **Webhook API** — Authenticated POST /api/webhook (token header) for Slack/Zapier/bots → compressed chat reply
 - [ ] **Multi-agent routing** — Route different channels to different models/configs
 
 ### Improvements
