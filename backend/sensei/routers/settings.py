@@ -66,6 +66,8 @@ def _snapshot() -> dict[str, Any]:
         "model_provider": settings.model_provider,
         "api_key_set": bool(getattr(settings, _key_attr(provider), "")),
         "compression_enabled": settings.compression_enabled,
+        "redaction_enabled": settings.redaction_enabled,
+        "redaction_pii": settings.redaction_pii,
         "log_file": settings.log_file,
         "catalog": [{"id": pid, **info} for pid, info in PROVIDER_CATALOG.items()],
     }

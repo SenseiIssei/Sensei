@@ -27,6 +27,7 @@ from sensei.compression.router import ContentRouter
 from sensei.config import settings
 from sensei.models.api import APIModelProvider
 from sensei.savings import get_savings_tracker
+from sensei.security.redaction import redact_payload
 
 logger = logging.getLogger(__name__)
 
@@ -251,12 +252,17 @@ async def _forward(
     savings: dict[str, Any],
     stream: bool,
     meta: dict[str, Any] | None = None,
+    redactions: int = 0,
 ) -> Any:
     headers = _savings_headers(savings)
+    if redactions:
+        headers["X-Sensei-Redactions"] = str(redactions)
     get_savings_tracker().record(savings)
     if meta is not None:
         from sensei.audit import get_audit_log
 
+        if redactions:
+            meta = {**meta, "redactions": redactions}
         get_audit_log().record("gateway.request", **meta)
 
     client = _pooled_client(base_url)
@@ -336,6 +342,11 @@ async def chat_completions(request: Request) -> Any:
     if not payload.get("model"):
         payload["model"] = provider.model
 
+    red_total = 0
+    if settings.redaction_enabled:
+        payload, red_counts = redact_payload(payload)
+        red_total = sum(red_counts.values())
+
     return await _forward(
         base_url=provider.base_url,
         path="/chat/completions",
@@ -343,6 +354,7 @@ async def chat_completions(request: Request) -> Any:
         up_headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
         savings=savings,
         stream=bool(payload.get("stream")),
+        redactions=red_total,
         meta={
             "api": "openai",
             "provider": provider.provider_name,
@@ -400,6 +412,11 @@ async def messages_anthropic(request: Request) -> Any:
         payload["system"] = new_system
     payload["messages"] = new_messages
 
+    red_total = 0
+    if settings.redaction_enabled:
+        payload, red_counts = redact_payload(payload)
+        red_total = sum(red_counts.values())
+
     return await _forward(
         base_url=settings.anthropic_api_base_url,
         path="/messages",
@@ -407,6 +424,7 @@ async def messages_anthropic(request: Request) -> Any:
         up_headers=up_headers,
         savings=savings,
         stream=bool(payload.get("stream")),
+        redactions=red_total,
         meta={
             "api": "anthropic",
             "model": payload.get("model"),
