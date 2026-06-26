@@ -176,6 +176,66 @@ async function setApiKeyFlow(): Promise<SettingsSnapshot | null> {
   return updated;
 }
 
+// ─── multi-model comparison ──────────────────────────────────────────────────
+
+function renderCompareMarkdown(prompt: string, data: { tokens_saved: number; results: any[] }): string {
+  let md = `# Sensei — model comparison\n\n**Prompt:** ${prompt}\n\n`;
+  md += `_Tokens saved by compression (shared across all models): ${data.tokens_saved}_\n\n---\n\n`;
+  for (const r of data.results) {
+    md += `## ${r.model}\n\n`;
+    if (r.error) {
+      md += `> ⚠ error: ${r.error}\n\n`;
+    } else {
+      md += `${r.content}\n\n`;
+      md += `_latency ${r.latency_ms} ms · prompt ${r.prompt_tokens} tok · completion ${r.completion_tokens} tok_\n\n`;
+    }
+    md += `---\n\n`;
+  }
+  return md;
+}
+
+async function compareModelsFlow(): Promise<void> {
+  const settings = await getSettings();
+  if (!settings) {
+    vscode.window.showWarningMessage("Sensei backend is not reachable.");
+    return;
+  }
+  const message = await vscode.window.showInputBox({
+    prompt: "Prompt to send to every selected model",
+    ignoreFocusOut: true,
+  });
+  if (!message) return;
+
+  const allModels = Array.from(new Set(settings.catalog.flatMap((c) => c.models)));
+  const picks = await vscode.window.showQuickPick(allModels, {
+    canPickMany: true,
+    placeHolder: "Pick models to compare (up to 6)",
+  });
+  if (!picks || picks.length === 0) return;
+
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: "Sensei: comparing models…" },
+    async () => {
+      try {
+        const resp = await fetch(`${backendUrl()}/api/chat/compare`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message, models: picks.slice(0, 6) }),
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = (await resp.json()) as { tokens_saved: number; results: any[] };
+        const doc = await vscode.workspace.openTextDocument({
+          language: "markdown",
+          content: renderCompareMarkdown(message, data),
+        });
+        await vscode.window.showTextDocument(doc);
+      } catch (e: any) {
+        vscode.window.showErrorMessage(`Compare failed: ${e?.message ?? e}`);
+      }
+    }
+  );
+}
+
 // ─── chat webview ────────────────────────────────────────────────────────────
 
 class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -384,6 +444,7 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.commands.executeCommand("sensei.chatView.focus")
     ),
     vscode.commands.registerCommand("sensei.setApiKey", () => setApiKeyFlow()),
+    vscode.commands.registerCommand("sensei.compareModels", () => compareModelsFlow()),
     vscode.commands.registerCommand("sensei.showLogs", async () => {
       const s = await getSettings();
       if (s?.log_file) {
