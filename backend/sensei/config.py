@@ -112,6 +112,8 @@ class Settings(BaseSettings):
     ccr_ttl_hours: int = 24
     ccr_cache_dir: str = ".sensei_cache"
     output_shaper: bool = False
+    # Price assumption for the "money saved" dashboard (USD per 1M input tokens).
+    usd_per_million_tokens: float = 3.0
 
     # Memory
     memory_enabled: bool = True

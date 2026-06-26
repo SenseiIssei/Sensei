@@ -15,7 +15,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import type { Conversation } from "@/types";
+import type { Conversation, StatsResponse } from "@/types";
 import clsx from "clsx";
 
 interface SidebarProps {
@@ -215,18 +215,7 @@ interface StatsPanelProps {
 }
 
 export function StatsPanel({ open, onClose }: StatsPanelProps) {
-  const [stats, setStats] = useState<{
-    compression_enabled: boolean;
-    ccr: {
-      total_entries: number;
-      active_entries: number;
-      total_original_bytes: number;
-      total_compressed_bytes: number;
-      space_saved_bytes: number;
-    };
-    evicted_entries: number;
-    cache_ttl_hours: number;
-  } | null>(null);
+  const [stats, setStats] = useState<StatsResponse | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -255,6 +244,38 @@ export function StatsPanel({ open, onClose }: StatsPanelProps) {
 
         {stats ? (
           <div className="space-y-3">
+            {stats.savings && (
+              <div className="p-4 rounded-lg bg-gradient-to-br from-sensei-900/40 to-gray-800/40 border border-sensei-800/50">
+                <p className="text-xs text-sensei-300 mb-1">Gateway savings</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold text-sensei-400">
+                    {stats.savings.percent_saved}%
+                  </span>
+                  <span className="text-xs text-gray-500">fewer prompt tokens</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 mt-3">
+                  <div>
+                    <p className="text-sm font-semibold text-white">
+                      {stats.savings.tokens_saved.toLocaleString()}
+                    </p>
+                    <p className="text-[10px] text-gray-500">tokens saved</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">
+                      ${stats.savings.estimated_cost_saved_usd.toFixed(2)}
+                    </p>
+                    <p className="text-[10px] text-gray-500">est. saved</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">
+                      {stats.savings.requests.toLocaleString()}
+                    </p>
+                    <p className="text-[10px] text-gray-500">requests</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between p-3 rounded-lg bg-gray-800/50">
               <span className="text-sm text-gray-400">Compression</span>
               <span

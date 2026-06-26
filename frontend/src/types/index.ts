@@ -58,11 +58,25 @@ export interface CCRStats {
   space_saved_bytes: number;
 }
 
+export interface SavingsStats {
+  requests: number;
+  tokens_before: number;
+  tokens_after: number;
+  tokens_saved: number;
+  blocks_compressed: number;
+  compression_ratio: number;
+  percent_saved: number;
+  estimated_cost_saved_usd: number;
+  price_per_million_usd: number;
+  since: number;
+}
+
 export interface StatsResponse {
   compression_enabled: boolean;
   ccr: CCRStats;
   evicted_entries: number;
   cache_ttl_hours: number;
+  savings?: SavingsStats;
 }
 
 export interface WSMeta {
