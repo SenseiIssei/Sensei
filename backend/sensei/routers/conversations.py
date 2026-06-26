@@ -38,4 +38,8 @@ async def delete_conversation(conv_id: str) -> dict[str, bool]:
     """Delete a conversation by ID."""
     if _memory is None:
         return {"deleted": False}
-    return {"deleted": _memory.delete_conversation(conv_id)}
+    deleted = _memory.delete_conversation(conv_id)
+    from sensei.audit import get_audit_log
+
+    get_audit_log().record("conversation.delete", conversation_id=conv_id, deleted=deleted)
+    return {"deleted": deleted}

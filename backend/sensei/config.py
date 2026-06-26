@@ -141,6 +141,12 @@ class Settings(BaseSettings):
     rate_limit_window_seconds: int = 60
     max_message_length: int = 32_768
     data_encryption_enabled: bool = True
+    # Audit log (metadata only — never prompt contents).
+    audit_enabled: bool = True
+    audit_file: str = ".sensei_audit.jsonl"
+    # Encrypted API-key vault. Optional master password; otherwise machine key.
+    vault_file: str = ".sensei_vault.json"
+    vault_password: str = ""
 
     # Sessions
     session_timeout_minutes: int = 60
