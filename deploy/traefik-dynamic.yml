@@ -1,0 +1,17 @@
+# Traefik dynamic configuration for Sensei. Pair with a Traefik static config
+# that defines the `websecure` entrypoint and an ACME `le` cert resolver.
+http:
+  routers:
+    sensei:
+      rule: "Host(`sensei.example.com`)"
+      service: sensei
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: le
+  services:
+    sensei:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://127.0.0.1:7000"
