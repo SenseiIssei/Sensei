@@ -119,6 +119,26 @@ class TestTextCompressor:
         result = comp.compress("In order to win, you must try.")
         assert result[0].isupper()
 
+    def test_rust_matches_python(self):
+        import unittest.mock as mock
+
+        from sensei.compression import textcomp
+
+        if textcomp._core is None:
+            return
+        samples = [
+            "Basically, in order to actually get started, you must install everything.",
+            "the vast majority of the configuration is going to be handled automatically",
+            "x" * 600,
+            "Multiple sentences. " * 60,
+            "dup line long enough to dedupe\ndup line long enough to dedupe\nunique",
+        ]
+        for s in samples:
+            rust_out = textcomp.TextCompressor().compress(s)
+            with mock.patch.object(textcomp, "_core", None):
+                py_out = textcomp.TextCompressor().compress(s)
+            assert rust_out == py_out
+
 
 class TestLogCompressor:
     def test_keeps_errors_drops_noise(self):

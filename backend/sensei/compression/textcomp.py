@@ -2,6 +2,13 @@ from __future__ import annotations
 
 import re
 
+# Optional Rust accelerator (rust/sensei_core). Byte-compatible with the Python
+# path below; soft-imported so installs without the wheel still work.
+try:  # pragma: no cover - depends on whether the wheel was built
+    import sensei_core as _core
+except ImportError:
+    _core = None
+
 
 class TextCompressor:
     """Compress prose/text by removing verbosity while preserving meaning.
@@ -93,6 +100,10 @@ class TextCompressor:
 
     def compress(self, text: str) -> str:
         """Compress prose text."""
+        # Fast path: Rust accelerator (byte-identical output) when available.
+        if _core is not None:
+            return _core.compress_text(text)
+
         # 1. Strip boilerplate references.
         for pat in self._boilerplate:
             text = pat.sub("", text)
