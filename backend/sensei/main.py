@@ -49,6 +49,7 @@ app = FastAPI(
 # Global session manager
 session_manager: SessionManager | None = None
 _purge_task: asyncio.Task | None = None
+_watch_task: asyncio.Task | None = None
 
 
 @app.on_event("startup")
@@ -101,6 +102,21 @@ async def startup() -> None:
 
         _purge_task = asyncio.create_task(_purge_loop())
 
+    # Watched-source change detection loop.
+    global _watch_task
+    if settings.watch_check_interval_minutes > 0:
+        from sensei.watch import check_watches
+
+        async def _watch_loop() -> None:
+            while True:
+                await asyncio.sleep(max(60, settings.watch_check_interval_minutes * 60))
+                try:
+                    await check_watches()
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug("watch loop error: %s", exc)
+
+        _watch_task = asyncio.create_task(_watch_loop())
+
     logger.info(
         "Sensei initialized — compression: %s, memory: %s, auth: %s, rate_limit: %s",
         settings.compression_enabled,
@@ -117,6 +133,8 @@ async def shutdown() -> None:
         logger.info("Cleaned up %d expired sessions", expired)
     if _purge_task:
         _purge_task.cancel()
+    if _watch_task:
+        _watch_task.cancel()
     from sensei.routers.gateway import close_clients
 
     await close_clients()
@@ -185,6 +203,7 @@ from sensei.routers.models import router as models_router  # noqa: E402
 from sensei.routers.rag import router as rag_router  # noqa: E402
 from sensei.routers.settings import router as settings_router  # noqa: E402
 from sensei.routers.stats import router as stats_router  # noqa: E402
+from sensei.routers.watch import router as watch_router  # noqa: E402
 from sensei.routers.webhook import router as webhook_router  # noqa: E402
 
 app.include_router(agent_router, prefix="/api")
@@ -197,6 +216,7 @@ app.include_router(models_router, prefix="/api")
 app.include_router(rag_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(stats_router, prefix="/api")
+app.include_router(watch_router, prefix="/api")
 app.include_router(webhook_router, prefix="/api")
 
 # OpenAI-compatible compression gateway — mounted at the root so clients can use
