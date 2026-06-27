@@ -131,6 +131,9 @@ class Settings(BaseSettings):
     memory_enabled: bool = True
     memory_dir: str = ".sensei_memory"
 
+    # RAG: local document store + BM25 retrieval (no embedding model needed).
+    rag_file: str = ".sensei_rag.json"
+
     # Server
     host: str = "0.0.0.0"
     port: int = 7000

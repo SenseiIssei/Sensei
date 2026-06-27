@@ -23,6 +23,7 @@ frontend/node_modules/
 .sensei_users.json
 .sensei_audit.jsonl
 .sensei_vault.json
+.sensei_rag.json
 /models/
 *.gguf
 *.safetensors
