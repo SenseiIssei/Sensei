@@ -18,10 +18,11 @@ works over a whole documentation site. Builds directly on `fetch_url` + the
 - **Provenance:** every chunk keeps its source URL + fetch timestamp, so RAG
   answers cite **live links**.
 
-## 2. Clean extraction ("reader mode")
-Readability-style main-content extraction (strip nav/ads/boilerplate) before
-chunking, so RAG gets clean prose. Good candidate for a Rust port (fast, and the
-`sensei_core` crate is already there). PDFs/`.docx` ingestion belongs here too.
+## 2. Clean extraction ("reader mode") ✅ (shipped)
+`extract_main_text` drops chrome (nav/header/footer/aside/scripts/forms) and
+keeps prose — used by `fetch_url`, the crawler, and `POST /api/rag/ingest`.
+**PDF ingestion** via pypdf (`extract_pdf_text`); `fetch_url`/ingest auto-detect
+PDFs. Next: `.docx`, and a possible Rust port of the extractor.
 
 ## 3. Compressed, incremental crawl cache
 Store fetched pages **compressed** (the existing compressors / CCR), dedupe
