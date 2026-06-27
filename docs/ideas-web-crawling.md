@@ -28,11 +28,12 @@ Store fetched pages **compressed** (the existing compressors / CCR), dedupe
 near-identical pages, and re-crawl incrementally using `ETag` / `Last-Modified`.
 Surface "tokens saved by ingestion" in the savings dashboard.
 
-## 4. Scheduled / watched sources
-A background loop (like the existing auto-purge) re-crawls configured sources on
-an interval to keep the knowledge base fresh. Extend to **change monitoring**:
-diff a page against its last version and fire the **webhook** on meaningful
-changes ("watch this page").
+## 4. Scheduled / watched sources ✅ (shipped)
+A background loop re-fetches configured URLs on an interval, re-indexes changed
+pages into RAG, and POSTs a change alert to a notify webhook. API: `POST/GET
+/api/watch`, `DELETE /api/watch/{id}`, `POST /api/watch/check`. Content-hash
+diffing; first fetch is the baseline. Next: per-watch crawl (not just single
+page), and richer diffs (which sections changed).
 
 ## 5. Research agent
 Give the agent a `crawl_site` tool so it can decide to crawl to answer a
