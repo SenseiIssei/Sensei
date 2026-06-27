@@ -21,6 +21,7 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 
+from sensei.agents.extract import extract_main_text, extract_pdf_text
 from sensei.config import settings
 
 _SCRIPT_STYLE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
@@ -57,7 +58,7 @@ def _html_to_text(body: str) -> str:
     return re.sub(r"\s+", " ", html.unescape(body)).strip()
 
 
-async def fetch_url(url: str) -> dict[str, Any]:
+async def _fetch_core(url: str, max_chars: int = 200_000) -> dict[str, Any]:
     if not settings.web_fetch_enabled:
         return {"error": "Web fetch is disabled (set SENSEI_WEB_FETCH_ENABLED=true)."}
     async with httpx.AsyncClient(timeout=15.0) as client:
@@ -80,10 +81,20 @@ async def fetch_url(url: str) -> dict[str, Any]:
         else:
             return {"error": "too many redirects"}
 
-    text = resp.text[:200_000]
-    if "html" in resp.headers.get("content-type", ""):
-        text = _html_to_text(text)
-    return {"url": str(resp.url), "status": resp.status_code, "content": text[:_MAX_TEXT]}
+    ctype = resp.headers.get("content-type", "")
+    final = str(resp.url)
+    if "pdf" in ctype or final.split("?")[0].lower().endswith(".pdf"):
+        text = extract_pdf_text(resp.content)
+    elif "html" in ctype or "<html" in resp.text[:1024].lower():
+        text = extract_main_text(resp.text[:1_000_000])
+    else:
+        text = resp.text[:max_chars]
+    return {"url": final, "status": resp.status_code, "content": text[:max_chars]}
+
+
+async def fetch_url(url: str) -> dict[str, Any]:
+    """Agent tool view — extracted content, capped for prompt budgets."""
+    return await _fetch_core(url, max_chars=_MAX_TEXT)
 
 
 async def web_search(query: str) -> dict[str, Any]:

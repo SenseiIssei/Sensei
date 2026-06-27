@@ -12,7 +12,8 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 
-from sensei.agents.webtools import _html_to_text, _is_public_host
+from sensei.agents.extract import extract_main_text
+from sensei.agents.webtools import _is_public_host
 from sensei.rag.store import get_store
 
 _HREF = re.compile(r'href=["\']([^"\']+)["\']', re.IGNORECASE)
@@ -92,7 +93,7 @@ async def crawl_to_rag(start_url: str, max_pages: int = 10, max_depth: int = 2) 
             if fetched is None:
                 continue
             html, final = fetched
-            text = _html_to_text(html)
+            text = extract_main_text(html)
             if len(text) > 50:
                 store.add_document(url, text)
                 indexed.append(url)

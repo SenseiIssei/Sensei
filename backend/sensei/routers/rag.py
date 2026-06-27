@@ -33,6 +33,11 @@ class CrawlIn(BaseModel):
     max_depth: int = 2
 
 
+class IngestIn(BaseModel):
+    url: str
+    name: str | None = None
+
+
 @router.post("/documents")
 async def add_document(doc: DocIn) -> dict[str, Any]:
     chunks = get_store().add_document(doc.name, doc.content)
@@ -54,6 +59,20 @@ async def delete_document(name: str) -> dict[str, Any]:
 @router.post("/query")
 async def query(q: QueryIn) -> dict[str, Any]:
     return {"results": get_store().search(q.query, q.k)}
+
+
+@router.post("/ingest")
+async def ingest(req: IngestIn) -> dict[str, Any]:
+    """Fetch a URL (HTML reader-mode or PDF) and index it into the knowledge base."""
+    from sensei.agents.webtools import _fetch_core
+
+    result = await _fetch_core(req.url, max_chars=200_000)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    name = req.name or req.url
+    chunks = get_store().add_document(name, result["content"])
+    get_audit_log().record("rag.ingest", url=req.url, chunks=chunks)
+    return {"document": name, "url": result["url"], "chunks": chunks}
 
 
 @router.post("/crawl")
