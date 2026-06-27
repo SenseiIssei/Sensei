@@ -1,0 +1,10 @@
+# Sensei reverse proxy (Caddy). Automatic HTTPS via Let's Encrypt.
+# `flush_interval -1` streams responses without buffering (needed for SSE).
+sensei.example.com {
+	encode gzip
+	reverse_proxy 127.0.0.1:7000 {
+		flush_interval -1
+		header_up Host {host}
+		header_up X-Forwarded-For {remote_host}
+	}
+}

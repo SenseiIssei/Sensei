@@ -1,0 +1,24 @@
+# systemd unit for the Sensei backend. Install to /etc/systemd/system/sensei.service
+# then:  sudo systemctl daemon-reload && sudo systemctl enable --now sensei
+[Unit]
+Description=Sensei compression gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sensei
+WorkingDirectory=/opt/sensei/backend
+EnvironmentFile=-/opt/sensei/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/sensei/backend/.venv/bin/python -m uvicorn sensei.main:app --host 127.0.0.1 --port 7000
+Restart=on-failure
+RestartSec=3
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/sensei
+
+[Install]
+WantedBy=multi-user.target
