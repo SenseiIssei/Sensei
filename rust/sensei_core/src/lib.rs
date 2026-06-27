@@ -254,9 +254,214 @@ fn compress_logs(text: &str, context_after: usize, head: usize, tail: usize) -> 
     Ok(do_compress_logs(text, context_after, head, tail))
 }
 
+// ─── Text compressor (parity with Python sensei.compression.textcomp) ────────
+
+const PHRASE_REPLACEMENTS: &[(&str, &str)] = &[
+    ("in order to", "to"),
+    ("due to the fact that", "because"),
+    ("owing to the fact that", "because"),
+    ("in spite of the fact that", "although"),
+    ("despite the fact that", "although"),
+    ("in the event that", "if"),
+    ("for the purpose of", "for"),
+    ("with regard to", "about"),
+    ("with respect to", "about"),
+    ("in relation to", "about"),
+    ("a large number of", "many"),
+    ("a great deal of", "much"),
+    ("the vast majority of the", "most of the"),
+    ("the majority of the", "most of the"),
+    ("the vast majority of", "most"),
+    ("the majority of", "most"),
+    ("a majority of", "most"),
+    ("a number of", "several"),
+    ("all of the", "all the"),
+    ("at this point in time", "now"),
+    ("at the present time", "now"),
+    ("in a timely manner", "promptly"),
+    ("on a regular basis", "regularly"),
+    ("has the ability to", "can"),
+    ("have the ability to", "can"),
+    ("is able to", "can"),
+    ("are able to", "can"),
+    ("is going to", "will"),
+    ("are going to", "will"),
+    ("make sure that", "ensure"),
+    ("various different", "various"),
+];
+
+const FILLER: &[&str] = &[
+    "basically", "actually", "really", "very", "quite", "simply", "literally", "essentially",
+    "obviously", "clearly", "honestly", "totally", "definitely", "certainly", "arguably",
+    "ultimately", "in fact", "of course", "as a matter of fact", "at the end of the day",
+    "for all intents and purposes", "needless to say", "it goes without saying that",
+    "generally speaking", "as you can see", "as we can see", "as you know",
+    "it is very important to note that", "it is important to note that", "it is worth noting that",
+    "it should be noted that", "please note that",
+];
+
+const BOILERPLATE: &[&str] = &[
+    r"(?i)As mentioned (?:earlier|above|before)\s*,?\s*",
+    r"(?i)As (?:stated|described) (?:earlier|above)\s*,?\s*",
+    r"(?i)For more (?:information|details)\s*,?\s*see\s+\S+\s*",
+    r"(?i)See (?:the )?(?:documentation|docs|README|guide) for more details\.?",
+];
+
+const MAX_PARAGRAPH: usize = 500;
+
+struct TextEngine {
+    replacements: Vec<(Regex, String)>,
+    fillers: Vec<Regex>,
+    boilerplate: Vec<Regex>,
+    sp_tabs: Regex,
+    around_nl: Regex,
+    space_punct: Regex,
+    repeated_comma: Regex,
+    leading_punct: Regex,
+    blanks: Regex,
+    fix_caps: Regex,
+}
+
+fn text_engine() -> &'static TextEngine {
+    static E: OnceLock<TextEngine> = OnceLock::new();
+    E.get_or_init(|| {
+        // Stable-sort phrases longest-first (matches Python's sorted(..., reverse=True)).
+        let mut phrases: Vec<(&str, &str)> = PHRASE_REPLACEMENTS.to_vec();
+        phrases.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+        let replacements = phrases
+            .into_iter()
+            .map(|(k, v)| {
+                (Regex::new(&format!(r"(?i)\b{}\b", regex::escape(k))).unwrap(), v.to_string())
+            })
+            .collect();
+
+        let mut fillers_sorted: Vec<&str> = FILLER.to_vec();
+        fillers_sorted.sort_by(|a, b| b.len().cmp(&a.len()));
+        let fillers = fillers_sorted
+            .into_iter()
+            .map(|f| Regex::new(&format!(r"(?i)\s*,?\s*\b{}\b\s*,?\s*", regex::escape(f))).unwrap())
+            .collect();
+
+        let boilerplate = BOILERPLATE.iter().map(|p| Regex::new(p).unwrap()).collect();
+
+        TextEngine {
+            replacements,
+            fillers,
+            boilerplate,
+            sp_tabs: Regex::new(r"[ \t]+").unwrap(),
+            around_nl: Regex::new(r" *\n *").unwrap(),
+            space_punct: Regex::new(r"\s+([,.;:!?])").unwrap(),
+            repeated_comma: Regex::new(r"(?:,\s*){2,}").unwrap(),
+            leading_punct: Regex::new(r"(?m)^[ \t]*[,;:][ \t]*").unwrap(),
+            blanks: Regex::new(r"\n{3,}").unwrap(),
+            fix_caps: Regex::new(r"(^\s*|[.!?]\s+|\n\s*)([a-z])").unwrap(),
+        }
+    })
+}
+
+fn split_sentences(line: &str) -> Vec<String> {
+    // Mirror Python re.split(r"(?<=[.!?])\s+", line) without lookbehind.
+    let chars: Vec<char> = line.chars().collect();
+    let mut parts: Vec<String> = Vec::new();
+    let mut start = 0usize;
+    let mut i = 0usize;
+    while i < chars.len() {
+        if chars[i].is_whitespace() && i > 0 && matches!(chars[i - 1], '.' | '!' | '?') {
+            parts.push(chars[start..i].iter().collect());
+            let mut j = i;
+            while j < chars.len() && chars[j].is_whitespace() {
+                j += 1;
+            }
+            start = j;
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+    parts.push(chars[start..].iter().collect());
+    parts
+}
+
+fn do_compress_text(input: &str) -> String {
+    let e = text_engine();
+    let mut text = input.to_string();
+
+    for re in &e.boilerplate {
+        text = re.replace_all(&text, "").into_owned();
+    }
+    for (re, repl) in &e.replacements {
+        text = re.replace_all(&text, repl.as_str()).into_owned();
+    }
+    for re in &e.fillers {
+        text = re.replace_all(&text, " ").into_owned();
+    }
+
+    // cleanup
+    text = e.sp_tabs.replace_all(&text, " ").into_owned();
+    text = e.around_nl.replace_all(&text, "\n").into_owned();
+    text = e.space_punct.replace_all(&text, "${1}").into_owned();
+    text = e.repeated_comma.replace_all(&text, ", ").into_owned();
+    text = e.leading_punct.replace_all(&text, "").into_owned();
+
+    // collapse blank lines
+    text = e.blanks.replace_all(&text, "\n\n").into_owned();
+
+    // dedupe lines
+    {
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut out: Vec<String> = Vec::new();
+        for line in text.split('\n') {
+            let stripped = line.trim();
+            if !stripped.is_empty() && stripped.chars().count() > 20 && seen.contains(stripped) {
+                continue;
+            }
+            if !stripped.is_empty() {
+                seen.insert(stripped.to_string());
+            }
+            out.push(line.to_string());
+        }
+        text = out.join("\n");
+    }
+
+    // truncate paragraphs
+    {
+        let mut out: Vec<String> = Vec::new();
+        for line in text.split('\n') {
+            if line.chars().count() > MAX_PARAGRAPH {
+                let sentences = split_sentences(line);
+                if sentences.len() > 3 {
+                    out.push(format!("{} […] {}", sentences[0], sentences[sentences.len() - 1]));
+                } else {
+                    let head: String = line.chars().take(MAX_PARAGRAPH).collect();
+                    out.push(format!("{head}…"));
+                }
+            } else {
+                out.push(line.to_string());
+            }
+        }
+        text = out.join("\n");
+    }
+
+    // fix caps
+    text = e
+        .fix_caps
+        .replace_all(&text, |caps: &regex::Captures| {
+            format!("{}{}", &caps[1], caps[2].to_uppercase())
+        })
+        .into_owned();
+
+    text.trim().to_string()
+}
+
+#[pyfunction]
+fn compress_text(text: &str) -> PyResult<String> {
+    Ok(do_compress_text(text))
+}
+
 #[pymodule]
 fn sensei_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(csv_schema, m)?)?;
     m.add_function(wrap_pyfunction!(compress_logs, m)?)?;
+    m.add_function(wrap_pyfunction!(compress_text, m)?)?;
     Ok(())
 }
