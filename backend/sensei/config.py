@@ -134,6 +134,12 @@ class Settings(BaseSettings):
     # RAG: local document store + BM25 retrieval (no embedding model needed).
     rag_file: str = ".sensei_rag.json"
 
+    # Watched sources: re-fetch URLs on an interval, re-index changed pages into
+    # RAG, and POST a change alert to the per-watch notify_url or this default.
+    watch_file: str = ".sensei_watch.json"
+    watch_check_interval_minutes: int = 30
+    watch_notify_url: str = ""
+
     # Agent: read-only tools sandboxed to agent_root; bounded ReAct loop.
     agent_root: str = "."
     agent_max_steps: int = 6
