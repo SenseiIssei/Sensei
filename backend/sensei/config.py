@@ -173,6 +173,12 @@ class Settings(BaseSettings):
     webhook_enabled: bool = False
     webhook_token: str = ""
 
+    # RBAC: when enabled, admin-only endpoints (settings, audit, purge) require a
+    # user JWT with the admin role. admin_emails (comma-separated) get that role
+    # at registration. Off by default so local/self-hosted use needs no auth.
+    rbac_enabled: bool = False
+    admin_emails: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

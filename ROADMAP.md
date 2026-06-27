@@ -48,7 +48,7 @@ This document outlines planned features, future directions, and monetization ide
 
 ### Enterprise & Company Features
 - [ ] **SSO / SAML integration** — Connect to Okta, Azure AD, Google Workspace
-- [ ] **Role-based access control (RBAC)** — Admin, user, readonly roles
+- [x] **Role-based access control (RBAC)** — admin/user roles on the user JWT; admin gate on settings/audit/purge (opt-in via SENSEI_RBAC_ENABLED + SENSEI_ADMIN_EMAILS)
 - [ ] **Audit logging** — Track all model calls, file accesses, config changes
 - [ ] **Data residency controls** — Force all data to stay within specified directory
 - [ ] **Compliance exports** — GDPR data export, SOC2 audit trail generation

@@ -9,11 +9,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from sensei.config import ENV_PATH, settings
 from sensei.models import registry
+from sensei.security.rbac import require_admin
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -106,7 +107,7 @@ def _persist_env(updates: dict[str, str]) -> None:
 
 
 @router.put("")
-async def update_settings(update: SettingsUpdate) -> dict[str, Any]:
+async def update_settings(update: SettingsUpdate, _admin=Depends(require_admin)) -> dict[str, Any]:
     env_updates: dict[str, str] = {}
 
     if update.provider is not None:
