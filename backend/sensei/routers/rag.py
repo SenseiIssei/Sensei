@@ -27,6 +27,12 @@ class RagChatIn(BaseModel):
     model: str | None = None
 
 
+class CrawlIn(BaseModel):
+    url: str
+    max_pages: int = 10
+    max_depth: int = 2
+
+
 @router.post("/documents")
 async def add_document(doc: DocIn) -> dict[str, Any]:
     chunks = get_store().add_document(doc.name, doc.content)
@@ -48,6 +54,16 @@ async def delete_document(name: str) -> dict[str, Any]:
 @router.post("/query")
 async def query(q: QueryIn) -> dict[str, Any]:
     return {"results": get_store().search(q.query, q.k)}
+
+
+@router.post("/crawl")
+async def crawl(req: CrawlIn) -> dict[str, Any]:
+    """Crawl a site (same-domain, capped) and index it into the knowledge base."""
+    from sensei.agents.crawler import crawl_to_rag
+
+    result = await crawl_to_rag(req.url, min(req.max_pages, 50), min(req.max_depth, 3))
+    get_audit_log().record("rag.crawl", url=req.url, pages=result.get("pages_indexed", 0))
+    return result
 
 
 @router.post("/chat")
