@@ -85,6 +85,27 @@ async def rag_search(query: str) -> dict[str, Any]:
     return {"results": get_store().search(query, 4)}
 
 
+async def ingest_url(url: str) -> dict[str, Any]:
+    """Fetch a page or PDF and add it to the knowledge base, then rag_search it."""
+    from sensei.agents.webtools import _fetch_core
+    from sensei.rag.store import get_store
+
+    result = await _fetch_core(url, max_chars=200_000)
+    if "error" in result:
+        return result
+    chunks = get_store().add_document(url, result["content"])
+    return {"url": result["url"], "indexed_chunks": chunks}
+
+
+async def crawl_site(url: str, max_pages: int = 8) -> dict[str, Any]:
+    """Crawl a site (same-domain, capped) into the knowledge base, then rag_search it."""
+    if not settings.web_fetch_enabled:
+        return {"error": "Web fetch is disabled."}
+    from sensei.agents.crawler import crawl_to_rag
+
+    return await crawl_to_rag(url, min(int(max_pages), 25), 2)
+
+
 def build_default_registry() -> ToolRegistry:
     reg = ToolRegistry()
     reg.register(Tool(
@@ -129,6 +150,22 @@ def build_default_registry() -> ToolRegistry:
         description="Search the web (needs a Brave API key); returns title/url/snippet results.",
         parameters={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
         handler=web_search,
+    ))
+    reg.register(Tool(
+        name="ingest_url",
+        description="Fetch a page or PDF and add it to the knowledge base (then rag_search it).",
+        parameters={"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]},
+        handler=ingest_url,
+    ))
+    reg.register(Tool(
+        name="crawl_site",
+        description="Crawl a site (same-domain, capped) into the knowledge base, then rag_search it.",
+        parameters={
+            "type": "object",
+            "properties": {"url": {"type": "string"}, "max_pages": {"type": "integer"}},
+            "required": ["url"],
+        },
+        handler=crawl_site,
     ))
     if settings.code_exec_enabled:
         reg.register(Tool(

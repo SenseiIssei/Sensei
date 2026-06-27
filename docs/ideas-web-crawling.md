@@ -36,11 +36,11 @@ pages into RAG, and POSTs a change alert to a notify webhook. API: `POST/GET
 diffing; first fetch is the baseline. Next: per-watch crawl (not just single
 page), and richer diffs (which sections changed).
 
-## 5. Research agent
-Give the agent a `crawl_site` tool so it can decide to crawl to answer a
-question: `web_search → fetch_url → crawl → synthesize`, multi-hop, with the
-ReAct loop already in place. Tool results stay cheap because they're compressed
-before feedback.
+## 5. Research agent ✅ (shipped)
+The agent now has `web_search`, `fetch_url`, `ingest_url`, `crawl_site`, and
+`rag_search` tools — so it can `search → ingest/crawl → rag_search → synthesize`
+on its own, multi-hop, with tool results compressed before feedback. Next:
+auto-pick depth, and a "deep research" preset with a higher step budget.
 
 ## 6. Structured extraction
 A tool that pulls tables, JSON-LD, and OpenGraph metadata from pages → then
