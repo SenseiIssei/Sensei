@@ -236,6 +236,63 @@ async function compareModelsFlow(): Promise<void> {
   );
 }
 
+// ─── RAG: knowledge base ─────────────────────────────────────────────────────
+
+async function addToKnowledgeFlow(): Promise<void> {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    vscode.window.showWarningMessage("Open a file to add it to the knowledge base.");
+    return;
+  }
+  const name = editor.document.fileName.split(/[\\/]/).pop() || "document";
+  try {
+    const resp = await fetch(`${backendUrl()}/api/rag/documents`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, content: editor.document.getText() }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = (await resp.json()) as { document: string; chunks: number };
+    vscode.window.showInformationMessage(`Sensei: indexed "${data.document}" (${data.chunks} chunks).`);
+  } catch (e: any) {
+    vscode.window.showErrorMessage(`Add failed: ${e?.message ?? e}`);
+  }
+}
+
+async function askDocsFlow(): Promise<void> {
+  const question = await vscode.window.showInputBox({
+    prompt: "Ask a question about your indexed documents",
+    ignoreFocusOut: true,
+  });
+  if (!question) return;
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: "Sensei: searching your docs…" },
+    async () => {
+      try {
+        const resp = await fetch(`${backendUrl()}/api/rag/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: question, k: 4 }),
+        });
+        if (resp.status === 404) {
+          vscode.window.showWarningMessage(
+            "No documents indexed yet — run 'Sensei: Add current file to knowledge base' first."
+          );
+          return;
+        }
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = (await resp.json()) as { answer: string; sources: { doc: string }[]; tokens_saved: number };
+        const sources = Array.from(new Set(data.sources.map((s) => s.doc))).join(", ");
+        const md = `# ${question}\n\n${data.answer}\n\n---\n\n**Sources:** ${sources}\n\n_tokens saved by compression: ${data.tokens_saved}_\n`;
+        const doc = await vscode.workspace.openTextDocument({ language: "markdown", content: md });
+        await vscode.window.showTextDocument(doc);
+      } catch (e: any) {
+        vscode.window.showErrorMessage(`Ask failed: ${e?.message ?? e}`);
+      }
+    }
+  );
+}
+
 // ─── chat webview ────────────────────────────────────────────────────────────
 
 class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -445,6 +502,8 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
     vscode.commands.registerCommand("sensei.setApiKey", () => setApiKeyFlow()),
     vscode.commands.registerCommand("sensei.compareModels", () => compareModelsFlow()),
+    vscode.commands.registerCommand("sensei.addToKnowledge", () => addToKnowledgeFlow()),
+    vscode.commands.registerCommand("sensei.askDocs", () => askDocsFlow()),
     vscode.commands.registerCommand("sensei.showLogs", async () => {
       const s = await getSettings();
       if (s?.log_file) {

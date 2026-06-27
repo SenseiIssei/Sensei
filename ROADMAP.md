@@ -130,11 +130,12 @@ This document outlines planned features, future directions, and monetization ide
   - Web search integration
   - Code execution sandbox
   - Custom tool plugins
-- [ ] **RAG (Retrieval-Augmented Generation)** — Upload documents, chat with them
-  - Vector embeddings stored locally (ChromaDB or FAISS)
-  - Automatic chunking and indexing
-  - Citation tracking
-  - Multi-document queries
+- [x] **RAG (Retrieval-Augmented Generation)** — Upload documents, chat with them
+  - [x] Local store + **BM25** retrieval (zero-dependency; no embedding model/key needed)
+  - [x] Automatic chunking and indexing (`/api/rag/documents`, `/api/rag/query`, `/api/rag/chat`)
+  - [x] Citation tracking (sources returned + cited in the grounded answer)
+  - [x] Multi-document queries; VS Code "Add file to knowledge base" + "Ask your docs"
+  - [ ] Optional vector/embedding backend (behind the same interface)
 - [ ] **Conversation branching** — Fork conversations at any point
 - [ ] **Prompt templates** — Save and reuse prompt templates
 - [ ] **Shared conversations** — Export and import conversation files
