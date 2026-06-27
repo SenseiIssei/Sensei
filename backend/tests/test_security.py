@@ -202,6 +202,11 @@ class TestSessionManager:
 
 
 class TestLocalCrypto:
+    def test_machine_key_roundtrip(self):
+        # Constructing without a key derives the machine key — must work headless.
+        c = LocalCrypto()
+        assert c.decrypt(c.encrypt("hello headless")) == "hello headless"
+
     def test_encrypt_decrypt(self):
         crypto = LocalCrypto(key=b"test-key-32-bytes-long-1234567890")
         original = "Hello, Sensei!"

@@ -44,9 +44,22 @@ class LocalCrypto:
         self._aes = AESGCM(hashlib.sha256(self._key).digest()) if _HAS_AES else None
 
     def _derive_machine_key(self) -> bytes:
-        """Derive a machine-specific key from environment."""
+        """Derive a machine-specific key from environment (robust on headless hosts)."""
         node = os.uname().nodename if hasattr(os, "uname") else os.environ.get("COMPUTERNAME", "localhost")
-        machine_id = f"{os.getlogin()}@{node}"
+        # os.getlogin() raises OSError without a controlling tty (CI, daemons),
+        # so prefer getpass/env which work headless.
+        try:
+            import getpass
+
+            user = getpass.getuser()
+        except Exception:
+            user = (
+                os.environ.get("USER")
+                or os.environ.get("USERNAME")
+                or os.environ.get("LOGNAME")
+                or "sensei"
+            )
+        machine_id = f"{user}@{node}"
         return hashlib.sha256(machine_id.encode() + self.SALT).digest()
 
     def encrypt(self, data: str | bytes) -> bytes:
