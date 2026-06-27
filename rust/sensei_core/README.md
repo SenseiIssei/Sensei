@@ -14,7 +14,11 @@ behavior never changes — only speed.
 - [x] `compress_logs(text, context_after, head, tail) -> str` — log/build/test
       triage. Byte-identical to the Python `LogCompressor` (parity test in
       `test_compression.py::TestLogCompressor::test_rust_matches_python`).
-- [ ] `compress_code` / `compress_text` — port the remaining compressors.
+- [x] `compress_text(text) -> str` — prose compressor (phrase/filler/cleanup/
+      truncate/caps). Byte-identical to the Python `TextCompressor`; lookbehind
+      sentence-split reimplemented manually since the regex crate lacks it.
+      Parity verified across 22 diverse samples + a test.
+- [ ] `compress_code` — code compressor (per-language AST-ish stripping; deferred).
 - [ ] streaming tokenizer + KV-cache prefix hashing.
 - [ ] zero-copy CCR store.
 
