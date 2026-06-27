@@ -130,7 +130,9 @@ This document outlines planned features, future directions, and monetization ide
   - [x] Knowledge-base tool — `rag_search` over the RAG store
   - [x] Custom tool plugins — `ToolRegistry` (register your own `Tool`s)
   - [x] VS Code "Run agent task" command
-  - [ ] Web search + code-execution sandbox (write/exec deferred for safety)
+  - [x] Web tools — `fetch_url` (SSRF-guarded, per-hop revalidated) + `web_search` (Brave)
+  - [x] Code execution — `run_python` (opt-in `SENSEI_CODE_EXEC_ENABLED`, isolated subprocess + timeout)
+  - [ ] Docker-sandboxed code exec; crawl-to-RAG (see docs/ideas-web-crawling.md)
 - [x] **RAG (Retrieval-Augmented Generation)** — Upload documents, chat with them
   - [x] Local store + **BM25** retrieval (zero-dependency; no embedding model/key needed)
   - [x] Automatic chunking and indexing (`/api/rag/documents`, `/api/rag/query`, `/api/rag/chat`)

@@ -137,6 +137,13 @@ class Settings(BaseSettings):
     # Agent: read-only tools sandboxed to agent_root; bounded ReAct loop.
     agent_root: str = "."
     agent_max_steps: int = 6
+    # Web fetch (SSRF-guarded; blocks private/loopback hosts). Web search needs a
+    # Brave Search API key. Code execution is OFF by default and NOT sandboxed —
+    # it runs on the host, so only enable it on a machine you control.
+    web_fetch_enabled: bool = True
+    brave_api_key: str = ""
+    code_exec_enabled: bool = False
+    code_exec_timeout: int = 5
 
     # Server
     host: str = "0.0.0.0"

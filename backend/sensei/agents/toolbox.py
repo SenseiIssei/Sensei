@@ -115,4 +115,26 @@ def build_default_registry() -> ToolRegistry:
         parameters={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
         handler=rag_search,
     ))
+
+    from sensei.agents.webtools import fetch_url, run_python, web_search
+
+    reg.register(Tool(
+        name="fetch_url",
+        description="Fetch an http(s) URL and return its text content (SSRF-guarded).",
+        parameters={"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]},
+        handler=fetch_url,
+    ))
+    reg.register(Tool(
+        name="web_search",
+        description="Search the web (needs a Brave API key); returns title/url/snippet results.",
+        parameters={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
+        handler=web_search,
+    ))
+    if settings.code_exec_enabled:
+        reg.register(Tool(
+            name="run_python",
+            description="Execute a short Python snippet and return stdout/stderr (host, not sandboxed).",
+            parameters={"type": "object", "properties": {"code": {"type": "string"}}, "required": ["code"]},
+            handler=run_python,
+        ))
     return reg

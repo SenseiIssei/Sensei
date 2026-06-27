@@ -1,0 +1,59 @@
+# Ideas: web crawling & ingestion
+
+Sensei already has the primitives — an **SSRF-guarded `fetch_url`**, **`web_search`**,
+the **agent** loop, the **RAG** store, and the **compression** pipeline. Crawling is
+the natural next layer: turn the open web into a compressed, searchable knowledge
+base the agent can reason over. Ideas, roughly in build order.
+
+## 1. Crawl-to-RAG (the headline)
+`POST /api/rag/crawl {url, depth, max_pages}` → BFS-crawl same-domain links,
+extract main text, chunk, and index into the RAG store. Then "Ask your docs"
+works over a whole documentation site. Builds directly on `fetch_url` + the
+`DocumentStore`.
+
+- **Politeness:** honor `robots.txt`, per-domain rate limit, concurrency cap,
+  `max_pages` / `max_bytes`, depth limit. Reuse the SSRF guard.
+- **Sitemap-first:** if `/sitemap.xml` exists, enumerate from it instead of
+  link-following (faster, more complete).
+- **Provenance:** every chunk keeps its source URL + fetch timestamp, so RAG
+  answers cite **live links**.
+
+## 2. Clean extraction ("reader mode")
+Readability-style main-content extraction (strip nav/ads/boilerplate) before
+chunking, so RAG gets clean prose. Good candidate for a Rust port (fast, and the
+`sensei_core` crate is already there). PDFs/`.docx` ingestion belongs here too.
+
+## 3. Compressed, incremental crawl cache
+Store fetched pages **compressed** (the existing compressors / CCR), dedupe
+near-identical pages, and re-crawl incrementally using `ETag` / `Last-Modified`.
+Surface "tokens saved by ingestion" in the savings dashboard.
+
+## 4. Scheduled / watched sources
+A background loop (like the existing auto-purge) re-crawls configured sources on
+an interval to keep the knowledge base fresh. Extend to **change monitoring**:
+diff a page against its last version and fire the **webhook** on meaningful
+changes ("watch this page").
+
+## 5. Research agent
+Give the agent a `crawl_site` tool so it can decide to crawl to answer a
+question: `web_search → fetch_url → crawl → synthesize`, multi-hop, with the
+ReAct loop already in place. Tool results stay cheap because they're compressed
+before feedback.
+
+## 6. Structured extraction
+A tool that pulls tables, JSON-LD, and OpenGraph metadata from pages → then
+**SmartCrusher** packs the JSON. Great for price/spec/feed monitoring.
+
+## 7. JS-heavy sites (optional, flagged)
+A headless-browser fetch (Playwright) behind a flag for sites that need
+rendering — same SSRF/politeness guards, just a different fetch backend.
+
+## Safety posture (applies throughout)
+SSRF guard on every hop (already done), domain allow/block lists, global
+byte/time budgets, `robots.txt`, and everything **off or rate-limited by
+default**. Crawling is powerful; keep it boring and bounded.
+
+---
+
+**Next concrete step:** implement #1 (`crawl_site` tool + `/api/rag/crawl`) on top
+of `fetch_url` + `DocumentStore`, with robots.txt + caps.
