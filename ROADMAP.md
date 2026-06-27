@@ -80,7 +80,7 @@ This document outlines planned features, future directions, and monetization ide
 - [ ] **Edge deployment** — Deploy Sensei close to users via CDN edge nodes
 
 ### Proxy & Networking
-- [ ] **Reverse proxy support** — Nginx, Caddy, Traefik configuration templates
+- [x] **Reverse proxy support** — Nginx, Caddy, Traefik templates in deploy/ (SSE-safe)
 - [ ] **API proxy mode** — Sensei as a transparent proxy with compression for any LLM API
 - [ ] **Load balancer support** — Multiple Sensei instances behind HAProxy
 - [ ] **Custom DNS resolution** — Route requests through specific DNS for privacy
@@ -152,10 +152,10 @@ This document outlines planned features, future directions, and monetization ide
 
 ### Deployment
 - [ ] **Kubernetes manifests** — Helm chart for K8s deployment
-- [ ] **Systemd service files** — Native Linux service installation
+- [x] **Systemd service files** — deploy/sensei.service (hardened)
 - [ ] **Windows installer** — MSI or NSIS installer for Qt GUI
 - [ ] **macOS app bundle** — .dmg for Qt GUI
-- [ ] **Reverse proxy guide** — Nginx/Caddy configuration templates
+- [x] **Reverse proxy guide** — deploy/README.md (TLS, streaming gotcha, hardening)
 - [x] **CI/CD pipeline** — GitHub Actions: backend pytest+coverage, frontend typecheck+vitest, extension compile
 
 ## Long-term (v1.0.0) — Platform & Ecosystem
