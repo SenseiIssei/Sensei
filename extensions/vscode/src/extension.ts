@@ -293,6 +293,38 @@ async function askDocsFlow(): Promise<void> {
   );
 }
 
+// ─── agent ───────────────────────────────────────────────────────────────────
+
+async function runAgentFlow(): Promise<void> {
+  const task = await vscode.window.showInputBox({
+    prompt: "Agent task (it can list/read/search files in the workspace + your docs)",
+    ignoreFocusOut: true,
+  });
+  if (!task) return;
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: "Sensei: agent working…" },
+    async () => {
+      try {
+        const resp = await fetch(`${backendUrl()}/api/agent/run`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ task }),
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = (await resp.json()) as { answer: string; steps: any[]; stopped: string };
+        let md = `# Agent task\n\n**${task}**\n\n${data.answer}\n\n---\n\n## Steps (${data.steps.length} · ${data.stopped})\n\n`;
+        for (const s of data.steps) {
+          md += `- \`${s.tool}\`(${JSON.stringify(s.args)})\n`;
+        }
+        const doc = await vscode.workspace.openTextDocument({ language: "markdown", content: md });
+        await vscode.window.showTextDocument(doc);
+      } catch (e: any) {
+        vscode.window.showErrorMessage(`Agent failed: ${e?.message ?? e}`);
+      }
+    }
+  );
+}
+
 // ─── chat webview ────────────────────────────────────────────────────────────
 
 class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -504,6 +536,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("sensei.compareModels", () => compareModelsFlow()),
     vscode.commands.registerCommand("sensei.addToKnowledge", () => addToKnowledgeFlow()),
     vscode.commands.registerCommand("sensei.askDocs", () => askDocsFlow()),
+    vscode.commands.registerCommand("sensei.runAgent", () => runAgentFlow()),
     vscode.commands.registerCommand("sensei.showLogs", async () => {
       const s = await getSettings();
       if (s?.log_file) {

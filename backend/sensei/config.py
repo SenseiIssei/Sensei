@@ -134,6 +134,10 @@ class Settings(BaseSettings):
     # RAG: local document store + BM25 retrieval (no embedding model needed).
     rag_file: str = ".sensei_rag.json"
 
+    # Agent: read-only tools sandboxed to agent_root; bounded ReAct loop.
+    agent_root: str = "."
+    agent_max_steps: int = 6
+
     # Server
     host: str = "0.0.0.0"
     port: int = 7000

@@ -174,6 +174,7 @@ async def health() -> dict[str, str]:
 
 
 # Register routers
+from sensei.routers.agent import router as agent_router  # noqa: E402
 from sensei.routers.audit import router as audit_router  # noqa: E402
 from sensei.routers.auth import router as auth_router  # noqa: E402
 from sensei.routers.chat import router as chat_router  # noqa: E402
@@ -186,6 +187,7 @@ from sensei.routers.settings import router as settings_router  # noqa: E402
 from sensei.routers.stats import router as stats_router  # noqa: E402
 from sensei.routers.webhook import router as webhook_router  # noqa: E402
 
+app.include_router(agent_router, prefix="/api")
 app.include_router(audit_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
