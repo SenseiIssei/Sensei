@@ -106,10 +106,10 @@ This document outlines planned features, future directions, and monetization ide
 - [ ] **Graceful degradation** — Better error messages when providers are unavailable
 
 ### Testing
-- [ ] **Frontend tests** — Vitest + React Testing Library
+- [x] **Frontend tests** — Vitest unit tests (run in CI)
 - [ ] **E2E tests** — Playwright for web UI
 - [ ] **Load tests** — Locust or k6 for rate limiting validation
-- [ ] **Coverage reporting** — pytest-cov + codecov integration
+- [x] **Coverage reporting** — pytest-cov (~64%), reported in CI
 - [ ] **Security tests** — Penetration testing, fuzzing, OWASP compliance
 
 ## Medium-term (v0.3.0) — RAG, Agents, and Sensei-1 Model
@@ -156,7 +156,7 @@ This document outlines planned features, future directions, and monetization ide
 - [ ] **Windows installer** — MSI or NSIS installer for Qt GUI
 - [ ] **macOS app bundle** — .dmg for Qt GUI
 - [ ] **Reverse proxy guide** — Nginx/Caddy configuration templates
-- [ ] **CI/CD pipeline** — GitHub Actions for auto-deploy
+- [x] **CI/CD pipeline** — GitHub Actions: backend pytest+coverage, frontend typecheck+vitest, extension compile
 
 ## Long-term (v1.0.0) — Platform & Ecosystem
 

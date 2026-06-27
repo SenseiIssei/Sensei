@@ -45,6 +45,7 @@ cli = [
 dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
+    "pytest-cov>=5.0.0",
     "httpx>=0.28.0",
     "ruff>=0.8.0",
 ]
@@ -60,3 +61,10 @@ target-version = "py311"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["sensei"]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+show_missing = true
