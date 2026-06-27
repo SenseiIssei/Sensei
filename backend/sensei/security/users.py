@@ -71,10 +71,11 @@ def _save_users(users: dict[str, dict]) -> None:
     USERS_FILE.write_text(json.dumps(users, indent=2), encoding="utf-8")
 
 
-def _create_token(user_id: str, email: str) -> str:
+def _create_token(user_id: str, email: str, role: str = "user") -> str:
     payload = {
         "sub": user_id,
         "email": email,
+        "role": role,
         "exp": int(time.time()) + JWT_EXPIRY_HOURS * 3600,
         "iat": int(time.time()),
     }
@@ -124,18 +125,24 @@ def register_user(email: str, password: str, name: str) -> tuple[Optional[TokenR
     salt = secrets.token_hex(16)
     password_hash = _hash_password(password, salt)
 
+    from sensei.config import settings
+
+    admins = {e.strip().lower() for e in settings.admin_emails.split(",") if e.strip()}
+    role = "admin" if email_lower in admins else "user"
+
     users[email_lower] = {
         "id": user_id,
         "email": email_lower,
         "name": name,
+        "role": role,
         "salt": salt,
         "password_hash": password_hash,
         "created_at": time.time(),
     }
     _save_users(users)
 
-    logger.info("New user registered: %s (%s)", name, email_lower)
-    token = _create_token(user_id, email_lower)
+    logger.info("New user registered: %s (%s) [%s]", name, email_lower, role)
+    token = _create_token(user_id, email_lower, role)
     user_out = UserOut(id=user_id, email=email_lower, name=name, created_at=users[email_lower]["created_at"])
     return TokenResponse(access_token=token, user=user_out), None
 
@@ -150,7 +157,7 @@ def login_user(email: str, password: str) -> tuple[Optional[TokenResponse], Opti
     if not _verify_password(password, user["salt"], user["password_hash"]):
         return None, "Invalid email or password"
 
-    token = _create_token(user["id"], email_lower)
+    token = _create_token(user["id"], email_lower, user.get("role", "user"))
     user_out = UserOut(id=user["id"], email=email_lower, name=user["name"], created_at=user["created_at"])
     logger.info("User logged in: %s", email_lower)
     return TokenResponse(access_token=token, user=user_out), None
