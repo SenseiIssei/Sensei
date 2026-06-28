@@ -17,6 +17,9 @@ frontend/dist/
 frontend/node_modules/
 
 # Sensei runtime
+.coverage
+htmlcov/
+logs/
 .sensei_cache/
 .sensei_memory/
 .sensei_sessions/
