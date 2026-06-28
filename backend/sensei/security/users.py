@@ -163,6 +163,40 @@ def login_user(email: str, password: str) -> tuple[Optional[TokenResponse], Opti
     return TokenResponse(access_token=token, user=user_out), None
 
 
+def provision_sso_user(email: str, name: str = "") -> TokenResponse:
+    """Just-in-time provision (or sync) an SSO user and issue a Sensei token."""
+    users = _load_users()
+    email_lower = email.lower()
+
+    from sensei.config import settings
+
+    admins = {e.strip().lower() for e in settings.admin_emails.split(",") if e.strip()}
+    role = "admin" if email_lower in admins else "user"
+
+    user = users.get(email_lower)
+    if not user:
+        user = {
+            "id": secrets.token_hex(16),
+            "email": email_lower,
+            "name": name or email_lower,
+            "role": role,
+            "salt": "",
+            "password_hash": "",  # SSO users have no local password
+            "sso": True,
+            "created_at": time.time(),
+        }
+        users[email_lower] = user
+        _save_users(users)
+        logger.info("Provisioned SSO user: %s [%s]", email_lower, role)
+    elif user.get("role") != role:  # keep role in sync with the admin list
+        user["role"] = role
+        _save_users(users)
+
+    token = _create_token(user["id"], email_lower, user["role"])
+    user_out = UserOut(id=user["id"], email=email_lower, name=user["name"], created_at=user["created_at"])
+    return TokenResponse(access_token=token, user=user_out)
+
+
 def get_user_from_token(token: str) -> Optional[dict]:
     payload = verify_token(token)
     if not payload:
