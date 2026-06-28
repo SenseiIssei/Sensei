@@ -52,11 +52,16 @@ def chunk_text(text: str, target: int = 600) -> list[str]:
 
 
 class DocumentStore:
-    def __init__(self, path: Path | str | None = None):
+    def __init__(self, path: Path | str | None = None, embedder: Any = None):
         self.path = Path(path) if path is not None else Path(settings.rag_file)
         self._lock = threading.Lock()
-        self._chunks: list[dict[str, Any]] = []  # {doc, text, tokens}
+        self._chunks: list[dict[str, Any]] = []  # {doc, text, tokens, vec?}
+        self._embedder = embedder
         self._load()
+
+    @property
+    def backend(self) -> str:
+        return "hybrid" if self._embedder is not None else "bm25"
 
     def _load(self) -> None:
         if not self.path.exists():
@@ -76,8 +81,16 @@ class DocumentStore:
     def add_document(self, name: str, text: str) -> int:
         with self._lock:
             self._chunks = [c for c in self._chunks if c["doc"] != name]  # replace existing
-            for ch in chunk_text(text):
-                self._chunks.append({"doc": name, "text": ch, "tokens": _tokenize(ch)})
+            new: list[dict[str, Any]] = [
+                {"doc": name, "text": ch, "tokens": _tokenize(ch)} for ch in chunk_text(text)
+            ]
+            if self._embedder is not None and new:
+                try:  # embeddings are best-effort; ingestion must not fail on a network hiccup
+                    for c, vec in zip(new, self._embedder.embed([c["text"] for c in new])):
+                        c["vec"] = vec
+                except Exception:  # noqa: BLE001
+                    pass
+            self._chunks.extend(new)
             self._save()
             return sum(1 for c in self._chunks if c["doc"] == name)
 
@@ -97,19 +110,25 @@ class DocumentStore:
         return [{"name": name, "chunks": n} for name, n in sorted(counts.items())]
 
     def search(self, query: str, k: int = 4) -> list[dict[str, Any]]:
-        q = _tokenize(query)
-        chunks = self._chunks
-        if not q or not chunks:
-            return []
+        if self._embedder is not None and any("vec" in c for c in self._chunks):
+            try:
+                return self._hybrid_search(query, k)
+            except Exception:  # noqa: BLE001 — degrade to BM25 on any embedding failure
+                pass
+        return self._bm25_search(query, k)
 
+    def _bm25_raw(self, q: list[str]) -> list[float]:
+        chunks = self._chunks
         n_docs = len(chunks)
+        if not q or not chunks:
+            return [0.0] * n_docs
         df: dict[str, int] = {}
         for ch in chunks:
             for term in set(ch["tokens"]):
                 df[term] = df.get(term, 0) + 1
         avgdl = sum(len(c["tokens"]) for c in chunks) / n_docs
 
-        scored: list[tuple[float, dict[str, Any]]] = []
+        scores: list[float] = []
         for ch in chunks:
             dl = len(ch["tokens"])
             tf: dict[str, int] = {}
@@ -122,11 +141,39 @@ class DocumentStore:
                     continue
                 idf = math.log((n_docs - df[term] + 0.5) / (df[term] + 0.5) + 1)
                 score += idf * (f * (_K1 + 1)) / (f + _K1 * (1 - _B + _B * dl / avgdl))
-            if score > 0:
-                scored.append((score, ch))
+            scores.append(score)
+        return scores
 
-        scored.sort(key=lambda x: x[0], reverse=True)
-        return [{"doc": c["doc"], "text": c["text"], "score": round(s, 4)} for s, c in scored[:k]]
+    def _bm25_search(self, query: str, k: int) -> list[dict[str, Any]]:
+        scores = self._bm25_raw(_tokenize(query))
+        ranked = sorted(
+            ((s, c) for s, c in zip(scores, self._chunks) if s > 0),
+            key=lambda x: x[0],
+            reverse=True,
+        )
+        return [{"doc": c["doc"], "text": c["text"], "score": round(s, 4)} for s, c in ranked[:k]]
+
+    def _hybrid_search(self, query: str, k: int) -> list[dict[str, Any]]:
+        from sensei.rag.embeddings import cosine
+
+        chunks = self._chunks
+        if not chunks:
+            return []
+        qvec = self._embedder.embed([query])[0]
+        cos = [cosine(qvec, c["vec"]) if c.get("vec") else 0.0 for c in chunks]
+        bm = self._bm25_raw(_tokenize(query))
+
+        def _norm(xs: list[float]) -> list[float]:
+            top = max(xs) if xs else 0.0
+            return [x / top if top > 0 else 0.0 for x in xs]
+
+        cn, bn = _norm(cos), _norm(bm)
+        combined = [
+            (0.5 * cn[i] + 0.5 * bn[i], chunks[i]) for i in range(len(chunks))
+        ]
+        combined = [(s, c) for s, c in combined if s > 0]
+        combined.sort(key=lambda x: x[0], reverse=True)
+        return [{"doc": c["doc"], "text": c["text"], "score": round(s, 4)} for s, c in combined[:k]]
 
 
 _store: DocumentStore | None = None
@@ -135,5 +182,7 @@ _store: DocumentStore | None = None
 def get_store() -> DocumentStore:
     global _store
     if _store is None:
-        _store = DocumentStore()
+        from sensei.rag.embeddings import get_embedding_backend
+
+        _store = DocumentStore(embedder=get_embedding_backend())
     return _store

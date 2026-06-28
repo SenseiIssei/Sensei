@@ -144,6 +144,13 @@ class Settings(BaseSettings):
     agent_root: str = "."
     agent_max_steps: int = 6
     agent_max_steps_deep: int = 12  # "deep research" preset (more tool hops)
+
+    # Optional semantic RAG (off by default → zero-dep BM25). Any OpenAI-compatible
+    # /embeddings endpoint; falls back to BM25 if a call fails.
+    embeddings_enabled: bool = False
+    embeddings_base_url: str = "https://api.openai.com/v1"
+    embeddings_model: str = "text-embedding-3-small"
+    embeddings_api_key: str = ""
     # Web fetch (SSRF-guarded; blocks private/loopback hosts). Web search needs a
     # Brave Search API key. Code execution is OFF by default and NOT sandboxed —
     # it runs on the host, so only enable it on a machine you control.
