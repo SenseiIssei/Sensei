@@ -12,6 +12,14 @@ def teardown_function():
     learned.reset_cache()
 
 
+def test_tidy_cleans_drop_artifacts():
+    from sensei.compression.learned import _tidy
+
+    assert _tidy(" , the system ,, resilient .") == "The system, resilient."
+    assert _tidy("") == ""
+    assert _tidy("hello world") == "Hello world"
+
+
 def test_disabled_by_default_returns_none(monkeypatch):
     from sensei.config import settings
 

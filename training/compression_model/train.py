@@ -114,14 +114,22 @@ def main() -> None:
         report_to=[],
     )
 
+    # transformers >=5 renamed the Trainer's `tokenizer` arg to `processing_class`.
+    import inspect
+
+    tok_kwarg = (
+        "processing_class"
+        if "processing_class" in inspect.signature(Trainer.__init__).parameters
+        else "tokenizer"
+    )
     trainer = Trainer(
         model=model,
         args=targs,
         train_dataset=tokenized["train"],
         eval_dataset=tokenized["test"],
-        tokenizer=tokenizer,
         data_collator=DataCollatorForTokenClassification(tokenizer),
         compute_metrics=build_metrics(),
+        **{tok_kwarg: tokenizer},
     )
 
     trainer.train()
