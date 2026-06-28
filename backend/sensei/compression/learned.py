@@ -24,6 +24,16 @@ _WORD_RE = re.compile(r"\w+|[^\w\s]")
 _PUNCT = re.compile(r"^[^\w\s]$")
 
 
+def _tidy(out: str) -> str:
+    """Clean up artifacts left by dropping words: dangling/duplicate punctuation."""
+    out = re.sub(r"\s+([,.;:!?])", r"\1", out)        # space before punctuation
+    out = re.sub(r"([,;:]\s*){2,}", ", ", out)        # collapse repeated commas
+    out = re.sub(r"\s*([.!?])[\s.,;:]*", r"\1 ", out)  # one terminator, then a space
+    out = re.sub(r"^[\s,;:.]+", "", out)              # strip leading punctuation
+    out = re.sub(r"\s{2,}", " ", out).strip()
+    return out[:1].upper() + out[1:] if out else out
+
+
 class LearnedTextCompressor:
     def __init__(self, model_dir: str, keep_threshold: float = 0.5, max_length: int = 256):
         import torch  # heavy, optional — imported only when actually loading
@@ -64,9 +74,7 @@ class LearnedTextCompressor:
             return text
         probs = self._keep_probs(words)
         kept = [w for w, p in zip(words, probs) if p >= self.keep_threshold or _PUNCT.match(w)]
-        out = " ".join(kept)
-        out = re.sub(r"\s+([,.;:!?])", r"\1", out)
-        return out.strip() or text
+        return _tidy(" ".join(kept)) or text
 
 
 _loaded = False

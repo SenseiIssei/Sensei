@@ -38,6 +38,9 @@ logs/
 
 # Training artifacts
 training/compression_model/data/
+training/.venv-train/
+training/compression_model/*.log
+training/compression_model/config.smoke.yaml
 .hf-cache/
 
 # Environment

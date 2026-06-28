@@ -18,6 +18,16 @@ _WORD_RE = re.compile(r"\w+|[^\w\s]")
 _PUNCT = re.compile(r"^[^\w\s]$")
 
 
+def _tidy(out: str) -> str:
+    """Clean up artifacts left by dropping words: dangling/duplicate punctuation."""
+    out = re.sub(r"\s+([,.;:!?])", r"\1", out)
+    out = re.sub(r"([,;:]\s*){2,}", ", ", out)
+    out = re.sub(r"\s*([.!?])[\s.,;:]*", r"\1 ", out)
+    out = re.sub(r"^[\s,;:.]+", "", out)
+    out = re.sub(r"\s{2,}", " ", out).strip()
+    return out[:1].upper() + out[1:] if out else out
+
+
 class LearnedTextCompressor:
     """Token-importance prose compressor. Same `compress(text)` surface as the
     rule-based ``TextCompressor`` so it can drop straight into ``ContentRouter``.
@@ -76,9 +86,7 @@ class LearnedTextCompressor:
             threshold = self.keep_threshold
 
         kept = [w for w, p in zip(words, probs) if p >= threshold or _PUNCT.match(w)]
-        out = " ".join(kept)
-        out = re.sub(r"\s+([,.;:!?])", r"\1", out)  # tidy punctuation spacing
-        return out.strip()
+        return _tidy(" ".join(kept))
 
 
 def main() -> None:
