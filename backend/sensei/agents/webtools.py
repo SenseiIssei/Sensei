@@ -58,7 +58,7 @@ def _html_to_text(body: str) -> str:
     return re.sub(r"\s+", " ", html.unescape(body)).strip()
 
 
-async def _fetch_core(url: str, max_chars: int = 200_000) -> dict[str, Any]:
+async def _fetch_core(url: str, max_chars: int = 200_000, extract: bool = True) -> dict[str, Any]:
     if not settings.web_fetch_enabled:
         return {"error": "Web fetch is disabled (set SENSEI_WEB_FETCH_ENABLED=true)."}
     async with httpx.AsyncClient(timeout=15.0) as client:
@@ -83,6 +83,8 @@ async def _fetch_core(url: str, max_chars: int = 200_000) -> dict[str, Any]:
 
     ctype = resp.headers.get("content-type", "")
     final = str(resp.url)
+    if not extract:  # raw body (e.g. HTML for table parsing)
+        return {"url": final, "status": resp.status_code, "content": resp.text[:max_chars]}
     path = final.split("?")[0].lower()
     if "pdf" in ctype or path.endswith(".pdf"):
         text = extract_pdf_text(resp.content)

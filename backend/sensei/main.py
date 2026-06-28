@@ -197,6 +197,7 @@ from sensei.routers.audit import router as audit_router  # noqa: E402
 from sensei.routers.auth import router as auth_router  # noqa: E402
 from sensei.routers.chat import router as chat_router  # noqa: E402
 from sensei.routers.conversations import router as conversations_router  # noqa: E402
+from sensei.routers.extract import router as extract_router  # noqa: E402
 from sensei.routers.gateway import router as gateway_router  # noqa: E402
 from sensei.routers.maintenance import router as maintenance_router  # noqa: E402
 from sensei.routers.models import router as models_router  # noqa: E402
@@ -211,6 +212,7 @@ app.include_router(audit_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api")
+app.include_router(extract_router, prefix="/api")
 app.include_router(maintenance_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
 app.include_router(rag_router, prefix="/api")
