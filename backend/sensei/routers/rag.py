@@ -50,6 +50,12 @@ async def list_documents() -> dict[str, Any]:
     return {"documents": get_store().list_documents()}
 
 
+@router.get("/status")
+async def rag_status() -> dict[str, Any]:
+    store = get_store()
+    return {"backend": store.backend, "documents": len(store.list_documents())}
+
+
 @router.delete("/documents/{name}")
 async def delete_document(name: str) -> dict[str, Any]:
     removed = get_store().delete_document(name)
