@@ -32,3 +32,23 @@ def test_extract_block_boundaries_become_newlines():
 def test_pdf_extract_graceful_on_garbage():
     assert extract_pdf_text(b"not a real pdf") == ""
     assert extract_pdf_text(b"") == ""
+
+
+def test_docx_extract():
+    import io
+    import zipfile
+
+    from sensei.agents.extract import extract_docx_text
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr(
+            "word/document.xml",
+            "<w:document><w:body>"
+            "<w:p><w:r><w:t>Hello docx</w:t></w:r></w:p>"
+            "<w:p><w:r><w:t>Second line</w:t></w:r></w:p>"
+            "</w:body></w:document>",
+        )
+    text = extract_docx_text(buf.getvalue())
+    assert "Hello docx" in text and "Second line" in text
+    assert extract_docx_text(b"garbage") == ""
