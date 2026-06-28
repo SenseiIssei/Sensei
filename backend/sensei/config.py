@@ -207,6 +207,14 @@ class Settings(BaseSettings):
     rbac_enabled: bool = False
     admin_emails: str = ""
 
+    # SSO via OpenID Connect (token-exchange flow). Off by default. The frontend
+    # gets an ID token from the IdP and exchanges it at /api/auth/oidc.
+    oidc_enabled: bool = False
+    oidc_issuer: str = ""
+    oidc_client_id: str = ""
+    oidc_audience: str = ""  # defaults to client_id when blank
+    oidc_jwks_uri: str = ""  # optional override; else discovered from the issuer
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
