@@ -38,6 +38,12 @@ export HF_HOME=G:/Projects/Sensei/.hf-cache    # PowerShell: $env:HF_HOME="G:/Pr
 
 ## Quick start
 
+**Turnkey (Windows):** `./run.ps1` creates a dedicated training venv on `G:`,
+installs deps, builds the dataset, and trains. Use `./run.ps1 -Smoke` for a fast
+end-to-end check (200 samples, 1 epoch) before committing to the full run.
+
+Manual:
+
 ```bash
 pip install -r requirements.txt
 
@@ -54,14 +60,27 @@ PYTHONPATH=../../backend python infer.py --config config.yaml \
 
 ## Wiring it back into Sensei
 
-`infer.py` exposes `LearnedTextCompressor`, a drop-in replacement for the
-rule-based `TextCompressor`. Once a checkpoint scores well on
-`benchmarks/compression_benchmark.py` (quality retained, tokens down), route
-prose through it in `ContentRouter` behind a `SENSEI_LEARNED_PROSE=1` flag.
+The integration seam already exists in the backend:
+`sensei/compression/learned.py` loads the checkpoint and exposes the same
+`compress(text)` surface as the rule-based `TextCompressor`; `ContentRouter`
+routes prose through it automatically when enabled. Turn it on once a checkpoint
+scores well on `benchmarks/compression_benchmark.py` (quality retained, tokens
+down):
+
+```bash
+SENSEI_LEARNED_COMPRESSOR_ENABLED=true
+SENSEI_LEARNED_COMPRESSOR_PATH=G:/Projects/Sensei/models/sensei-compressor
+# optional: SENSEI_LEARNED_KEEP_THRESHOLD=0.5
+```
+
+If the flag is off, the checkpoint is missing, or torch isn't installed, the
+router transparently falls back to the rule-based compressor — so enabling it is
+safe.
 
 ## Roadmap
 
 - [x] Token-importance scaffold (this folder)
+- [x] Backend integration seam (`sensei/compression/learned.py`, flag-gated, safe fallback)
 - [ ] Train v0 on the synthetic + your data, eval quality retention
 - [ ] Add a JSON/log "droppability" head (structured content)
 - [ ] GGUF/ONNX export for zero-Python inference inside the proxy

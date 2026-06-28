@@ -8,6 +8,7 @@ from typing import Any
 from sensei.compression.cachealign import CacheAligner
 from sensei.compression.ccr import CCRStore
 from sensei.compression.codecomp import CodeCompressor
+from sensei.compression import learned
 from sensei.compression.logcomp import LogCompressor
 from sensei.compression.smartcrusher import SmartCrusher
 from sensei.compression.textcomp import TextCompressor
@@ -127,6 +128,8 @@ class ContentRouter:
         self.smart_crusher = SmartCrusher()
         self.code_compressor = CodeCompressor()
         self.text_compressor = TextCompressor()
+        # Learned prose compressor when available, else the rule-based one.
+        self.prose_compressor = learned.get_prose_compressor() or self.text_compressor
         self.log_compressor = LogCompressor()
         self.cache_aligner = CacheAligner()
         self.ccr_store = ccr_store
@@ -166,8 +169,12 @@ class ContentRouter:
                 compressed = self.log_compressor.compress(content)
                 compressor = "logcompressor"
             case _:
-                compressed = self.text_compressor.compress(content)
-                compressor = "textcompressor"
+                compressed = self.prose_compressor.compress(content)
+                compressor = (
+                    "textcompressor"
+                    if self.prose_compressor is self.text_compressor
+                    else "learned-compressor"
+                )
 
         compressed_tokens = _estimate_tokens(compressed)
 
