@@ -145,6 +145,14 @@ class Settings(BaseSettings):
     agent_max_steps: int = 6
     agent_max_steps_deep: int = 12  # "deep research" preset (more tool hops)
 
+    # Optional learned prose compressor (the trained Sensei-Compressor). Off by
+    # default; falls back to the rule-based TextCompressor if disabled, the
+    # checkpoint is missing, or torch/transformers aren't installed.
+    learned_compressor_enabled: bool = False
+    learned_compressor_path: str = "G:/Projects/Sensei/models/sensei-compressor"
+    learned_keep_threshold: float = 0.5
+    learned_max_length: int = 256
+
     # Optional semantic RAG (off by default → zero-dep BM25). Any OpenAI-compatible
     # /embeddings endpoint; falls back to BM25 if a call fails.
     embeddings_enabled: bool = False
