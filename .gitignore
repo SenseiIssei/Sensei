@@ -15,6 +15,10 @@ env/
 node_modules/
 frontend/dist/
 frontend/node_modules/
+frontend/playwright-report/
+frontend/test-results/
+frontend/playwright/.cache/
+*.tsbuildinfo
 
 # Sensei runtime
 .coverage
