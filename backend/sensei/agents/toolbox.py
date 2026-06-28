@@ -106,6 +106,15 @@ async def crawl_site(url: str, max_pages: int = 8) -> dict[str, Any]:
     return await crawl_to_rag(url, min(int(max_pages), 25), 2)
 
 
+async def extract_structured(url: str, fields: Any) -> dict[str, Any]:
+    """Extract a list of named fields from a page as a JSON object."""
+    from sensei.agents.structured import extract_structured as _extract
+
+    if isinstance(fields, str):
+        fields = [f.strip() for f in fields.split(",") if f.strip()]
+    return await _extract(url, list(fields or []))
+
+
 def build_default_registry() -> ToolRegistry:
     reg = ToolRegistry()
     reg.register(Tool(
@@ -166,6 +175,19 @@ def build_default_registry() -> ToolRegistry:
             "required": ["url"],
         },
         handler=crawl_site,
+    ))
+    reg.register(Tool(
+        name="extract_structured",
+        description="Extract named fields from a page into a JSON object (fields = list of field names).",
+        parameters={
+            "type": "object",
+            "properties": {
+                "url": {"type": "string"},
+                "fields": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["url", "fields"],
+        },
+        handler=extract_structured,
     ))
     if settings.code_exec_enabled:
         reg.register(Tool(
