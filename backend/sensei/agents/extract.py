@@ -44,3 +44,22 @@ def extract_pdf_text(data: bytes) -> str:
         return "\n\n".join(p for p in parts if p)
     except Exception:
         return ""
+
+
+def extract_docx_text(data: bytes) -> str:
+    """Extract text from a .docx (zero-dependency: read word/document.xml)."""
+    import zipfile
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            xml = z.read("word/document.xml").decode("utf-8", "replace")
+    except Exception:
+        return ""
+    xml = re.sub(r"<w:tab\b[^>]*/>", "\t", xml)
+    xml = re.sub(r"<w:br\b[^>]*/>", "\n", xml)
+    xml = re.sub(r"</w:p>", "\n", xml)
+    text = _TAG.sub("", xml)  # text lives inside <w:t>; other tags carry no text
+    text = _html.unescape(text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()

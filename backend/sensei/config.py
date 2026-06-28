@@ -143,6 +143,7 @@ class Settings(BaseSettings):
     # Agent: read-only tools sandboxed to agent_root; bounded ReAct loop.
     agent_root: str = "."
     agent_max_steps: int = 6
+    agent_max_steps_deep: int = 12  # "deep research" preset (more tool hops)
     # Web fetch (SSRF-guarded; blocks private/loopback hosts). Web search needs a
     # Brave Search API key. Code execution is OFF by default and NOT sandboxed —
     # it runs on the host, so only enable it on a machine you control.

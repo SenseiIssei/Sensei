@@ -21,7 +21,7 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 
-from sensei.agents.extract import extract_main_text, extract_pdf_text
+from sensei.agents.extract import extract_docx_text, extract_main_text, extract_pdf_text
 from sensei.config import settings
 
 _SCRIPT_STYLE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
@@ -83,8 +83,11 @@ async def _fetch_core(url: str, max_chars: int = 200_000) -> dict[str, Any]:
 
     ctype = resp.headers.get("content-type", "")
     final = str(resp.url)
-    if "pdf" in ctype or final.split("?")[0].lower().endswith(".pdf"):
+    path = final.split("?")[0].lower()
+    if "pdf" in ctype or path.endswith(".pdf"):
         text = extract_pdf_text(resp.content)
+    elif "wordprocessingml" in ctype or path.endswith(".docx"):
+        text = extract_docx_text(resp.content)
     elif "html" in ctype or "<html" in resp.text[:1024].lower():
         text = extract_main_text(resp.text[:1_000_000])
     else:

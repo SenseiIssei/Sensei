@@ -79,6 +79,22 @@ def test_agent_tools_endpoint():
     assert {"read_file", "list_files", "search_files", "rag_search"} <= names
 
 
+def test_agent_deep_uses_more_steps(tmp_path, monkeypatch):
+    from sensei.config import settings
+
+    monkeypatch.setattr(settings, "agent_root", str(tmp_path))
+    monkeypatch.setattr(settings, "agent_max_steps", 1)
+    monkeypatch.setattr(settings, "agent_max_steps_deep", 3)
+
+    async def _looping_provider():
+        return _ScriptedProvider([json.dumps({"tool": "list_files", "args": {}})] * 5)
+
+    monkeypatch.setattr(runner, "get_provider", _looping_provider)
+    client = TestClient(app)
+    assert len(client.post("/api/agent/run", json={"task": "x"}).json()["steps"]) == 1
+    assert len(client.post("/api/agent/run", json={"task": "x", "deep": True}).json()["steps"]) == 3
+
+
 def test_agent_run_endpoint(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "agent_root", str(tmp_path))
     (tmp_path / "f.txt").write_text("contents here", encoding="utf-8")

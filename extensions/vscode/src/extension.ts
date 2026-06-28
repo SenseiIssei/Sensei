@@ -297,10 +297,18 @@ async function askDocsFlow(): Promise<void> {
 
 async function runAgentFlow(): Promise<void> {
   const task = await vscode.window.showInputBox({
-    prompt: "Agent task (it can list/read/search files in the workspace + your docs)",
+    prompt: "Agent task (files, your docs, web search/fetch, crawl, ingest)",
     ignoreFocusOut: true,
   });
   if (!task) return;
+  const mode = await vscode.window.showQuickPick(
+    [
+      { label: "Standard", deep: false },
+      { label: "Deep research (more tool hops)", deep: true },
+    ],
+    { placeHolder: "Agent mode" }
+  );
+  if (!mode) return;
   await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: "Sensei: agent working…" },
     async () => {
@@ -308,7 +316,7 @@ async function runAgentFlow(): Promise<void> {
         const resp = await fetch(`${backendUrl()}/api/agent/run`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ task }),
+          body: JSON.stringify({ task, deep: mode.deep }),
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = (await resp.json()) as { answer: string; steps: any[]; stopped: string };
