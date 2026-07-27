@@ -1,0 +1,68 @@
+version: 2
+
+# Grouped weekly so upgrades arrive as a handful of reviewable PRs rather than
+# thirty. Security updates are never grouped — those should land immediately.
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      python-minor-patch:
+        update-types: [minor, patch]
+      python-dev:
+        dependency-type: development
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom", "react-router*"]
+      build-tooling:
+        patterns: ["vite", "vitest", "@vitejs/*", "@vitest/*", "typescript", "tailwindcss", "@tailwindcss/*", "postcss"]
+      frontend-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /extensions/vscode
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      extension-deps:
+        patterns: ["*"]
+
+  - package-ecosystem: cargo
+    directory: /rust/sensei_core
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      rust-deps:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directories:
+      - /backend
+      - /frontend
+    schedule:
+      interval: weekly
+      day: monday

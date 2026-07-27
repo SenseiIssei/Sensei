@@ -1,0 +1,49 @@
+# Catches the things CI would fail on, before you push.
+#
+#   pip install pre-commit && pre-commit install
+#
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+        exclude: ^extensions/vscode/tsconfig\.json$ # allows comments
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.0
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: bash -c 'cd rust/sensei_core && cargo fmt --check'
+        language: system
+        files: ^rust/
+        pass_filenames: false
+
+      - id: frontend-typecheck
+        name: tsc --noEmit (frontend)
+        entry: bash -c 'cd frontend && npm run typecheck'
+        language: system
+        files: ^frontend/src/.*\.(ts|tsx)$
+        pass_filenames: false

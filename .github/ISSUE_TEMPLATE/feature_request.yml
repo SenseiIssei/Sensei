@@ -1,0 +1,50 @@
+name: Feature request
+description: Suggest something Sensei should do
+labels: [enhancement, needs-triage]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation you're stuck in, not the feature you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like Sensei to do?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Compression pipeline
+        - Gateway / proxy (OpenAI + Anthropic APIs)
+        - Model providers
+        - Web UI
+        - CLI
+        - Desktop app
+        - VS Code extension
+        - Agents / tools
+        - RAG / knowledge base
+        - Security / auth
+        - Deployment / packaging
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What have you tried or considered instead?
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Would you be up for implementing it?
+      options:
+        - label: I'd be willing to open a PR for this

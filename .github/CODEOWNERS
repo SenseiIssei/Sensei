@@ -1,0 +1,17 @@
+# Default owner for everything.
+*                       @SenseiIssei
+
+# The compression pipeline and the accelerator are the parts where a subtle
+# change silently costs every user money — always review these together.
+/backend/sensei/compression/  @SenseiIssei
+/rust/sensei_core/            @SenseiIssei
+/backend/benchmarks/          @SenseiIssei
+
+# Security-sensitive surfaces.
+/backend/sensei/security/     @SenseiIssei
+/backend/sensei/routers/gateway.py @SenseiIssei
+/SECURITY.md                  @SenseiIssei
+
+# Supply chain: a change here can run arbitrary code with repo credentials.
+/.github/workflows/           @SenseiIssei
+/.github/dependabot.yml       @SenseiIssei

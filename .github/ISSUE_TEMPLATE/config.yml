@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/SenseiIssei/Sensei/security/advisories/new
+    about: Report privately — please do not open a public issue.
+  - name: Question or idea
+    url: https://github.com/SenseiIssei/Sensei/discussions
+    about: For anything that isn't a concrete bug or feature request.

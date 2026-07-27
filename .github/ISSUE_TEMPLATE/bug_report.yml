@@ -1,0 +1,79 @@
+name: Bug report
+description: Something in Sensei doesn't work
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **If this is a security issue, please don't file it here** —
+        use [private vulnerability reporting](https://github.com/SenseiIssei/Sensei/security/advisories/new) instead.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run `sensei up`
+        2. Open http://localhost:7000/app
+        3. ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: How are you running Sensei?
+      options:
+        - Docker / docker compose
+        - Installer (.exe / .dmg / AppImage / .deb / .rpm)
+        - From source (install.py / install.sh)
+        - pip install
+        - VS Code extension
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Sensei version
+      description: From `GET /health`, or the tag/commit you're on.
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS and version
+      placeholder: "Windows 11 26200 / macOS 15.2 arm64 / Ubuntu 24.04"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Model provider in use
+      options:
+        - Ollama (local)
+        - llama.cpp / vLLM (local)
+        - OpenAI
+        - Anthropic
+        - OpenRouter
+        - Google Gemini
+        - Groq
+        - Other / not relevant
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Server output or browser console. **Redact API keys first.**
+      render: shell
