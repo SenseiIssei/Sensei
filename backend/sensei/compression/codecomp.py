@@ -3,6 +3,35 @@ from __future__ import annotations
 import re
 from typing import ClassVar
 
+# Compiled once at import. These run per line of every code block that passes
+# through the gateway, and `re.sub("...", ...)` with a string pattern pays a
+# cache lookup on every single call — which showed up as ~11k lookups per
+# request in the profiler.
+_BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/")
+_COMMENT_RES: dict[str, re.Pattern[str]] = {
+    "python": re.compile(r"#.*$"),
+    "javascript": re.compile(r"//.*$"),
+    "typescript": re.compile(r"//.*$"),
+    "go": re.compile(r"//.*$"),
+    "rust": re.compile(r"//.*$"),
+    "java": re.compile(r"//.*$"),
+    "cpp": re.compile(r"//.*$"),
+}
+_DEFAULT_COMMENT_RE = re.compile(r"(#|//).*$")
+
+_IMPORT_PREFIXES: dict[str, tuple[str, ...]] = {
+    "python": ("import ", "from "),
+    "javascript": ("import ", "const ", "require("),
+    "typescript": ("import ", "const ", "require("),
+    "go": ("import ", "package "),
+    "rust": ("use ", "mod "),
+    # Note the trailing comma: without it this is a bare string, and
+    # `startswith` over its characters matches any line beginning with
+    # i, m, p, o, r, t or a space — which silently mangled Java input.
+    "java": ("import ",),
+    "cpp": ("#include", "#define"),
+}
+
 
 class CodeCompressor:
     """AST-aware code compression for multiple languages.
@@ -121,17 +150,7 @@ class CodeCompressor:
 
     def _strip_comments(self, lines: list[str], lang: str) -> list[str]:
         """Remove single-line and multi-line comments."""
-        comment_patterns = {
-            "python": r"#.*$",
-            "javascript": r"//.*$",
-            "typescript": r"//.*$",
-            "go": r"//.*$",
-            "rust": r"//.*$",
-            "java": r"//.*$",
-            "cpp": r"//.*$",
-        }
-
-        pattern = comment_patterns.get(lang, r"(#|//).*$")
+        pattern = _COMMENT_RES.get(lang, _DEFAULT_COMMENT_RE)
         result = []
         in_block_comment = False
 
@@ -139,7 +158,7 @@ class CodeCompressor:
             line = raw_line
             # Handle block comments /* ... */
             if "/*" in line and "*/" in line:
-                line = re.sub(r"/\*.*?\*/", "", line)
+                line = _BLOCK_COMMENT_RE.sub("", line)
             elif "/*" in line:
                 in_block_comment = True
                 line = line[: line.index("/*")]
@@ -159,7 +178,7 @@ class CodeCompressor:
                     continue
 
             # Remove single-line comments
-            line = re.sub(pattern, "", line)
+            line = pattern.sub("", line)
             if line.strip():
                 result.append(line)
 
@@ -167,17 +186,7 @@ class CodeCompressor:
 
     def _collapse_imports(self, lines: list[str], lang: str) -> list[str]:
         """Collapse consecutive import statements."""
-        import_prefixes = {
-            "python": ("import ", "from "),
-            "javascript": ("import ", "const ", "require("),
-            "typescript": ("import ", "const ", "require("),
-            "go": ("import ", "package "),
-            "rust": ("use ", "mod "),
-            "java": ("import "),
-            "cpp": ("#include", "#define"),
-        }
-
-        prefixes = import_prefixes.get(lang, ())
+        prefixes = _IMPORT_PREFIXES.get(lang, ())
         if not prefixes:
             return lines
 

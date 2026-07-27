@@ -73,7 +73,10 @@ _LOG_LINE_START = re.compile(
 
 def _detect_logs(text: str) -> bool:
     """Heuristic: many lines that look like log records (levels/timestamps/frames)."""
-    lines = text.split("\n")
+    # maxsplit stops after the sample: a plain split() allocates every line of a
+    # multi-megabyte tool result just to look at the first eighty. The bounded
+    # split yields the same first 80 entries, so the verdict is unchanged.
+    lines = text.split("\n", 80)
     if len(lines) < 8:
         return False
     sample = lines[:80]
@@ -81,35 +84,42 @@ def _detect_logs(text: str) -> bool:
     return hits >= max(4, int(len(sample) * 0.25))
 
 
+# Detection runs on every message of every request, so the indicator sets are
+# compiled once and merged into a single alternation each. Six searches per line
+# became one, and the per-call `re` cache lookups disappear entirely.
+
+# Strong signals — a single match is enough to classify as code.
+_STRONG_CODE_RE = re.compile(
+    r"^\s*(?:def |async def |class )"
+    r"|^\s*(?:function |func |fn )\w"
+    r"|^\s*import \w"
+    r"|^\s*from \S+ import "
+    r"|^\s*(?:#include|package |using )"
+    r"|^\s*(?:public |private |protected )\w"
+)
+
+# Weaker signals — need at least two matching lines to classify as code.
+_WEAK_CODE_RE = re.compile(
+    r";\s*$"  # statement terminators
+    r"|^\s*\}\s*$"  # closing braces
+    r"|^\s*\{[^}]*\}"  # inline blocks
+    r"|=>\s*[{(]"  # arrow functions
+    r"|->\s*\w+"  # return-type arrows
+    r"|\b(?:const|let|var|return|print|console\.log)\b"
+)
+
+
 def _detect_code(text: str) -> bool:
     """Heuristic: check for code fences or common code patterns."""
     if text.strip().startswith("```"):
         return True
 
-    lines = text.split("\n")[:20]
+    lines = text.split("\n", 20)[:20]
 
-    # Strong signals — a single match is enough to classify as code.
-    strong_indicators = [
-        r"^\s*(def |async def |class )",
-        r"^\s*(function |func |fn )\w",
-        r"^\s*import \w",
-        r"^\s*from \S+ import ",
-        r"^\s*(#include|package |using )",
-        r"^\s*(public |private |protected )\w",
-    ]
-    if any(re.search(p, line) for line in lines for p in strong_indicators):
+    if any(_STRONG_CODE_RE.search(line) for line in lines):
         return True
 
-    # Weaker signals — need at least two to classify as code.
-    weak_indicators = [
-        r";\s*$",  # statement terminators
-        r"^\s*\}\s*$",  # closing braces
-        r"^\s*\{[^}]*\}",  # inline blocks
-        r"=>\s*[{(]",  # arrow functions
-        r"->\s*\w+",  # return-type arrows
-        r"\b(const|let|var|return|print|console\.log)\b",
-    ]
-    matches = sum(1 for line in lines if any(re.search(p, line) for p in weak_indicators))
+    matches = sum(1 for line in lines if _WEAK_CODE_RE.search(line))
     return matches >= 2
 
 
