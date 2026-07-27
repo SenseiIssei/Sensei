@@ -1,6 +1,24 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* Tailwind 4 is configured in CSS — this block replaces tailwind.config.cjs.
+   Every `--color-sensei-*` entry generates the matching bg-/text-/border-
+   utilities, exactly as the old `theme.extend.colors.sensei` map did. */
+@theme {
+  --color-sensei-50: #f0fdf4;
+  --color-sensei-100: #dcfce7;
+  --color-sensei-200: #bbf7d0;
+  --color-sensei-300: #86efac;
+  --color-sensei-400: #4ade80;
+  --color-sensei-500: #22c55e;
+  --color-sensei-600: #16a34a;
+  --color-sensei-700: #15803d;
+  --color-sensei-800: #166534;
+  --color-sensei-900: #14532d;
+  --color-sensei-950: #052e16;
+
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+}
 
 @layer base {
   body {
@@ -34,10 +52,13 @@
     background-color: rgb(82 82 91);
   }
 
+  /* Do not hand-write -webkit- prefixes here: Lightning CSS (bundled with
+     Tailwind 4) treats an existing prefixed declaration as authoritative and
+     drops the unprefixed one, which silently kills the effect in Firefox.
+     Let it generate prefixes from the browserslist targets instead. */
   .glass {
     background: rgba(255, 255, 255, 0.03);
     backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.06);
   }
 
@@ -49,7 +70,6 @@
   .glass-card {
     background: rgba(255, 255, 255, 0.02);
     backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 12px;
   }

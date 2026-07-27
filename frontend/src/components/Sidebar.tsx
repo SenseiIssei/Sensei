@@ -112,7 +112,7 @@ export function Sidebar({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search conversations..."
-            className="w-full glass text-sm text-gray-300 rounded-lg pl-8 pr-3 py-2 border border-gray-700/50 focus:border-sensei-600/50 focus:outline-none"
+            className="w-full glass text-sm text-gray-300 rounded-lg pl-8 pr-3 py-2 border border-gray-700/50 focus:border-sensei-600/50 focus:outline-hidden"
           />
         </div>
       </div>
@@ -136,7 +136,7 @@ export function Sidebar({
               )}
               onClick={() => onSelectConversation(conv.id)}
             >
-              <MessageSquare className="w-4 h-4 flex-shrink-0" />
+              <MessageSquare className="w-4 h-4 shrink-0" />
               <span className="text-sm truncate flex-1">{conv.title}</span>
               <button
                 onClick={(e) => {
@@ -361,7 +361,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           <div>
             <label className="text-sm text-gray-400 block mb-1">System Prompt</label>
             <textarea
-              className="w-full bg-gray-800 text-white text-sm rounded-lg p-3 border border-gray-700 focus:border-sensei-600 focus:outline-none resize-none"
+              className="w-full bg-gray-800 text-white text-sm rounded-lg p-3 border border-gray-700 focus:border-sensei-600 focus:outline-hidden resize-none"
               rows={3}
               placeholder="You are Sensei, a helpful AI assistant..."
               defaultValue="You are Sensei, a helpful AI assistant powered by GLM-5.2. Be concise and accurate."

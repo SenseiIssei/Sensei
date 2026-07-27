@@ -383,7 +383,7 @@ function ChatArea({
                 onKeyDown={handleKeyDown}
                 placeholder="Send a message to Sensei..."
                 rows={1}
-                className="w-full glass text-white text-sm rounded-xl px-4 py-3 border border-gray-700/50 focus:border-sensei-600/50 focus:outline-none resize-none scrollbar-thin"
+                className="w-full glass text-white text-sm rounded-xl px-4 py-3 border border-gray-700/50 focus:border-sensei-600/50 focus:outline-hidden resize-none scrollbar-thin"
                 style={{ minHeight: "44px", maxHeight: "200px" }}
                 disabled={isStreaming}
               />
@@ -415,7 +415,7 @@ function MessageBubble({ message, isStreaming, onCopy, copied }: { message: Chat
   return (
     <div className={clsx("group flex gap-3", isUser ? "flex-row-reverse" : "flex-row")}>
       <div className={clsx(
-        "w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center text-sm font-bold",
+        "w-8 h-8 rounded-lg shrink-0 flex items-center justify-center text-sm font-bold",
         isUser ? "bg-blue-600 text-white" : "bg-sensei-600 text-white"
       )}>
         {isUser ? "U" : "S"}
