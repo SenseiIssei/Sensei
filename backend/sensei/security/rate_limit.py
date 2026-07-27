@@ -4,7 +4,6 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Literal
 
 from sensei.config import settings
 

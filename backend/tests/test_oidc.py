@@ -9,10 +9,9 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from fastapi.testclient import TestClient
 
-import sensei.security.oidc as oidc
-import sensei.security.users as users
 from sensei.config import settings
 from sensei.main import app
+from sensei.security import oidc, users
 from sensei.security.oidc import OIDCError, verify_id_token
 
 _ISSUER = "https://idp.test"
@@ -35,8 +34,14 @@ def keypair():
 
 def _jwk(pub) -> dict:
     nums = pub.public_numbers()
-    return {"kty": "RSA", "use": "sig", "alg": "RS256", "kid": _KID,
-            "n": _int_b64url(nums.n), "e": _int_b64url(nums.e)}
+    return {
+        "kty": "RSA",
+        "use": "sig",
+        "alg": "RS256",
+        "kid": _KID,
+        "n": _int_b64url(nums.n),
+        "e": _int_b64url(nums.e),
+    }
 
 
 def _make_token(priv, claims: dict, kid: str = _KID) -> str:
@@ -58,8 +63,13 @@ def oidc_env(monkeypatch, keypair):
 
 
 def _claims(**over):
-    base = {"iss": _ISSUER, "aud": _CLIENT, "exp": int(time.time()) + 600,
-            "email": "alice@corp.test", "name": "Alice"}
+    base = {
+        "iss": _ISSUER,
+        "aud": _CLIENT,
+        "exp": int(time.time()) + 600,
+        "email": "alice@corp.test",
+        "name": "Alice",
+    }
     base.update(over)
     return base
 

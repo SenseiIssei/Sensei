@@ -4,6 +4,7 @@
 turns block boundaries into newlines so the remaining prose is clean for RAG.
 ``extract_pdf_text`` pulls text from a PDF (via pypdf), failing gracefully.
 """
+
 from __future__ import annotations
 
 import html as _html

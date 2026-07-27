@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from sensei import __version__
 from sensei.agents.memory import MemoryStore
 from sensei.agents.tools import ToolRegistry, retrieve_original_tool
 from sensei.compression.ccr import CCRStore
@@ -39,12 +42,7 @@ if settings.log_file:
         logging.getLogger(_name).addHandler(_fh)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(
-    title="Sensei",
-    description="Self-hosted AI workspace with token compression, powered by GLM-5.2",
-    version="0.1.0",
-    license_info={"name": "MIT"},
-)
+DESCRIPTION = "Self-hosted AI workspace with token compression, powered by GLM-5.2"
 
 # Global session manager
 session_manager: SessionManager | None = None
@@ -52,11 +50,11 @@ _purge_task: asyncio.Task | None = None
 _watch_task: asyncio.Task | None = None
 
 
-@app.on_event("startup")
-async def startup() -> None:
-    """Initialize shared components on startup."""
-    global session_manager
-    logger.info("Starting Sensei v0.1.0...")
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Initialize shared components on startup, tear them down on shutdown."""
+    global session_manager, _purge_task, _watch_task
+    logger.info("Starting Sensei v%s...", __version__)
 
     # Load encrypted API keys from the vault into live settings.
     from sensei.security.vault import get_vault
@@ -88,7 +86,6 @@ async def startup() -> None:
     init_stats_deps(ccr_store=ccr_store)
 
     # Data auto-purge background loop.
-    global _purge_task
     if settings.purge_interval_minutes > 0:
         from sensei.purge import purge_expired
 
@@ -96,14 +93,13 @@ async def startup() -> None:
             while True:
                 try:
                     purge_expired()
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logger.debug("purge loop error: %s", exc)
                 await asyncio.sleep(max(60, settings.purge_interval_minutes * 60))
 
         _purge_task = asyncio.create_task(_purge_loop())
 
     # Watched-source change detection loop.
-    global _watch_task
     if settings.watch_check_interval_minutes > 0:
         from sensei.watch import check_watches
 
@@ -112,7 +108,7 @@ async def startup() -> None:
                 await asyncio.sleep(max(60, settings.watch_check_interval_minutes * 60))
                 try:
                     await check_watches()
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logger.debug("watch loop error: %s", exc)
 
         _watch_task = asyncio.create_task(_watch_loop())
@@ -125,21 +121,28 @@ async def startup() -> None:
         settings.rate_limit_enabled,
     )
 
+    yield
 
-@app.on_event("shutdown")
-async def shutdown() -> None:
+    # ── Shutdown ────────────────────────────────────────────────
     if session_manager:
         expired = session_manager.cleanup_expired()
         logger.info("Cleaned up %d expired sessions", expired)
-    if _purge_task:
-        _purge_task.cancel()
-    if _watch_task:
-        _watch_task.cancel()
+    for task in (_purge_task, _watch_task):
+        if task:
+            task.cancel()
     from sensei.routers.gateway import close_clients
 
     await close_clients()
     logger.info("Sensei shutting down...")
 
+
+app = FastAPI(
+    title="Sensei",
+    description=DESCRIPTION,
+    version=__version__,
+    license_info={"name": "MIT"},
+    lifespan=lifespan,
+)
 
 # CORS
 app.add_middleware(
@@ -188,24 +191,24 @@ async def rate_limit_middleware(request: Request, call_next):
 # Health check
 @app.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok", "version": "0.1.0"}
+    return {"status": "ok", "version": __version__}
 
 
 # Register routers
-from sensei.routers.agent import router as agent_router  # noqa: E402
-from sensei.routers.audit import router as audit_router  # noqa: E402
-from sensei.routers.auth import router as auth_router  # noqa: E402
-from sensei.routers.chat import router as chat_router  # noqa: E402
-from sensei.routers.conversations import router as conversations_router  # noqa: E402
-from sensei.routers.extract import router as extract_router  # noqa: E402
-from sensei.routers.gateway import router as gateway_router  # noqa: E402
-from sensei.routers.maintenance import router as maintenance_router  # noqa: E402
-from sensei.routers.models import router as models_router  # noqa: E402
-from sensei.routers.rag import router as rag_router  # noqa: E402
-from sensei.routers.settings import router as settings_router  # noqa: E402
-from sensei.routers.stats import router as stats_router  # noqa: E402
-from sensei.routers.watch import router as watch_router  # noqa: E402
-from sensei.routers.webhook import router as webhook_router  # noqa: E402
+from sensei.routers.agent import router as agent_router
+from sensei.routers.audit import router as audit_router
+from sensei.routers.auth import router as auth_router
+from sensei.routers.chat import router as chat_router
+from sensei.routers.conversations import router as conversations_router
+from sensei.routers.extract import router as extract_router
+from sensei.routers.gateway import router as gateway_router
+from sensei.routers.maintenance import router as maintenance_router
+from sensei.routers.models import router as models_router
+from sensei.routers.rag import router as rag_router
+from sensei.routers.settings import router as settings_router
+from sensei.routers.stats import router as stats_router
+from sensei.routers.watch import router as watch_router
+from sensei.routers.webhook import router as webhook_router
 
 app.include_router(agent_router, prefix="/api")
 app.include_router(audit_router, prefix="/api")
@@ -230,8 +233,8 @@ app.include_router(gateway_router)
 async def root() -> dict[str, str]:
     return {
         "name": "Sensei",
-        "version": "0.1.0",
-        "description": "Self-hosted AI workspace with token compression, powered by GLM-5.2",
+        "version": __version__,
+        "description": DESCRIPTION,
         "docs": "/docs",
         "health": "/health",
     }

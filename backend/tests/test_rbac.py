@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-import sensei.security.users as users
 from sensei.config import settings
 from sensei.main import app
+from sensei.security import users
 
 
 def test_rbac_off_allows_without_auth(monkeypatch):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from typing import ClassVar
 
 # Optional Rust accelerator (rust/sensei_core). Byte-compatible with the Python
 # path below; soft-imported so installs without the wheel still work.
@@ -40,7 +41,7 @@ class LogCompressor:
     FRAME = re.compile(r'^\s*(at |File ", "|in |\| |#\d+ |\.\.\. )')
 
     # Normalize volatile tokens so otherwise-identical lines dedupe together.
-    _NORM = [
+    _NORM: ClassVar[list[tuple[re.Pattern[str], str]]] = [
         (re.compile(r"\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}\S*"), "<ts>"),
         (re.compile(r"\b0x[0-9a-fA-F]+\b"), "<hex>"),
         (re.compile(r"\b\d+\b"), "<n>"),

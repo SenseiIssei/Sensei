@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Literal
+from typing import ClassVar
 
 
 class CodeCompressor:
@@ -16,7 +16,7 @@ class CodeCompressor:
     """
 
     # Language detection patterns
-    LANG_PATTERNS = {
+    LANG_PATTERNS: ClassVar[dict[str, list[str]]] = {
         "python": [
             r"^\s*(def |class |import |from .+ import)",
             r"^\s*(if __name__|@|print\()",
@@ -70,13 +70,20 @@ class CodeCompressor:
         """Detect the programming language of a code block."""
         hint = hint.lower().strip()
         lang_map = {
-            "py": "python", "python": "python",
-            "js": "javascript", "javascript": "javascript",
-            "ts": "typescript", "typescript": "typescript",
-            "go": "go", "golang": "go",
-            "rs": "rust", "rust": "rust",
+            "py": "python",
+            "python": "python",
+            "js": "javascript",
+            "javascript": "javascript",
+            "ts": "typescript",
+            "typescript": "typescript",
+            "go": "go",
+            "golang": "go",
+            "rs": "rust",
+            "rust": "rust",
             "java": "java",
-            "cpp": "cpp", "c++": "cpp", "c": "cpp",
+            "cpp": "cpp",
+            "c++": "cpp",
+            "c": "cpp",
         }
         if hint in lang_map:
             return lang_map[hint]
@@ -84,8 +91,7 @@ class CodeCompressor:
         # Auto-detect from patterns
         for lang, patterns in self.LANG_PATTERNS.items():
             matches = sum(
-                1 for line in code.split("\n")[:30]
-                if any(re.search(p, line) for p in patterns)
+                1 for line in code.split("\n")[:30] if any(re.search(p, line) for p in patterns)
             )
             if matches >= 2:
                 return lang
@@ -129,7 +135,8 @@ class CodeCompressor:
         result = []
         in_block_comment = False
 
-        for line in lines:
+        for raw_line in lines:
+            line = raw_line
             # Handle block comments /* ... */
             if "/*" in line and "*/" in line:
                 line = re.sub(r"/\*.*?\*/", "", line)
@@ -145,7 +152,7 @@ class CodeCompressor:
             # Handle Python triple-quoted strings used as comments
             if lang == "python":
                 stripped = line.strip()
-                if stripped.startswith('"""') or stripped.startswith("'''"):
+                if stripped.startswith(('"""', "'''")):
                     if stripped.count('"""') == 2 or stripped.count("'''") == 2:
                         continue  # Single-line docstring
                     # Multi-line — skip until closing

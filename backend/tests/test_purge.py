@@ -15,7 +15,10 @@ def test_audit_trim_drops_old_entries(tmp_path):
     old = time.time() - 100 * 86400
     new = time.time()
     p.write_text(
-        json.dumps({"ts": old, "event": "old"}) + "\n" + json.dumps({"ts": new, "event": "new"}) + "\n",
+        json.dumps({"ts": old, "event": "old"})
+        + "\n"
+        + json.dumps({"ts": new, "event": "new"})
+        + "\n",
         encoding="utf-8",
     )
     log = AuditLog(p)

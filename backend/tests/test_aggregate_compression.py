@@ -4,6 +4,7 @@ Uses the router's offline len//4 token estimate (not tiktoken) so the test runs
 without downloading a tokenizer. The tiktoken-measured number from
 ``benchmarks/compression_benchmark.py`` is higher still.
 """
+
 from __future__ import annotations
 
 from benchmarks.compression_benchmark import CORPUS

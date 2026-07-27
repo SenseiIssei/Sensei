@@ -29,7 +29,9 @@ async def extract(req: ExtractIn) -> dict[str, Any]:
         return res
 
     if not req.fields:
-        raise HTTPException(status_code=400, detail="Provide 'fields' to extract, or set tables=true.")
+        raise HTTPException(
+            status_code=400, detail="Provide 'fields' to extract, or set tables=true."
+        )
     from sensei.agents.structured import extract_structured
 
     res = await extract_structured(req.url, req.fields)

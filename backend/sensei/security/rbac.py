@@ -4,6 +4,7 @@ When ``rbac_enabled`` is off (default) this is a no-op, so local/self-hosted use
 needs no auth. When on, admin-only endpoints require a user JWT (bearer token
 from /api/auth login) whose role is ``admin``.
 """
+
 from __future__ import annotations
 
 from fastapi import Header, HTTPException

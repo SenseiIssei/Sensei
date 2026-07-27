@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 
 from sensei.config import settings
-from sensei.models.base import ModelInfo, ModelProvider, ModelStatus
 from sensei.models.api import APIModelProvider
+from sensei.models.base import ModelInfo, ModelProvider, ModelStatus
 from sensei.models.local import LocalModelProvider, _detect_gpu
 from sensei.models.ollama import OllamaProvider
 

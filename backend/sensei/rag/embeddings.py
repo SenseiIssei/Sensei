@@ -6,6 +6,7 @@ chunks are embedded via any OpenAI-compatible ``/embeddings`` endpoint and the
 store does hybrid (BM25 + cosine) retrieval. Any embedding failure degrades
 gracefully back to BM25.
 """
+
 from __future__ import annotations
 
 import math
@@ -18,8 +19,7 @@ from sensei.config import settings
 
 @runtime_checkable
 class EmbeddingBackend(Protocol):
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        ...
+    def embed(self, texts: list[str]) -> list[list[float]]: ...
 
 
 class OpenAIEmbeddingBackend:
@@ -50,7 +50,7 @@ class OpenAIEmbeddingBackend:
 def cosine(a: list[float], b: list[float]) -> float:
     if not a or not b:
         return 0.0
-    dot = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=True))
     na = math.sqrt(sum(x * x for x in a))
     nb = math.sqrt(sum(y * y for y in b))
     if na == 0 or nb == 0:

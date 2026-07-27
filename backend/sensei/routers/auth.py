@@ -1,4 +1,5 @@
 """Auth API routes for public Sensei chat — registration, login, OIDC SSO, verify."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Header, HTTPException
@@ -6,9 +7,9 @@ from pydantic import BaseModel
 
 from sensei.config import settings
 from sensei.security.users import (
+    TokenResponse,
     UserLogin,
     UserRegister,
-    TokenResponse,
     get_user_from_token,
     login_user,
     provision_sso_user,
@@ -58,7 +59,7 @@ async def oidc_exchange(body: OIDCExchange) -> TokenResponse:
     try:
         claims = verify_id_token(body.id_token)
     except OIDCError as e:
-        raise HTTPException(status_code=401, detail=str(e))
+        raise HTTPException(status_code=401, detail=str(e)) from e
     return provision_sso_user(claims["email"], claims.get("name") or claims["email"])
 
 

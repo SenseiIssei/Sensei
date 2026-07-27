@@ -10,6 +10,7 @@ checkpoint is missing, or torch/transformers aren't installed, the loader
 returns ``None`` and the router transparently falls back to the rule-based
 compressor. The heavy model is loaded once (module-level singleton).
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,10 +27,10 @@ _PUNCT = re.compile(r"^[^\w\s]$")
 
 def _tidy(out: str) -> str:
     """Clean up artifacts left by dropping words: dangling/duplicate punctuation."""
-    out = re.sub(r"\s+([,.;:!?])", r"\1", out)        # space before punctuation
-    out = re.sub(r"([,;:]\s*){2,}", ", ", out)        # collapse repeated commas
+    out = re.sub(r"\s+([,.;:!?])", r"\1", out)  # space before punctuation
+    out = re.sub(r"([,;:]\s*){2,}", ", ", out)  # collapse repeated commas
     out = re.sub(r"\s*([.!?])[\s.,;:]*", r"\1 ", out)  # one terminator, then a space
-    out = re.sub(r"^[\s,;:.]+", "", out)              # strip leading punctuation
+    out = re.sub(r"^[\s,;:.]+", "", out)  # strip leading punctuation
     out = re.sub(r"\s{2,}", " ", out).strip()
     return out[:1].upper() + out[1:] if out else out
 
@@ -73,7 +74,11 @@ class LearnedTextCompressor:
         if not words:
             return text
         probs = self._keep_probs(words)
-        kept = [w for w, p in zip(words, probs) if p >= self.keep_threshold or _PUNCT.match(w)]
+        kept = [
+            w
+            for w, p in zip(words, probs, strict=True)
+            if p >= self.keep_threshold or _PUNCT.match(w)
+        ]
         return _tidy(" ".join(kept)) or text
 
 
@@ -91,7 +96,9 @@ def get_prose_compressor() -> LearnedTextCompressor | None:
         return None
     path = Path(settings.learned_compressor_path)
     if not path.exists():
-        logger.warning("Learned compressor enabled but no checkpoint at %s; using rule-based.", path)
+        logger.warning(
+            "Learned compressor enabled but no checkpoint at %s; using rule-based.", path
+        )
         return None
     try:
         _instance = LearnedTextCompressor(
@@ -100,7 +107,7 @@ def get_prose_compressor() -> LearnedTextCompressor | None:
             max_length=settings.learned_max_length,
         )
         logger.info("Loaded learned prose compressor from %s", path)
-    except Exception as e:  # noqa: BLE001 — never let model loading break the server
+    except Exception as e:
         logger.warning("Failed to load learned compressor (%s); using rule-based.", e)
         _instance = None
     return _instance

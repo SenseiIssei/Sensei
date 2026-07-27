@@ -10,8 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from sensei.agents.memory import MemoryStore
-from sensei.agents.tools import ToolRegistry, retrieve_original_tool
-from sensei.compression.ccr import CCRStore
+from sensei.agents.tools import ToolRegistry
 from sensei.compression.router import ContentRouter
 from sensei.config import settings
 from sensei.models.base import ChatMessage, Role
@@ -83,7 +82,9 @@ async def chat(request: ChatRequest) -> ChatResponse:
     if settings.compression_enabled and _content_router:
         compressed_msgs, results = _content_router.compress_messages(msg_dicts)
         total_saved = sum(r.tokens_saved for r in results)
-        messages = [ChatMessage(role=Role(m["role"]), content=m["content"]) for m in compressed_msgs]
+        messages = [
+            ChatMessage(role=Role(m["role"]), content=m["content"]) for m in compressed_msgs
+        ]
 
     # Get model provider and generate
     provider = await get_provider()
@@ -118,6 +119,7 @@ def _sse(event: str, data: dict) -> str:
 async def chat_stream_sse(request: ChatRequest) -> StreamingResponse:
     """Server-Sent Events streaming chat — token-by-token, with compression."""
     if _memory is None:
+
         async def err():
             yield _sse("error", {"message": "Chat not initialized"})
 
@@ -138,7 +140,9 @@ async def chat_stream_sse(request: ChatRequest) -> StreamingResponse:
     if settings.compression_enabled and _content_router:
         compressed_msgs, results = _content_router.compress_messages(msg_dicts)
         total_saved = sum(r.tokens_saved for r in results)
-        messages = [ChatMessage(role=Role(m["role"]), content=m["content"]) for m in compressed_msgs]
+        messages = [
+            ChatMessage(role=Role(m["role"]), content=m["content"]) for m in compressed_msgs
+        ]
 
     async def gen():
         yield _sse("meta", {"conversation_id": conv_id, "tokens_saved": total_saved})
@@ -153,7 +157,7 @@ async def chat_stream_sse(request: ChatRequest) -> StreamingResponse:
             ):
                 full += token
                 yield _sse("token", {"t": token})
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.error("SSE streaming error: %s", e)
             yield _sse("error", {"message": str(e)})
         if full:
@@ -202,7 +206,9 @@ async def compare(request: CompareRequest) -> CompareResponse:
     if settings.compression_enabled and _content_router:
         compressed_msgs, results = _content_router.compress_messages(msg_dicts)
         total_saved = sum(r.tokens_saved for r in results)
-        messages = [ChatMessage(role=Role(m["role"]), content=m["content"]) for m in compressed_msgs]
+        messages = [
+            ChatMessage(role=Role(m["role"]), content=m["content"]) for m in compressed_msgs
+        ]
 
     provider = await get_provider()
 
@@ -222,7 +228,7 @@ async def compare(request: CompareRequest) -> CompareResponse:
                 prompt_tokens=completion.usage.prompt_tokens,
                 completion_tokens=completion.usage.completion_tokens,
             )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             return CompareResult(
                 model=model, error=str(e), latency_ms=int((time.perf_counter() - start) * 1000)
             )
@@ -286,17 +292,18 @@ async def chat_stream(ws: WebSocket) -> None:
                 compressed_msgs, results = _content_router.compress_messages(msg_dicts)
                 total_saved = sum(r.tokens_saved for r in results)
                 messages = [
-                    ChatMessage(role=Role(m["role"]), content=m["content"])
-                    for m in compressed_msgs
+                    ChatMessage(role=Role(m["role"]), content=m["content"]) for m in compressed_msgs
                 ]
 
             # Send metadata
-            await ws.send_json({
-                "type": "meta",
-                "conversation_id": conv_id,
-                "tokens_saved": total_saved,
-                "compression_enabled": settings.compression_enabled,
-            })
+            await ws.send_json(
+                {
+                    "type": "meta",
+                    "conversation_id": conv_id,
+                    "tokens_saved": total_saved,
+                    "compression_enabled": settings.compression_enabled,
+                }
+            )
 
             # Stream response
             provider = await get_provider()
@@ -328,5 +335,5 @@ async def chat_stream(ws: WebSocket) -> None:
         try:
             await ws.send_json({"type": "error", "content": str(e)})
             await ws.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("failed to report error over a closing socket: %s", exc)

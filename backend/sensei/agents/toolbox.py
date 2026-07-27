@@ -4,6 +4,7 @@ All file paths are resolved relative to the configured root and rejected if they
 escape it (no traversal). No write or code-execution tools by default — keeping
 the agent safe to expose. Plus a ``rag_search`` over the indexed knowledge base.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -69,9 +70,13 @@ async def search_files(query: str, glob: str = "**/*") -> dict[str, Any]:
         if not f.is_file() or any(part in _SKIP_DIRS for part in f.parts):
             continue
         try:
-            for i, line in enumerate(f.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            for i, line in enumerate(
+                f.read_text(encoding="utf-8", errors="replace").splitlines(), 1
+            ):
                 if q in line.lower():
-                    hits.append({"file": str(f.relative_to(root)), "line": i, "text": line.strip()[:160]})
+                    hits.append(
+                        {"file": str(f.relative_to(root)), "line": i, "text": line.strip()[:160]}
+                    )
                     if len(hits) >= _MAX_HITS:
                         break
         except OSError:
@@ -117,83 +122,131 @@ async def extract_structured(url: str, fields: Any) -> dict[str, Any]:
 
 def build_default_registry() -> ToolRegistry:
     reg = ToolRegistry()
-    reg.register(Tool(
-        name="list_files",
-        description="List files and directories under a path (relative to the workspace root).",
-        parameters={"type": "object", "properties": {"path": {"type": "string"}}, "required": []},
-        handler=list_files,
-    ))
-    reg.register(Tool(
-        name="read_file",
-        description="Read a UTF-8 text file (relative to the workspace root).",
-        parameters={"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
-        handler=read_file,
-    ))
-    reg.register(Tool(
-        name="search_files",
-        description="Search file contents for a substring; returns file/line matches.",
-        parameters={
-            "type": "object",
-            "properties": {"query": {"type": "string"}, "glob": {"type": "string"}},
-            "required": ["query"],
-        },
-        handler=search_files,
-    ))
-    reg.register(Tool(
-        name="rag_search",
-        description="Search the indexed knowledge base (RAG) for relevant chunks.",
-        parameters={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
-        handler=rag_search,
-    ))
+    reg.register(
+        Tool(
+            name="list_files",
+            description="List files and directories under a path (relative to the workspace root).",
+            parameters={
+                "type": "object",
+                "properties": {"path": {"type": "string"}},
+                "required": [],
+            },
+            handler=list_files,
+        )
+    )
+    reg.register(
+        Tool(
+            name="read_file",
+            description="Read a UTF-8 text file (relative to the workspace root).",
+            parameters={
+                "type": "object",
+                "properties": {"path": {"type": "string"}},
+                "required": ["path"],
+            },
+            handler=read_file,
+        )
+    )
+    reg.register(
+        Tool(
+            name="search_files",
+            description="Search file contents for a substring; returns file/line matches.",
+            parameters={
+                "type": "object",
+                "properties": {"query": {"type": "string"}, "glob": {"type": "string"}},
+                "required": ["query"],
+            },
+            handler=search_files,
+        )
+    )
+    reg.register(
+        Tool(
+            name="rag_search",
+            description="Search the indexed knowledge base (RAG) for relevant chunks.",
+            parameters={
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"],
+            },
+            handler=rag_search,
+        )
+    )
 
     from sensei.agents.webtools import fetch_url, run_python, web_search
 
-    reg.register(Tool(
-        name="fetch_url",
-        description="Fetch an http(s) URL and return its text content (SSRF-guarded).",
-        parameters={"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]},
-        handler=fetch_url,
-    ))
-    reg.register(Tool(
-        name="web_search",
-        description="Search the web (needs a Brave API key); returns title/url/snippet results.",
-        parameters={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
-        handler=web_search,
-    ))
-    reg.register(Tool(
-        name="ingest_url",
-        description="Fetch a page or PDF and add it to the knowledge base (then rag_search it).",
-        parameters={"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]},
-        handler=ingest_url,
-    ))
-    reg.register(Tool(
-        name="crawl_site",
-        description="Crawl a site (same-domain, capped) into the knowledge base, then rag_search it.",
-        parameters={
-            "type": "object",
-            "properties": {"url": {"type": "string"}, "max_pages": {"type": "integer"}},
-            "required": ["url"],
-        },
-        handler=crawl_site,
-    ))
-    reg.register(Tool(
-        name="extract_structured",
-        description="Extract named fields from a page into a JSON object (fields = list of field names).",
-        parameters={
-            "type": "object",
-            "properties": {
-                "url": {"type": "string"},
-                "fields": {"type": "array", "items": {"type": "string"}},
+    reg.register(
+        Tool(
+            name="fetch_url",
+            description="Fetch an http(s) URL and return its text content (SSRF-guarded).",
+            parameters={
+                "type": "object",
+                "properties": {"url": {"type": "string"}},
+                "required": ["url"],
             },
-            "required": ["url", "fields"],
-        },
-        handler=extract_structured,
-    ))
+            handler=fetch_url,
+        )
+    )
+    reg.register(
+        Tool(
+            name="web_search",
+            description="Search the web (needs a Brave API key); returns title/url/snippet results.",
+            parameters={
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"],
+            },
+            handler=web_search,
+        )
+    )
+    reg.register(
+        Tool(
+            name="ingest_url",
+            description="Fetch a page or PDF and add it to the knowledge base (then rag_search it).",
+            parameters={
+                "type": "object",
+                "properties": {"url": {"type": "string"}},
+                "required": ["url"],
+            },
+            handler=ingest_url,
+        )
+    )
+    reg.register(
+        Tool(
+            name="crawl_site",
+            description="Crawl a site (same-domain, capped) into the knowledge base, then rag_search it.",
+            parameters={
+                "type": "object",
+                "properties": {"url": {"type": "string"}, "max_pages": {"type": "integer"}},
+                "required": ["url"],
+            },
+            handler=crawl_site,
+        )
+    )
+    reg.register(
+        Tool(
+            name="extract_structured",
+            description="Extract named fields from a page into a JSON object (fields = list of field names).",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string"},
+                    "fields": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["url", "fields"],
+            },
+            handler=extract_structured,
+        )
+    )
     if settings.code_exec_enabled:
-        reg.register(Tool(
-            name="run_python",
-            description="Execute a short Python snippet and return stdout/stderr (host, not sandboxed).",
-            parameters={"type": "object", "properties": {"code": {"type": "string"}}, "required": ["code"]},
-            handler=run_python,
-        ))
+        reg.register(
+            Tool(
+                name="run_python",
+                description="Execute a short Python snippet and return stdout/stderr (host, not sandboxed).",
+                parameters={
+                    "type": "object",
+                    "properties": {"code": {"type": "string"}},
+                    "required": ["code"],
+                },
+                handler=run_python,
+            )
+        )
     return reg

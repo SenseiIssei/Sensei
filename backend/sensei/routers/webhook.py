@@ -7,6 +7,7 @@ compressed-chat flow and returns the assistant reply + tokens saved. Disabled
 unless both ``SENSEI_WEBHOOK_ENABLED`` and ``SENSEI_WEBHOOK_TOKEN`` are set, so
 you can expose just this endpoint without opening the rest of the API.
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Header, HTTPException

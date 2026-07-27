@@ -442,7 +442,7 @@ def main() -> None:
 
     # Server
     env_lines.append("# ── Server ──────────────────────────────────────────────────")
-    env_lines.append("SENSEI_HOST=0.0.0.0")
+    env_lines.append("SENSEI_HOST=127.0.0.1")
     port = prompt("Backend port", "7000")
     env_lines.append(f"SENSEI_PORT={port}")
     env_lines.append("SENSEI_CORS_ORIGINS=http://localhost:5173,http://localhost:7000")
@@ -559,7 +559,7 @@ def main() -> None:
         else:
             info("Starting backend... (Ctrl+C to stop)")
             run([sys.executable, "-m", "uvicorn", "sensei.main:app",
-                 "--host", "0.0.0.0", "--port", str(port)],
+                 "--host", "127.0.0.1", "--port", str(port)],
                 cwd=str(backend_dir), check=False)
 
 

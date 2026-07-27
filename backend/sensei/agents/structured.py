@@ -6,6 +6,7 @@ Two modes:
 - ``extract_structured``: provider-backed extraction of an arbitrary list of
   fields from a page's main text into a JSON object (keys = requested fields).
 """
+
 from __future__ import annotations
 
 import html as _html
@@ -36,7 +37,9 @@ def extract_tables(html: str) -> list[dict[str, Any]]:
             if is_header and not header:
                 header = texts
             elif header:
-                rows.append(dict(zip(header, texts)))
+                rows.append(
+                    dict(zip(header, texts, strict=False))
+                )  # ragged rows are normal in HTML
             else:
                 rows.append(texts)
         if header or rows:
@@ -53,9 +56,7 @@ async def extract_tables_from_url(url: str) -> dict[str, Any]:
     return {"url": fetched["url"], "tables": extract_tables(fetched["content"])}
 
 
-async def extract_structured(
-    url: str, fields: list[str], provider: Any = None
-) -> dict[str, Any]:
+async def extract_structured(url: str, fields: list[str], provider: Any = None) -> dict[str, Any]:
     """Fetch a page and have the model fill the requested fields as JSON."""
     from sensei.agents.runner import _extract_json
     from sensei.agents.webtools import _fetch_core

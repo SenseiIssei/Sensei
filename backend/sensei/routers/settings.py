@@ -5,6 +5,7 @@ restarting the server. Changes update the live settings, persist to the repo
 Intended for local/self-hosted use; protect with ``SENSEI_AUTH_ENABLED`` if you
 expose the server beyond localhost.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -20,7 +21,11 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 
 # Provider → display name, whether it has a free tier, and a few model choices.
 PROVIDER_CATALOG: dict[str, dict[str, Any]] = {
-    "ollama": {"name": "Ollama (local)", "free": True, "models": ["glm-5.2", "llama3.3", "qwen2.5"]},
+    "ollama": {
+        "name": "Ollama (local)",
+        "free": True,
+        "models": ["glm-5.2", "llama3.3", "qwen2.5"],
+    },
     "openrouter": {
         "name": "OpenRouter",
         "free": True,
@@ -38,10 +43,26 @@ PROVIDER_CATALOG: dict[str, dict[str, Any]] = {
         "free": False,
         "models": ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"],
     },
-    "groq": {"name": "Groq", "free": True, "models": ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"]},
-    "google": {"name": "Google Gemini", "free": True, "models": ["gemini-2.0-flash", "gemini-1.5-pro"]},
-    "deepseek": {"name": "DeepSeek", "free": False, "models": ["deepseek-chat", "deepseek-reasoner"]},
-    "mistral": {"name": "Mistral", "free": False, "models": ["mistral-large-latest", "codestral-latest"]},
+    "groq": {
+        "name": "Groq",
+        "free": True,
+        "models": ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"],
+    },
+    "google": {
+        "name": "Google Gemini",
+        "free": True,
+        "models": ["gemini-2.0-flash", "gemini-1.5-pro"],
+    },
+    "deepseek": {
+        "name": "DeepSeek",
+        "free": False,
+        "models": ["deepseek-chat", "deepseek-reasoner"],
+    },
+    "mistral": {
+        "name": "Mistral",
+        "free": False,
+        "models": ["mistral-large-latest", "codestral-latest"],
+    },
 }
 
 

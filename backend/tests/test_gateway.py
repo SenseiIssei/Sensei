@@ -165,7 +165,12 @@ class TestCompressAnthropic:
         big = _compressible_json()
         _, messages, savings = compress_anthropic_request(
             "You are an agent.",
-            [{"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": big}]}],
+            [
+                {
+                    "role": "user",
+                    "content": [{"type": "tool_result", "tool_use_id": "t1", "content": big}],
+                }
+            ],
         )
         assert savings["tokens_saved"] > 0
         block = messages[0]["content"][0]
@@ -176,11 +181,18 @@ class TestCompressAnthropic:
         big = _compressible_json()
         _, messages, _ = compress_anthropic_request(
             None,
-            [{
-                "role": "user",
-                "content": [{"type": "tool_result", "tool_use_id": "t2",
-                             "content": [{"type": "text", "text": big}]}],
-            }],
+            [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "t2",
+                            "content": [{"type": "text", "text": big}],
+                        }
+                    ],
+                }
+            ],
         )
         inner = messages[0]["content"][0]["content"][0]
         assert inner["type"] == "text"
@@ -194,8 +206,14 @@ class TestCompressAnthropic:
         system, messages, savings = compress_anthropic_request(
             big,  # system is part of the cached prefix — must stay byte-exact
             [
-                {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "a", "content": big}]},
-                {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "b", "content": big}]},
+                {
+                    "role": "user",
+                    "content": [{"type": "tool_result", "tool_use_id": "a", "content": big}],
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "tool_result", "tool_use_id": "b", "content": big}],
+                },
             ],
         )
         assert system == big  # system untouched

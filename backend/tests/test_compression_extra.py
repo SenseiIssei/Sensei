@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-import pytest
-
 from sensei.compression.cachealign import CacheAligner
 from sensei.compression.ccr import CCRStore
-from sensei.compression.codecomp import CodeCompressor
 from sensei.compression.router import ContentRouter, ContentType
-from sensei.compression.smartcrusher import SmartCrusher
-from sensei.compression.textcomp import TextCompressor
 
 
 class TestCacheAligner:
@@ -70,12 +65,15 @@ class TestContentRouterIntegration:
     def test_full_pipeline_json(self):
         router = ContentRouter(enable_caching=False)
         import json
-        original = json.dumps({
-            "users": [
-                {"id": 1, "name": "Alice", "email": None},
-                {"id": 2, "name": "Bob", "email": None},
-            ]
-        })
+
+        original = json.dumps(
+            {
+                "users": [
+                    {"id": 1, "name": "Alice", "email": None},
+                    {"id": 2, "name": "Bob", "email": None},
+                ]
+            }
+        )
         result = router.compress(original)
         assert result.original_tokens > result.compressed_tokens
         assert result.content_type == ContentType.json
@@ -108,7 +106,7 @@ class TestContentRouterIntegration:
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": "x" * 200},
         ]
-        compressed, results = router.compress_messages(messages)
+        compressed, _results = router.compress_messages(messages)
         assert len(compressed) == 2
         assert compressed[0]["role"] == "system"
 
@@ -124,5 +122,5 @@ class TestContentRouterIntegration:
             {"role": "system", "content": "System prompt"},
             {"role": "user", "content": None},
         ]
-        compressed, results = router.compress_messages(messages)
+        compressed, _results = router.compress_messages(messages)
         assert len(compressed) == 2

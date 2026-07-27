@@ -3,6 +3,7 @@
 Powers the "money saved" dashboard. In-memory only — it counts tokens, never
 prompt contents, and resets on restart (zero telemetry, nothing persisted).
 """
+
 from __future__ import annotations
 
 import threading

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import sensei.security.users as users
+from sensei.security import users
 
 
 def test_register_login_and_token_roundtrip(tmp_path, monkeypatch):

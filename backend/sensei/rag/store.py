@@ -4,9 +4,11 @@ Documents are chunked, tokenized, and scored with Okapi BM25 at query time. No
 embedding model or API key required, so it works fully offline. Chunks persist
 to a JSON file. (A vector/embedding backend can slot in behind this interface.)
 """
+
 from __future__ import annotations
 
 import json
+import logging
 import math
 import re
 import threading
@@ -14,6 +16,8 @@ from pathlib import Path
 from typing import Any
 
 from sensei.config import settings
+
+logger = logging.getLogger(__name__)
 
 _TOKEN = re.compile(r"[a-z0-9]+")
 _K1 = 1.5
@@ -86,10 +90,12 @@ class DocumentStore:
             ]
             if self._embedder is not None and new:
                 try:  # embeddings are best-effort; ingestion must not fail on a network hiccup
-                    for c, vec in zip(new, self._embedder.embed([c["text"] for c in new])):
+                    for c, vec in zip(
+                        new, self._embedder.embed([c["text"] for c in new]), strict=True
+                    ):
                         c["vec"] = vec
-                except Exception:  # noqa: BLE001
-                    pass
+                except Exception as exc:
+                    logger.debug("embedding failed, indexing without vectors: %s", exc)
             self._chunks.extend(new)
             self._save()
             return sum(1 for c in self._chunks if c["doc"] == name)
@@ -113,8 +119,8 @@ class DocumentStore:
         if self._embedder is not None and any("vec" in c for c in self._chunks):
             try:
                 return self._hybrid_search(query, k)
-            except Exception:  # noqa: BLE001 — degrade to BM25 on any embedding failure
-                pass
+            except Exception as exc:
+                logger.debug("hybrid search failed, falling back to BM25: %s", exc)
         return self._bm25_search(query, k)
 
     def _bm25_raw(self, q: list[str]) -> list[float]:
@@ -147,7 +153,7 @@ class DocumentStore:
     def _bm25_search(self, query: str, k: int) -> list[dict[str, Any]]:
         scores = self._bm25_raw(_tokenize(query))
         ranked = sorted(
-            ((s, c) for s, c in zip(scores, self._chunks) if s > 0),
+            ((s, c) for s, c in zip(scores, self._chunks, strict=True) if s > 0),
             key=lambda x: x[0],
             reverse=True,
         )
@@ -168,9 +174,7 @@ class DocumentStore:
             return [x / top if top > 0 else 0.0 for x in xs]
 
         cn, bn = _norm(cos), _norm(bm)
-        combined = [
-            (0.5 * cn[i] + 0.5 * bn[i], chunks[i]) for i in range(len(chunks))
-        ]
+        combined = [(0.5 * cn[i] + 0.5 * bn[i], chunks[i]) for i in range(len(chunks))]
         combined = [(s, c) for s, c in combined if s > 0]
         combined.sort(key=lambda x: x[0], reverse=True)
         return [{"doc": c["doc"], "text": c["text"], "score": round(s, 4)} for s, c in combined[:k]]

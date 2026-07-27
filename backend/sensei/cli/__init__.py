@@ -10,6 +10,7 @@ Features:
 - Conversation history
 - Slash commands (/help, /clear, /stats, /model, /exit)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -21,12 +22,12 @@ from sensei.config import settings
 logger = logging.getLogger(__name__)
 
 BANNER = r"""
-  _____                  _     
+  _____                  _
   \_   \_   _  __ _  __| | ___
    _  / | | | |/ _` |/ _` |/ _ \
   / \ \_| |_| | (_| | (_| |  __/
   \___/ \__,_|\__,_|\__,_|\___|
-  
+
   Self-hosted AI · GLM-5.2 · Token Compression
   Type /help for commands · /exit to quit
 """
@@ -49,7 +50,9 @@ async def cli_chat() -> None:
     from sensei.models.registry import get_provider, list_available_models
 
     print(BANNER)
-    print(f"  Provider: {settings.model_provider} | Compression: {'on' if settings.compression_enabled else 'off'}")
+    print(
+        f"  Provider: {settings.model_provider} | Compression: {'on' if settings.compression_enabled else 'off'}"
+    )
     print()
 
     # Check model availability
@@ -73,7 +76,7 @@ async def cli_chat() -> None:
 
     while True:
         try:
-            user_input = input("\033[1;32mYou\033[0m > ").strip()
+            user_input = (await asyncio.to_thread(input, "\033[1;32mYou\033[0m > ")).strip()
         except (EOFError, KeyboardInterrupt):
             print("\nGoodbye!")
             break
@@ -95,9 +98,11 @@ async def cli_chat() -> None:
                 continue
             elif cmd == "/stats":
                 ccr_stats = ccr_store.stats()
-                print(f"\033[36mCompression Stats:\033[0m")
+                print("\033[36mCompression Stats:\033[0m")
                 print(f"  Tokens saved:     {tokens_saved:,}")
-                print(f"  CCR entries:      {ccr_stats['active_entries']}/{ccr_stats['total_entries']}")
+                print(
+                    f"  CCR entries:      {ccr_stats['active_entries']}/{ccr_stats['total_entries']}"
+                )
                 print(f"  Original bytes:   {ccr_stats['total_original_bytes']:,}")
                 print(f"  Compressed bytes: {ccr_stats['total_compressed_bytes']:,}")
                 print(f"  Space saved:      {ccr_stats['space_saved_bytes']:,} bytes")

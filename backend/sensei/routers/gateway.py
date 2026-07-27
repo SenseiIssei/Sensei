@@ -13,6 +13,7 @@ Auth is pass-through: whatever key the client sends (``Authorization: Bearer`` o
 If the client sends no key, Sensei falls back to a server-configured one. Savings
 are reported in ``X-Sensei-*`` headers and a ``sensei`` block in JSON responses.
 """
+
 from __future__ import annotations
 
 import logging
@@ -219,7 +220,10 @@ def _pooled_client(base_url: str) -> httpx.AsyncClient:
     if client is None or client.is_closed:
         try:
             client = httpx.AsyncClient(
-                base_url=base, timeout=httpx.Timeout(300.0, connect=10.0), limits=_LIMITS, http2=True
+                base_url=base,
+                timeout=httpx.Timeout(300.0, connect=10.0),
+                limits=_LIMITS,
+                http2=True,
             )
         except ImportError:  # `h2` not installed — pooled HTTP/1.1 keep-alive
             client = httpx.AsyncClient(
@@ -233,8 +237,8 @@ async def close_clients() -> None:
     for client in _clients.values():
         try:
             await client.aclose()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("upstream client did not close cleanly: %s", exc)
     _clients.clear()
 
 
@@ -269,6 +273,7 @@ async def _forward(
     client = _pooled_client(base_url)
 
     if stream:
+
         async def event_stream():
             async with client.stream("POST", path, json=payload, headers=up_headers) as resp:
                 async for chunk in resp.aiter_bytes():

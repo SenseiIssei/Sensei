@@ -4,8 +4,7 @@ import json
 
 from fastapi.testclient import TestClient
 
-import sensei.agents.runner as runner
-import sensei.agents.toolbox as toolbox
+from sensei.agents import runner, toolbox
 from sensei.agents.runner import run_agent
 from sensei.config import settings
 from sensei.main import app
@@ -18,10 +17,13 @@ class _ScriptedProvider:
 
     async def chat(self, messages, model=None, temperature=0.7, max_tokens=4096, stream=False):
         content = self._responses.pop(0)
-        return ChatCompletion(id="x", model="fake", content=content, role=Role.assistant, usage=UsageStats())
+        return ChatCompletion(
+            id="x", model="fake", content=content, role=Role.assistant, usage=UsageStats()
+        )
 
 
 # ─── toolbox sandboxing ───
+
 
 async def test_read_file_within_sandbox(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "agent_root", str(tmp_path))
@@ -48,13 +50,16 @@ async def test_list_and_search(tmp_path, monkeypatch):
 
 # ─── ReAct loop ───
 
+
 async def test_run_agent_uses_tool_then_answers(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "agent_root", str(tmp_path))
     (tmp_path / "data.txt").write_text("the secret is 42", encoding="utf-8")
-    provider = _ScriptedProvider([
-        json.dumps({"thought": "read it", "tool": "read_file", "args": {"path": "data.txt"}}),
-        json.dumps({"thought": "done", "answer": "The secret is 42."}),
-    ])
+    provider = _ScriptedProvider(
+        [
+            json.dumps({"thought": "read it", "tool": "read_file", "args": {"path": "data.txt"}}),
+            json.dumps({"thought": "done", "answer": "The secret is 42."}),
+        ]
+    )
     result = await run_agent("what is the secret", provider=provider, max_steps=4)
     assert result["stopped"] == "done"
     assert result["answer"] == "The secret is 42."
@@ -72,6 +77,7 @@ async def test_run_agent_hits_step_limit(tmp_path, monkeypatch):
 
 
 # ─── endpoints ───
+
 
 def test_agent_tools_endpoint():
     client = TestClient(app)
@@ -100,10 +106,12 @@ def test_agent_run_endpoint(tmp_path, monkeypatch):
     (tmp_path / "f.txt").write_text("contents here", encoding="utf-8")
 
     async def _fake_get_provider():
-        return _ScriptedProvider([
-            json.dumps({"tool": "list_files", "args": {}}),
-            json.dumps({"answer": "I listed the files."}),
-        ])
+        return _ScriptedProvider(
+            [
+                json.dumps({"tool": "list_files", "args": {}}),
+                json.dumps({"answer": "I listed the files."}),
+            ]
+        )
 
     monkeypatch.setattr(runner, "get_provider", _fake_get_provider)
     client = TestClient(app)

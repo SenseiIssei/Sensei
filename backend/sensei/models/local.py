@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import uuid
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from sensei.config import settings
 from sensei.models.base import (
@@ -33,10 +34,11 @@ def _detect_gpu() -> bool:
         import subprocess
 
         result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],  # noqa: S607 — resolved via PATH by design
             capture_output=True,
             text=True,
             timeout=5,
+            check=False,  # absence of a GPU is a normal outcome, not an error
         )
         return result.returncode == 0 and bool(result.stdout.strip())
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -82,10 +84,10 @@ class LocalModelProvider(ModelProvider):
                     max_model_len=self.context_size,
                     trust_remote_code=True,
                 )
-            except ImportError:
+            except ImportError as exc:
                 raise RuntimeError(
                     "vLLM not installed. Install with: pip install sensei[local]"
-                )
+                ) from exc
         else:
             try:
                 from llama_cpp import Llama
@@ -96,10 +98,10 @@ class LocalModelProvider(ModelProvider):
                     n_ctx=self.context_size,
                     verbose=False,
                 )
-            except ImportError:
+            except ImportError as exc:
                 raise RuntimeError(
                     "llama-cpp-python not installed. Install with: pip install sensei[local]"
-                )
+                ) from exc
 
         self._loaded = True
         logger.info("Loaded local model: %s via %s", self.model_path, self.backend)
@@ -122,7 +124,9 @@ class LocalModelProvider(ModelProvider):
         import asyncio
 
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, self._sync_chat, messages, temperature, max_tokens)
+        result = await loop.run_in_executor(
+            None, self._sync_chat, messages, temperature, max_tokens
+        )
         return result
 
     def _sync_chat(
@@ -226,7 +230,7 @@ class LocalModelProvider(ModelProvider):
     async def is_available(self) -> bool:
         if not self.model_path:
             return False
-        if not os.path.exists(self.model_path):
+        if not await asyncio.to_thread(os.path.exists, self.model_path):
             return False
         # Check if the backend library is available
         if self.backend == "vllm":

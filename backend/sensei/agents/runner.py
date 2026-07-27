@@ -4,6 +4,7 @@ Works with any provider (no native function-calling needed): the model emits a
 single JSON object per turn — either a tool call or a final answer. Tool results
 are compressed before being fed back, so long file/search outputs stay cheap.
 """
+
 from __future__ import annotations
 
 import json
@@ -82,6 +83,12 @@ async def run_agent(
         if settings.compression_enabled:
             result_str = _cr.compress(result_str).compressed
         messages.append(ChatMessage(role=Role.assistant, content=completion.content))
-        messages.append(ChatMessage(role=Role.user, content=f"Tool result for {tool}: {result_str}"))
+        messages.append(
+            ChatMessage(role=Role.user, content=f"Tool result for {tool}: {result_str}")
+        )
 
-    return {"answer": "Reached the step limit before finishing.", "steps": steps, "stopped": "max_steps"}
+    return {
+        "answer": "Reached the step limit before finishing.",
+        "steps": steps,
+        "stopped": "max_steps",
+    }

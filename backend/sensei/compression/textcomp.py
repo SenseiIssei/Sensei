@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from typing import ClassVar
 
 # Optional Rust accelerator (rust/sensei_core). Byte-compatible with the Python
 # path below; soft-imported so installs without the wheel still work.
@@ -25,7 +26,7 @@ class TextCompressor:
     """
 
     # Verbose phrase -> concise equivalent. Applied longest-first, case-insensitive.
-    PHRASE_REPLACEMENTS = {
+    PHRASE_REPLACEMENTS: ClassVar[dict[str, str]] = {
         "in order to": "to",
         "due to the fact that": "because",
         "owing to the fact that": "because",
@@ -60,21 +61,43 @@ class TextCompressor:
     }
 
     # Filler words / discourse markers deleted entirely (with surrounding commas).
-    FILLER = [
-        "basically", "actually", "really", "very", "quite", "simply",
-        "literally", "essentially", "obviously", "clearly", "honestly",
-        "totally", "definitely", "certainly", "arguably", "ultimately",
-        "in fact", "of course", "as a matter of fact", "at the end of the day",
-        "for all intents and purposes", "needless to say",
-        "it goes without saying that", "generally speaking",
-        "as you can see", "as we can see", "as you know",
-        "it is very important to note that", "it is important to note that",
-        "it is worth noting that", "it should be noted that",
+    FILLER: ClassVar[list[str]] = [
+        "basically",
+        "actually",
+        "really",
+        "very",
+        "quite",
+        "simply",
+        "literally",
+        "essentially",
+        "obviously",
+        "clearly",
+        "honestly",
+        "totally",
+        "definitely",
+        "certainly",
+        "arguably",
+        "ultimately",
+        "in fact",
+        "of course",
+        "as a matter of fact",
+        "at the end of the day",
+        "for all intents and purposes",
+        "needless to say",
+        "it goes without saying that",
+        "generally speaking",
+        "as you can see",
+        "as we can see",
+        "as you know",
+        "it is very important to note that",
+        "it is important to note that",
+        "it is worth noting that",
+        "it should be noted that",
         "please note that",
     ]
 
     # Standalone boilerplate sentences / references to strip.
-    BOILERPLATE = [
+    BOILERPLATE: ClassVar[list[str]] = [
         r"As mentioned (?:earlier|above|before)\s*,?\s*",
         r"As (?:stated|described) (?:earlier|above)\s*,?\s*",
         r"For more (?:information|details)\s*,?\s*see\s+\S+\s*",
@@ -131,10 +154,10 @@ class TextCompressor:
         return text.strip()
 
     def _cleanup(self, text: str) -> str:
-        text = re.sub(r"[ \t]+", " ", text)                # collapse spaces/tabs
-        text = re.sub(r" *\n *", "\n", text)               # trim around newlines
-        text = re.sub(r"\s+([,.;:!?])", r"\1", text)       # no space before punctuation
-        text = re.sub(r"(,\s*){2,}", ", ", text)           # collapse repeated commas
+        text = re.sub(r"[ \t]+", " ", text)  # collapse spaces/tabs
+        text = re.sub(r" *\n *", "\n", text)  # trim around newlines
+        text = re.sub(r"\s+([,.;:!?])", r"\1", text)  # no space before punctuation
+        text = re.sub(r"(,\s*){2,}", ", ", text)  # collapse repeated commas
         text = re.sub(r"^[ \t]*[,;:][ \t]*", "", text, flags=re.MULTILINE)  # leading punct
         return text
 
