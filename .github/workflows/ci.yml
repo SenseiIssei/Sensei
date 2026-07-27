@@ -65,7 +65,9 @@ jobs:
           python-version: ${{ matrix.python }}
           cache: pip
           cache-dependency-path: backend/pyproject.toml
-      - run: pip install -e ".[dev]"
+      # The mcp extra is installed so the MCP server tests actually run rather
+      # than silently skipping via importorskip.
+      - run: pip install -e ".[dev,mcp]"
       - name: Run tests
         run: pytest -q --cov=sensei --cov-report=xml --cov-report=term-missing
       # One representative job uploads coverage; nine would just be noise.

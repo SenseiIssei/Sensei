@@ -53,6 +53,9 @@ gui = [
 cli = [
     "rich>=15.0.0",
 ]
+mcp = [
+    "mcp>=1.28.0",
+]
 dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
@@ -60,7 +63,7 @@ dev = [
     "httpx>=0.28.1",
     "ruff>=0.16.0",
 ]
-all = ["sensei[local,ml,gui,cli,dev]"]
+all = ["sensei[local,ml,gui,cli,mcp,dev]"]
 
 [project.scripts]
 sensei = "sensei.cli:main"

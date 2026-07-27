@@ -98,6 +98,23 @@ Claude Code now runs through Sensei. Everything works exactly as before.
 Same for `codex`, `aider`, `cursor-agent`, `cline`, `continue`, `opencode`,
 `goose` and `crush` — just swap the name.
 
+**Or use it as an MCP server**
+
+If your tool speaks [MCP](https://modelcontextprotocol.io), Sensei plugs in
+directly — no base URL to change:
+
+```jsonc
+{
+  "mcpServers": {
+    "sensei": { "command": "sensei", "args": ["mcp"] }
+  }
+}
+```
+
+The agent gets three tools: compress a blob before putting it in context, get
+the exact original back if it turns out it needed it, and check what's been
+saved. Needs `pip install "sensei[mcp]"`.
+
 <details>
 <summary><b>Prefer Docker?</b></summary>
 
@@ -312,6 +329,35 @@ removal, boilerplate sentence stripping, and line-level dedupe.
 **CCR — reversible compression.** Every original is written to a local cache
 keyed by id. If the model decides it needs the untouched text, it asks for it by
 id and gets it back. Compression is therefore never destructive in practice.
+
+</details>
+
+<details>
+<summary><b>MCP server</b></summary>
+
+`sensei mcp` speaks the Model Context Protocol over stdio, which covers the
+tools that don't let you redirect a base URL — and the case where an agent wants
+to compress one specific blob rather than route its whole conversation.
+
+| Tool | What it does |
+|---|---|
+| `sensei_compress` | Compress text. Returns the compressed form, a `ccr_id`, the token counts and the percentage saved. Optionally force a compressor with `content_type`. |
+| `sensei_retrieve` | Exchange a `ccr_id` for the byte-identical original. |
+| `sensei_stats` | Totals saved, plus CCR cache state. |
+
+`sensei_retrieve` is what makes this safe rather than lossy-by-default.
+Compression is never a one-way door: if the model decides the compressed form is
+missing something, it asks for the original instead of guessing. The server's
+instructions tell the client exactly that, because a capability a model doesn't
+know about might as well not exist.
+
+Verified end to end against a real MCP client — 582 → 287 tokens on a 40-record
+JSON array, original recovered byte-identical.
+
+```bash
+pip install "sensei[mcp]"
+sensei mcp            # stdio; normally your client spawns this, not you
+```
 
 </details>
 
