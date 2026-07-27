@@ -42,7 +42,7 @@ if settings.log_file:
         logging.getLogger(_name).addHandler(_fh)
 logger = logging.getLogger(__name__)
 
-DESCRIPTION = "Self-hosted AI workspace with token compression, powered by GLM-5.2"
+DESCRIPTION = "Self-hosted AI workspace that compresses prompts before they leave your machine"
 
 # Global session manager
 session_manager: SessionManager | None = None

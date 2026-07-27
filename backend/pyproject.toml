@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sensei"
 version = "0.1.0"
-description = "Self-hosted AI workspace with token compression, powered by GLM-5.2"
+description = "Self-hosted AI workspace that compresses prompts before they leave your machine"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.11"

@@ -193,7 +193,7 @@ def run_gui():
             title.setStyleSheet("color: #22c55e;")
             header.addWidget(title)
 
-            subtitle = QLabel("GLM-5.2 · Self-hosted AI")
+            subtitle = QLabel("Self-hosted AI · Token Compression")
             subtitle.setStyleSheet("color: #666;")
             header.addWidget(subtitle)
             header.addStretch()
@@ -271,7 +271,7 @@ def run_gui():
             self.chat_display.setHtml(
                 '<div style="color: #888; text-align: center; padding: 40px;">'
                 '<h2 style="color: #22c55e;">Welcome to Sensei</h2>'
-                "<p>Self-hosted AI workspace with token compression, powered by GLM-5.2</p>"
+                "<p>Self-hosted AI workspace that compresses prompts before they leave your machine</p>"
                 '<p style="color: #555; font-size: 12px;">Start typing to begin a conversation.</p>'
                 "</div>"
             )

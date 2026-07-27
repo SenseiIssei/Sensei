@@ -6,6 +6,10 @@
 
 ### Your AI tools, using a fraction of the tokens.
 
+<sub>A self-hosted workspace built on the compression ideas from
+<a href="https://github.com/headroomlabs-ai/headroom">Headroom</a> and the
+workspace design of <a href="https://github.com/pewdiepie-archdaemon/odysseus">Odysseus</a>.</sub>
+
 [![CI](https://github.com/SenseiIssei/Sensei/actions/workflows/ci.yml/badge.svg)](https://github.com/SenseiIssei/Sensei/actions/workflows/ci.yml)
 [![Security](https://github.com/SenseiIssei/Sensei/actions/workflows/security.yml/badge.svg)](https://github.com/SenseiIssei/Sensei/actions/workflows/security.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e)](LICENSE)
@@ -464,28 +468,56 @@ diffed for parity, and the suite against eagerly-upgraded dependencies.
 
 </details>
 
-<details>
-<summary><b>Credits and licensing</b></summary>
+---
 
-Sensei builds on ideas from two projects:
+## Standing on other people's shoulders
 
-- **[Headroom](https://github.com/headroomlabs-ai/headroom)** (Apache-2.0) — the
-  context-compression strategies this pipeline is modelled on.
-- **[Odysseus](https://github.com/pewdiepie-archdaemon/odysseus)** (AGPL-3.0) —
-  the self-hosted workspace shape.
+Sensei didn't invent any of this. Two projects did the hard thinking, and both
+are worth your time independently of whether you ever use Sensei:
 
-Sensei is a clean-room implementation. No Odysseus code is used, which is what
-lets Sensei stay MIT rather than inheriting AGPL.
+### 🪶 [Headroom](https://github.com/headroomlabs-ai/headroom) · Apache-2.0
 
-</details>
+**The reason this project exists.** Headroom worked out that the way to cut an
+agent's token bill isn't to summarise its context — it's to notice that most of
+what agents send is *structurally* redundant, and restructure it losslessly.
+Tabular JSON compaction, log triage, cache-aligned prefixes, and reversible
+compression with a retrieval tool are all Headroom's ideas.
+
+If you want context compression as a mature, standalone product with a much
+larger surface than Sensei's — output-token shaping, a learned prose compressor,
+LangChain and LiteLLM adapters, agent wrapping for a dozen tools — **go use
+Headroom.** It's excellent, and it's further along than this.
+
+Sensei's angle is different: compression as one part of a self-hosted workspace
+you own end to end, MIT-licensed, that also gives you a chat UI, RAG, an agent
+and a desktop app.
+
+### 🏛️ [Odysseus](https://github.com/pewdiepie-archdaemon/odysseus) · AGPL-3.0
+
+**The shape of the thing.** Odysseus — by Felix Kjellberg — made the case that a
+self-hosted AI workspace should feel like a finished product rather than a pile
+of scripts: hardware-aware model recommendations, a real editor, agents, memory,
+and security defaults that assume you'll actually deploy it. The "what can my
+machine actually run?" idea behind `sensei models` is straight from its Cookbook.
+
+Sensei is a **clean-room implementation** — no Odysseus code is copied, which is
+what lets it stay MIT instead of inheriting AGPL. If you want the full workspace
+with email, calendar, documents and image editing, **Odysseus is the more
+complete answer.**
+
+> Neither project endorses this one. Any bugs here are ours.
+
+Also worth knowing: [GLM-5.2](https://github.com/zai-org/GLM-5.2) is the model
+Sensei's defaults point at, and the reason a lot of the compression tuning
+assumes a very large context window.
 
 ---
 
 ## Contributing
 
 Issues and PRs welcome — [CONTRIBUTING.md](CONTRIBUTING.md) has the setup.
-Most useful right now: an MCP server, compression heuristics for more languages,
-mobile polish, and screenshots for this page.
+Most useful right now: compression heuristics for more languages, mobile polish,
+and [screenshots for this page](docs/screenshots/README.md).
 
 <div align="center">
 <sub>MIT · built by <a href="https://github.com/SenseiIssei">@SenseiIssei</a></sub>
