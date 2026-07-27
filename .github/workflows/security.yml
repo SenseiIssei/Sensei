@@ -31,10 +31,12 @@ jobs:
         run: |
           pip install pip-audit
           pip install -e ".[dev]"
-          # --skip-editable: `sensei` itself is installed editable and is not on
-          # PyPI, so --strict would abort on "could not be audited" before
-          # looking at a single dependency. We audit what we depend on.
-          pip-audit --strict --desc --skip-editable
+          # `sensei` installs itself editable and is not on PyPI, so pip-audit
+          # cannot look it up. --skip-editable excludes it; --strict is
+          # deliberately NOT used, because --strict means "fail if anything was
+          # skipped" — which is exactly the thing we just asked for. Real
+          # vulnerabilities in real dependencies still fail the build.
+          pip-audit --desc --skip-editable
 
   deps-node:
     name: npm audit (frontend)
