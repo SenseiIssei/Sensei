@@ -1,61 +1,252 @@
 name: CI
 
+# The merge gate. Everything here must be green before anything reaches main.
+# Actions are pinned to commit SHAs (with the human-readable tag in a comment)
+# so a compromised or retagged action can't silently change what runs.
+
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_COLOR: "1"
 
 jobs:
-  backend:
+  # ── Lint runs once and fast; it fails the PR before the matrix spends money ──
+  lint-backend:
+    name: lint (ruff)
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install ruff
+        working-directory: backend
+        run: pip install "ruff>=0.16.0"
+      - run: ruff check --output-format=github .
+        working-directory: backend
+      - run: ruff format --check .
+        working-directory: backend
+
+  backend:
+    name: backend (${{ matrix.os }}, py${{ matrix.python }})
+    needs: lint-backend
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.11", "3.12", "3.13"]
     defaults:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
       - run: pip install -e ".[dev]"
-      - run: pytest -q --cov=sensei --cov-report=term-missing
+      - name: Run tests
+        run: pytest -q --cov=sensei --cov-report=xml --cov-report=term-missing
+      # One representative job uploads coverage; nine would just be noise.
+      - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: backend/coverage.xml
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   frontend:
-    runs-on: ubuntu-latest
+    name: frontend (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     defaults:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "20"
-      - run: npm install
-      - run: npx tsc --noEmit
-      - run: npm run test
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test:coverage
+      - run: npm run build
+      - name: Enforce the JS bundle budget
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          # Guard against a dependency quietly doubling first-load cost.
+          budget_kb=450
+          total=$(find dist/assets -name '*.js' -exec cat {} + | wc -c)
+          total_kb=$(( total / 1024 ))
+          echo "JS bundle total: ${total_kb} kB (budget ${budget_kb} kB)"
+          if [ "$total_kb" -gt "$budget_kb" ]; then
+            echo "::error::JS bundle is ${total_kb} kB, over the ${budget_kb} kB budget"
+            exit 1
+          fi
 
   extension:
+    name: vscode extension
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: extensions/vscode
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "20"
-      - run: npm install
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: extensions/vscode/package-lock.json
+      - run: npm ci
       - run: npm run compile
+      - name: Verify the extension packages
+        run: npx vsce package --no-dependencies --out /tmp/sensei.vsix
+
+  rust:
+    name: rust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        working-directory: rust/sensei_core
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: rust/sensei_core
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo build --release
+
+  # The accelerator must produce byte-identical output to the pure-Python path.
+  # Building the wheel and re-running the full suite against it is the only
+  # honest way to prove that.
+  rust-parity:
+    name: rust/python byte parity
+    needs: [backend, rust]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: rust/sensei_core
+      - name: Build and install the accelerator
+        run: |
+          pip install "maturin>=1.9,<2"
+          maturin build --release --out dist --manifest-path rust/sensei_core/Cargo.toml
+          pip install dist/*.whl
+      - name: Run the suite with the Rust path active
+        working-directory: backend
+        run: |
+          pip install -e ".[dev]"
+          python -c "import sensei_core; print('accelerator active:', sensei_core.__file__)"
+          pytest -q
 
   e2e:
-    runs-on: ubuntu-latest
+    name: e2e (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     defaults:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "20"
-      - run: npm install
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: playwright-report-${{ matrix.os }}
+          path: frontend/playwright-report/
+          retention-days: 7
+
+  docker:
+    name: docker build + smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - name: Build the backend image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: ./backend
+          load: true
+          tags: sensei-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke-test /health
+        run: |
+          docker run -d --name sensei -p 7000:7000 sensei-backend:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:7000/health; then
+              echo "healthy"; docker rm -f sensei; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::container never became healthy"
+          docker logs sensei
+          exit 1
+      - name: Build the frontend image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: ./frontend
+          load: true
+          tags: sensei-frontend:ci
+
+  # A single required check to point branch protection at, so adding a matrix
+  # entry later doesn't mean reconfiguring the protection rule.
+  ci-ok:
+    name: CI OK
+    if: always()
+    needs: [lint-backend, backend, frontend, extension, rust, rust-parity, e2e, docker]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any dependency failed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - run: echo "All CI jobs passed."

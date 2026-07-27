@@ -1,0 +1,114 @@
+name: Nightly
+
+# Sensei's headline claim is "79% real token savings". That number is only
+# trustworthy if something checks it every day against the actual code.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+  pull_request:
+    # Any change to the compression pipeline must prove it didn't regress.
+    paths:
+      - "backend/sensei/compression/**"
+      - "backend/benchmarks/**"
+      - "rust/sensei_core/**"
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: compression benchmark (${{ matrix.accelerator && 'rust' || 'python' }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        accelerator: [false, true]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        if: matrix.accelerator
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        if: matrix.accelerator
+        with:
+          workspaces: rust/sensei_core
+
+      - name: Install
+        run: pip install -e ./backend
+
+      - name: Install the Rust accelerator
+        if: matrix.accelerator
+        run: |
+          pip install "maturin>=1.9,<2"
+          maturin build --release --out wheels --manifest-path rust/sensei_core/Cargo.toml
+          pip install wheels/*.whl
+
+      # The floor is deliberately below the current 79%: it catches real
+      # regressions without failing on tokenizer or corpus jitter.
+      - name: Run the benchmark with a regression floor
+        working-directory: backend
+        run: |
+          python benchmarks/compression_benchmark.py \
+            --json ../benchmark-${{ matrix.accelerator && 'rust' || 'python' }}.json \
+            --min-aggregate 75
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: benchmark-${{ matrix.accelerator && 'rust' || 'python' }}
+          path: benchmark-*.json
+          retention-days: 90
+
+  # Rust and Python must agree exactly, or the "optional accelerator" claim is
+  # a lie. Compare the two benchmark payloads token-for-token.
+  parity:
+    name: rust/python result parity
+    needs: benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: results
+          merge-multiple: true
+      - name: Compare
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+
+          py = json.loads(pathlib.Path("results/benchmark-python.json").read_text())
+          rs = json.loads(pathlib.Path("results/benchmark-rust.json").read_text())
+
+          if py["samples"] != rs["samples"]:
+              print("::error::Rust accelerator output differs from the Python path")
+              for a, b in zip(py["samples"], rs["samples"]):
+                  if a != b:
+                      print(f"  {a['name']}: python={a} rust={b}")
+              sys.exit(1)
+          print(f"Byte-parity confirmed. Aggregate: {py['aggregate']['saved_pct']}%")
+          PY
+
+  # Dependencies move even when we don't. Catch breakage from upstream releases
+  # here, at 3am, instead of in someone's PR.
+  latest-deps:
+    name: tests against the newest dependencies
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - working-directory: backend
+        run: |
+          pip install -e ".[dev]" --upgrade --upgrade-strategy eager
+          pip list
+          pytest -q

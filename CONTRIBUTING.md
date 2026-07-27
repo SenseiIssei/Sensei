@@ -5,32 +5,86 @@ Thank you for your interest in contributing to Sensei! This is a community-drive
 ## Development Setup
 
 ### Prerequisites
-- Python 3.11+
-- Node.js 18+
+- Python 3.11, 3.12 or 3.13 (CI tests all three on Linux, macOS and Windows)
+- Node.js 24+
+- Rust stable (only if you touch the optional accelerator)
 - Git
+
+### Get the pre-commit hooks first
+
+They run the same lint and format checks CI does, so you find out in one second
+instead of after a push.
+
+```bash
+pip install pre-commit && pre-commit install
+```
 
 ### Backend
 ```bash
 cd backend
 pip install -e ".[dev]"
-pytest -v  # run tests
-ruff check sensei/  # lint
+pytest -q                      # run tests
+ruff check .                   # lint (CI blocks on this)
+ruff format --check .          # formatting (CI blocks on this too)
 ```
 
 ### Frontend
 ```bash
 cd frontend
-npm install
-npm run dev      # dev server
-npx tsc --noEmit # type check
-npx vite build   # production build
+npm ci
+npm run dev            # dev server
+npm run typecheck      # tsc --noEmit
+npm run test           # vitest
+npm run test:e2e       # playwright (no backend needed — it mocks)
+npm run build          # production build
+```
+
+### Rust accelerator (optional)
+```bash
+cd rust/sensei_core
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo build --release
+
+# Build and install the wheel, then re-run the backend suite to prove the
+# Rust path is byte-identical to the Python one. CI does exactly this.
+pip install "maturin>=1.9,<2"
+maturin build --release --out dist && pip install dist/*.whl
+(cd ../../backend && pytest -q)
+```
+
+### VS Code extension
+```bash
+cd extensions/vscode
+npm ci
+npm run compile        # typecheck + esbuild bundle
+npm run package        # -> sensei-tokens-<version>.vsix
 ```
 
 ## Code Style
 
-- **Python**: ruff for linting, line length 100, target Python 3.11+
-- **TypeScript**: Strict mode, no implicit any
-- **Commits**: Conventional format — `feat:`, `fix:`, `docs:`, `test:`, `refactor:`
+- **Python**: ruff, line length 100, target 3.11+. The lint rule set is pinned
+  explicitly in `backend/pyproject.toml` — if a rule fights the architecture
+  (lazy optional imports, deliberate broad excepts), it's ignored there with a
+  written reason rather than sprinkled `# noqa` everywhere.
+- **TypeScript**: strict mode, no implicit any.
+- **Rust**: `cargo fmt`, and clippy is `-D warnings`.
+- **Commits**: Conventional format — `feat:`, `fix:`, `perf:`, `deps:`, `docs:`,
+  `test:`, `refactor:`, `ci:`, `chore:`. This is not cosmetic: release-please
+  builds `CHANGELOG.md` and picks the next version number from these prefixes.
+  Use `feat!:` or a `BREAKING CHANGE:` footer for anything breaking.
+
+## Changing the compression pipeline
+
+This is the part of Sensei that people install it for, so it has an extra bar:
+
+```bash
+python backend/benchmarks/compression_benchmark.py
+```
+
+Report the aggregate before and after in your PR. Nightly CI fails if aggregate
+savings drop below 75%, and it separately asserts that the Rust and Python
+paths produce identical output.
 
 ## Pull Request Process
 

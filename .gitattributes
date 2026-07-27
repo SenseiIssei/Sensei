@@ -1,0 +1,30 @@
+# Normalize to LF in the repository. Without this, a contributor on Windows
+# can commit CRLF into install.sh or a workflow and break it for everyone else.
+* text=auto eol=lf
+
+# Files that must stay LF even when checked out on Windows.
+*.sh          text eol=lf
+*.yml         text eol=lf
+*.yaml        text eol=lf
+Dockerfile    text eol=lf
+*.service     text eol=lf
+Caddyfile     text eol=lf
+
+# Windows-native scripts keep CRLF.
+*.ps1         text eol=crlf
+*.bat         text eol=crlf
+*.cmd         text eol=crlf
+
+# Binary — never touch, never diff.
+*.png         binary
+*.jpg         binary
+*.ico         binary
+*.pdf         binary
+*.whl         binary
+*.vsix        binary
+*.dmg         binary
+*.AppImage    binary
+
+# Generated: collapse in PR diffs so reviews stay readable.
+package-lock.json  linguist-generated=true -diff
+Cargo.lock         linguist-generated=true -diff
