@@ -1,185 +1,143 @@
-"""
-Sensei CLI — interactive console chat application.
+"""The `sensei` command — one front door for everything.
 
-Run with: python -m sensei.cli
+Sensei used to be reachable through a 22 kB interactive installer, a uvicorn
+invocation you had to remember, and a set of environment variables you had to
+look up per tool. This replaces all of that:
 
-Features:
-- Interactive chat with streaming
-- Model provider selection
-- Token compression stats
-- Conversation history
-- Slash commands (/help, /clear, /stats, /model, /exit)
+    sensei up              start the server and open the web UI
+    sensei wrap claude     route Claude Code through the compression gateway
+    sensei doctor          find out exactly why something isn't working
+    sensei models          what your machine can run, and what it already has
+    sensei stats           tokens and dollars saved
+    sensei chat            interactive console chat
 """
 
 from __future__ import annotations
 
-import asyncio
+import argparse
 import logging
 import sys
 
-from sensei.config import settings
+from sensei import __version__
 
-logger = logging.getLogger(__name__)
+# Re-exported for backwards compatibility: `python -m sensei.cli` and anything
+# importing cli_chat from here keep working.
+from sensei.cli.chat import cli_chat
 
-BANNER = r"""
-  _____                  _
-  \_   \_   _  __ _  __| | ___
-   _  / | | | |/ _` |/ _` |/ _ \
-  / \ \_| |_| | (_| | (_| |  __/
-  \___/ \__,_|\__,_|\__,_|\___|
-
-  Self-hosted AI · GLM-5.2 · Token Compression
-  Type /help for commands · /exit to quit
-"""
-
-HELP_TEXT = """
-Commands:
-  /help     Show this help message
-  /clear    Clear conversation history
-  /stats    Show compression statistics
-  /model    Show current model info
-  /exit     Exit Sensei (or press Ctrl+C)
-"""
+__all__ = ["cli_chat", "main"]
 
 
-async def cli_chat() -> None:
-    """Run the interactive CLI chat loop."""
-    from sensei.compression.ccr import CCRStore
-    from sensei.compression.router import ContentRouter
-    from sensei.models.base import ChatMessage, Role
-    from sensei.models.registry import get_provider, list_available_models
-
-    print(BANNER)
-    print(
-        f"  Provider: {settings.model_provider} | Compression: {'on' if settings.compression_enabled else 'off'}"
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="sensei",
+        description="Self-hosted AI workspace with token compression.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "examples:\n"
+            "  sensei up                    start Sensei and open the web UI\n"
+            "  sensei up --expose           also serve it to your local network\n"
+            "  sensei wrap claude           run Claude Code through Sensei\n"
+            "  sensei wrap aider -- --model gpt-4o\n"
+            "  sensei doctor                diagnose a broken setup\n"
+            "  sensei models --pull llama3.2:3b\n"
+        ),
     )
-    print()
+    parser.add_argument("-V", "--version", action="version", version=f"sensei {__version__}")
+    parser.add_argument("-v", "--verbose", action="store_true", help="show debug logging")
+    sub = parser.add_subparsers(dest="command", metavar="<command>")
 
-    # Check model availability
-    models = await list_available_models()
-    available = [m for m in models if m.status == "available"]
-    if available:
-        print(f"  Model: {available[0].name}")
-    else:
-        print("  No model configured. Options:")
-        for m in models:
-            print(f"    - {m.name}: {m.description}")
-        print()
-        print("  You can still try sending a message — it will use the configured provider.")
-    print()
+    p_up = sub.add_parser("up", help="start the server and open the web UI")
+    p_up.add_argument("--port", type=int, help="port to listen on")
+    p_up.add_argument(
+        "--expose",
+        action="store_true",
+        help="bind to all interfaces instead of loopback (anyone who can reach "
+        "the port can use your API keys — enable auth first)",
+    )
+    p_up.add_argument("--no-browser", action="store_true", help="don't open a browser")
+    p_up.add_argument("--reload", action="store_true", help="reload on code changes (development)")
 
-    # Initialize compression
-    ccr_store = CCRStore()
-    content_router = ContentRouter(ccr_store=ccr_store)
-    messages: list[ChatMessage] = []
-    tokens_saved = 0
+    p_wrap = sub.add_parser(
+        "wrap",
+        help="run a coding agent with its traffic routed through Sensei",
+        description="Sets the right base-URL environment variables for the tool and "
+        "launches it. Nothing is written to your shell profile — the variables live "
+        "only as long as the wrapped process.",
+    )
+    p_wrap.add_argument("tool", nargs="?", help="claude, codex, aider, cline, goose, ...")
+    p_wrap.add_argument(
+        "args", nargs=argparse.REMAINDER, help="arguments passed through to the tool"
+    )
 
-    while True:
-        try:
-            user_input = (await asyncio.to_thread(input, "\033[1;32mYou\033[0m > ")).strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\nGoodbye!")
-            break
+    sub.add_parser("doctor", help="check the setup and report what's wrong")
 
-        if not user_input:
-            continue
+    p_models = sub.add_parser("models", help="what this machine can run")
+    p_models.add_argument("--pull", metavar="ID", help="download a model with Ollama")
 
-        # Slash commands
-        if user_input.startswith("/"):
-            cmd = user_input.lower()
+    sub.add_parser("stats", help="tokens and dollars saved by compression")
+    sub.add_parser("chat", help="interactive console chat")
 
-            if cmd == "/help":
-                print(HELP_TEXT)
-                continue
-            elif cmd == "/clear":
-                messages.clear()
-                tokens_saved = 0
-                print("\033[33mConversation cleared.\033[0m")
-                continue
-            elif cmd == "/stats":
-                ccr_stats = ccr_store.stats()
-                print("\033[36mCompression Stats:\033[0m")
-                print(f"  Tokens saved:     {tokens_saved:,}")
-                print(
-                    f"  CCR entries:      {ccr_stats['active_entries']}/{ccr_stats['total_entries']}"
-                )
-                print(f"  Original bytes:   {ccr_stats['total_original_bytes']:,}")
-                print(f"  Compressed bytes: {ccr_stats['total_compressed_bytes']:,}")
-                print(f"  Space saved:      {ccr_stats['space_saved_bytes']:,} bytes")
-                continue
-            elif cmd == "/model":
-                models = await list_available_models()
-                for m in models:
-                    status_color = "\033[32m" if m.status == "available" else "\033[31m"
-                    print(f"  {status_color}{m.status}\033[0m  {m.name} ({m.backend})")
-                    print(f"         {m.description}")
-                continue
-            elif cmd in ("/exit", "/quit"):
-                print("Goodbye!")
-                break
-            else:
-                print(f"\033[31mUnknown command: {user_input}\033[0m")
-                print("Type /help for available commands.")
-                continue
-
-        # Validate message length
-        if len(user_input) > settings.max_message_length:
-            print(f"\033[31mMessage too long (max {settings.max_message_length} chars)\033[0m")
-            continue
-
-        # Add user message
-        messages.append(ChatMessage(role=Role.user, content=user_input))
-
-        # Compress
-        msg_dicts = [{"role": m.role.value, "content": m.content} for m in messages]
-        if settings.compression_enabled:
-            compressed, results = content_router.compress_messages(msg_dicts)
-            turn_saved = sum(r.tokens_saved for r in results)
-            tokens_saved += turn_saved
-            chat_messages = [
-                ChatMessage(role=Role(m["role"]), content=m["content"]) for m in compressed
-            ]
-        else:
-            chat_messages = messages
-            turn_saved = 0
-
-        # Get response
-        print("\033[1;36mSensei\033[0m > ", end="", flush=True)
-
-        try:
-            provider = await get_provider()
-            full_response = ""
-
-            async for token in provider.stream_chat(messages=chat_messages):
-                print(token, end="", flush=True)
-                full_response += token
-
-            print()  # newline after response
-
-            if turn_saved > 0:
-                print(f"\033[90m  [{turn_saved} tokens saved]\033[0m")
-
-            messages.append(ChatMessage(role=Role.assistant, content=full_response))
-
-        except Exception as e:
-            print(f"\033[31m\nError: {e}\033[0m")
-            # Remove the user message that failed
-            if messages and messages[-1].role == Role.user:
-                messages.pop()
+    return parser
 
 
-def main() -> None:
-    """Entry point for the CLI."""
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
     logging.basicConfig(
-        level=logging.WARNING,
+        level=logging.DEBUG if args.verbose else logging.WARNING,
         format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     )
+
     try:
-        asyncio.run(cli_chat())
+        if args.command == "up":
+            from sensei.cli import serve
+
+            return serve.run(
+                port=args.port,
+                expose=args.expose,
+                open_browser=not args.no_browser,
+                reload=args.reload,
+            )
+
+        if args.command == "wrap":
+            from sensei.cli import wrap
+
+            if not args.tool:
+                print("Which tool? Known tools:\n", file=sys.stderr)
+                for name, tool in sorted(wrap.TOOLS.items()):
+                    print(f"  {name:<14} {tool.note or tool.command}", file=sys.stderr)
+                return 2
+            # argparse.REMAINDER keeps a leading "--" separator; drop it.
+            passthrough = args.args[1:] if args.args[:1] == ["--"] else args.args
+            return wrap.run(args.tool, passthrough)
+
+        if args.command == "doctor":
+            from sensei.cli import doctor
+
+            return doctor.run()
+
+        if args.command == "models":
+            from sensei.cli import models
+
+            return models.run(pull=args.pull)
+
+        if args.command == "stats":
+            from sensei.cli import stats
+
+            return stats.run()
+
+        if args.command == "chat":
+            from sensei.cli import chat
+
+            return chat.run()
+
+        parser.print_help()
+        return 0
     except KeyboardInterrupt:
-        print("\nGoodbye!")
-        sys.exit(0)
+        print()
+        return 130
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
