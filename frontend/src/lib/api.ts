@@ -2,6 +2,8 @@ import type {
   Conversation,
   ConversationDetail,
   ModelsResponse,
+  ProviderModels,
+  SetupStatus,
   StatsResponse,
 } from "@/types";
 
@@ -21,6 +23,26 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
 export const api = {
   async getModels(): Promise<ModelsResponse> {
     return fetchJSON(`${API_BASE}/models`);
+  },
+
+  async getSetupStatus(): Promise<SetupStatus> {
+    return fetchJSON(`${API_BASE}/setup/status`);
+  },
+
+  async getProviderModels(provider: string): Promise<ProviderModels> {
+    return fetchJSON(`${API_BASE}/setup/provider-models/${provider}`);
+  },
+
+  async applySettings(update: {
+    provider?: string;
+    model?: string;
+    api_key?: string;
+    compression_enabled?: boolean;
+  }): Promise<unknown> {
+    return fetchJSON(`${API_BASE}/settings`, {
+      method: "PUT",
+      body: JSON.stringify(update),
+    });
   },
 
   async getStats(): Promise<StatsResponse> {
