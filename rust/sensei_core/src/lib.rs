@@ -27,7 +27,13 @@ fn compress_string(s: &str) -> String {
 fn scalar(v: &Value) -> String {
     match v {
         Value::Null => String::new(),
-        Value::Bool(b) => if *b { "true".into() } else { "false".into() },
+        Value::Bool(b) => {
+            if *b {
+                "true".into()
+            } else {
+                "false".into()
+            }
+        }
         Value::Number(n) => n.to_string(),
         Value::String(s) => compress_string(s),
         other => serde_json::to_string(other).unwrap_or_default(),
@@ -111,15 +117,19 @@ fn csv_schema(json_str: &str) -> PyResult<Option<String>> {
 
     let mut header = String::from("@csv");
     if !consts.is_empty() {
-        let parts: Vec<String> =
-            consts.iter().map(|(k, v)| format!("{k}={}", csv_field(v))).collect();
+        let parts: Vec<String> = consts
+            .iter()
+            .map(|(k, v)| format!("{k}={}", csv_field(v)))
+            .collect();
         header.push_str(&format!(" const({})", parts.join(",")));
     }
     let cols: Vec<String> = var_idx.iter().map(|&ci| csv_field(&keys[ci])).collect();
     header.push_str(&format!(" cols={}", cols.join(",")));
     if !extra.is_empty() {
-        let parts: Vec<String> =
-            extra.iter().map(|(k, v)| format!("{k}={}", csv_field(v))).collect();
+        let parts: Vec<String> = extra
+            .iter()
+            .map(|(k, v)| format!("{k}={}", csv_field(v)))
+            .collect();
         header.push_str(&format!(" extra({})", parts.join(",")));
     }
 
@@ -212,12 +222,8 @@ fn do_compress_logs(text: &str, context_after: usize, head: usize, tail: usize) 
         return text.to_string();
     }
     let mut keep = vec![false; n];
-    for i in 0..head.min(n) {
-        keep[i] = true;
-    }
-    for i in n.saturating_sub(tail)..n {
-        keep[i] = true;
-    }
+    keep[..head.min(n)].fill(true);
+    keep[n.saturating_sub(tail)..].fill(true);
     for i in 0..n {
         if important_re().is_match(lines[i]) || summary_re().is_match(lines[i]) {
             keep[i] = true;
@@ -291,13 +297,38 @@ const PHRASE_REPLACEMENTS: &[(&str, &str)] = &[
 ];
 
 const FILLER: &[&str] = &[
-    "basically", "actually", "really", "very", "quite", "simply", "literally", "essentially",
-    "obviously", "clearly", "honestly", "totally", "definitely", "certainly", "arguably",
-    "ultimately", "in fact", "of course", "as a matter of fact", "at the end of the day",
-    "for all intents and purposes", "needless to say", "it goes without saying that",
-    "generally speaking", "as you can see", "as we can see", "as you know",
-    "it is very important to note that", "it is important to note that", "it is worth noting that",
-    "it should be noted that", "please note that",
+    "basically",
+    "actually",
+    "really",
+    "very",
+    "quite",
+    "simply",
+    "literally",
+    "essentially",
+    "obviously",
+    "clearly",
+    "honestly",
+    "totally",
+    "definitely",
+    "certainly",
+    "arguably",
+    "ultimately",
+    "in fact",
+    "of course",
+    "as a matter of fact",
+    "at the end of the day",
+    "for all intents and purposes",
+    "needless to say",
+    "it goes without saying that",
+    "generally speaking",
+    "as you can see",
+    "as we can see",
+    "as you know",
+    "it is very important to note that",
+    "it is important to note that",
+    "it is worth noting that",
+    "it should be noted that",
+    "please note that",
 ];
 
 const BOILERPLATE: &[&str] = &[
@@ -327,16 +358,19 @@ fn text_engine() -> &'static TextEngine {
     E.get_or_init(|| {
         // Stable-sort phrases longest-first (matches Python's sorted(..., reverse=True)).
         let mut phrases: Vec<(&str, &str)> = PHRASE_REPLACEMENTS.to_vec();
-        phrases.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+        phrases.sort_by_key(|p| std::cmp::Reverse(p.0.len()));
         let replacements = phrases
             .into_iter()
             .map(|(k, v)| {
-                (Regex::new(&format!(r"(?i)\b{}\b", regex::escape(k))).unwrap(), v.to_string())
+                (
+                    Regex::new(&format!(r"(?i)\b{}\b", regex::escape(k))).unwrap(),
+                    v.to_string(),
+                )
             })
             .collect();
 
         let mut fillers_sorted: Vec<&str> = FILLER.to_vec();
-        fillers_sorted.sort_by(|a, b| b.len().cmp(&a.len()));
+        fillers_sorted.sort_by_key(|f| std::cmp::Reverse(f.len()));
         let fillers = fillers_sorted
             .into_iter()
             .map(|f| Regex::new(&format!(r"(?i)\s*,?\s*\b{}\b\s*,?\s*", regex::escape(f))).unwrap())
@@ -430,7 +464,11 @@ fn do_compress_text(input: &str) -> String {
             if line.chars().count() > MAX_PARAGRAPH {
                 let sentences = split_sentences(line);
                 if sentences.len() > 3 {
-                    out.push(format!("{} […] {}", sentences[0], sentences[sentences.len() - 1]));
+                    out.push(format!(
+                        "{} […] {}",
+                        sentences[0],
+                        sentences[sentences.len() - 1]
+                    ));
                 } else {
                     let head: String = line.chars().take(MAX_PARAGRAPH).collect();
                     out.push(format!("{head}…"));

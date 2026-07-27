@@ -3,5 +3,7 @@ src/**
 node_modules/**
 tsconfig.json
 .gitignore
+esbuild.config.*
 **/*.map
 **/*.ts
+!dist/extension.js

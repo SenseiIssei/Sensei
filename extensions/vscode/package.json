@@ -57,13 +57,20 @@
     }
   },
   "scripts": {
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "package": "vsce package --no-dependencies"
+    "typecheck": "tsc -p ./ --noEmit",
+    "bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --minify",
+    "compile": "npm run typecheck && npm run bundle",
+    "watch": "npm run bundle -- --sourcemap --watch",
+    "package": "npm run compile && vsce package --no-dependencies",
+    "publish:vsce": "vsce publish --no-dependencies",
+    "publish:ovsx": "ovsx publish --no-dependencies"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/node": "^22.19.0",
     "@types/vscode": "^1.85.0",
-    "typescript": "^5.4.0"
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.28.1",
+    "ovsx": "^1.0.2",
+    "typescript": "^7.0.2"
   }
 }

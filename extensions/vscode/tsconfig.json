@@ -1,14 +1,20 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
-    "target": "ES2021",
-    "lib": ["ES2021", "DOM"],
+    // esbuild emits the CommonJS bundle; tsc only typechecks, so it uses the
+    // bundler resolution mode. ("node10" was removed in TypeScript 7.)
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "types": ["node", "vscode"],
     "outDir": "dist",
     "rootDir": "src",
     "sourceMap": true,
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    // esbuild produces dist/extension.js; tsc is only used to typecheck.
+    "noEmit": true
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]
