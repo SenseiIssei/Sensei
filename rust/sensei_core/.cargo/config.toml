@@ -1,0 +1,17 @@
+# A Python extension module deliberately leaves the CPython symbols
+# (PyExc_TypeError, PyErr_*, ...) undefined — they resolve against whatever
+# interpreter loads the .so at runtime.
+#
+# Linux allows undefined symbols in a shared library by default. Apple's linker
+# does not, so a plain `cargo build` fails on macOS with a wall of
+# "Undefined symbols: _PyExc_TypeError, referenced from: ..." while the same
+# code links fine everywhere else. maturin passes these flags itself, which is
+# why `maturin build` worked while `cargo build` did not.
+#
+# See https://pyo3.rs/latest/building-and-distribution#macos
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]
+
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]
