@@ -1,7 +1,8 @@
 [package]
 name = "sensei_core"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+rust-version = "1.85"
 description = "Low-level Rust hot paths for Sensei compression (optional accelerator)."
 license = "MIT"
 
@@ -10,10 +11,15 @@ name = "sensei_core"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.22", features = ["extension-module"] }
-serde_json = "1"
-regex = "1"
+# abi3-py311 builds one wheel that works on every CPython >= 3.11, so the
+# release matrix is per-platform instead of per-platform-per-Python-version.
+pyo3 = { version = "0.29", features = ["extension-module", "abi3-py311"] }
+serde_json = "1.0.151"
+regex = "1.13"
 
 [profile.release]
 lto = true
 codegen-units = 1
+
+[lints.clippy]
+all = "deny"

@@ -1,12 +1,18 @@
 [build-system]
-requires = ["maturin>=1.5,<2"]
+requires = ["maturin>=1.9,<2"]
 build-backend = "maturin"
 
 [project]
 name = "sensei_core"
 version = "0.1.0"
 description = "Optional Rust accelerator for Sensei compression."
-requires-python = ">=3.9"
+# Matches the abi3-py311 feature in Cargo.toml.
+requires-python = ">=3.11"
+license = {text = "MIT"}
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Rust",
+]
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
