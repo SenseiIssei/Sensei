@@ -39,6 +39,12 @@ jobs:
         working-directory: backend
       - run: ruff format --check .
         working-directory: backend
+      - name: Config reference matches the Settings model
+        # docs/configuration.md is generated from pydantic. Drift here means
+        # someone added a setting nobody can find out about.
+        run: |
+          pip install -e ./backend
+          python scripts/gen_config_docs.py --check
 
   backend:
     name: backend (${{ matrix.os }}, py${{ matrix.python }})
@@ -93,6 +99,11 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:coverage
       - run: npm run build
+      - name: The web UI must not fetch anything from a third party
+        if: matrix.os == 'ubuntu-latest'
+        # Sensei claims to work offline and to leak nothing about you. A stray
+        # CDN font or analytics tag silently breaks both, so it is checked.
+        run: npm run check:offline
       - name: Enforce the JS bundle budget
         if: matrix.os == 'ubuntu-latest'
         shell: bash

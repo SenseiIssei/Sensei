@@ -2,14 +2,32 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/sensei.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Sensei — Self-hosted AI</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
+
+    <!--
+      No remote fonts on purpose.
+
+      This used to pull Inter and JetBrains Mono from fonts.googleapis.com,
+      which handed Google the IP address of every user on every page load — in
+      a tool whose entire premise is that nothing leaves your machine. It also
+      meant the UI fell back to unstyled system fonts whenever you were
+      offline, which for self-hosted software is most of the point.
+
+      The stack below resolves to the native UI font on each platform, so it
+      looks right, loads instantly, and talks to nobody.
+    -->
+
+    <link rel="icon" type="image/svg+xml" href="/sensei.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/sensei.svg" />
+    <meta name="theme-color" content="#0a0a0f" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta
+      name="description"
+      content="Self-hosted AI workspace with token compression. Your data stays on your machine."
     />
   </head>
   <body>

@@ -1,3 +1,55 @@
+export interface ProviderCatalogEntry {
+  id: string;
+  name: string;
+  free: boolean;
+  models: string[];
+}
+
+export interface HardwareInfo {
+  os: string;
+  arch: string;
+  cpu_count: number;
+  ram_mb: number | null;
+  usable_vram_mb: number | null;
+  unified_memory: boolean;
+  gpus: { name: string; vram_mb: number | null; vendor: string }[];
+}
+
+export interface LocalModelSuggestion {
+  id: string;
+  name: string;
+  params: string;
+  size_mb: number;
+  good_for: string;
+  fit: "comfortable" | "tight" | "too_large" | "unknown";
+}
+
+export interface SetupStatus {
+  ready: boolean;
+  needs_setup: boolean;
+  configured_providers: string[];
+  active_provider: string;
+  model_provider: string;
+  ollama: {
+    running: boolean;
+    host: string;
+    models: string[];
+    active_model: string;
+  };
+  hardware: HardwareInfo;
+  recommended_local_model: LocalModelSuggestion | null;
+  catalog: ProviderCatalogEntry[];
+  compression_enabled: boolean;
+}
+
+export interface ProviderModels {
+  provider: string;
+  models: string[];
+  /** "live" came from the provider just now; "catalog" is a static fallback. */
+  source: "live" | "catalog";
+  detail: string;
+}
+
 export interface FileReference {
   id: string;
   name: string;

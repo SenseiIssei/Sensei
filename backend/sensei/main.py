@@ -206,6 +206,7 @@ from sensei.routers.maintenance import router as maintenance_router
 from sensei.routers.models import router as models_router
 from sensei.routers.rag import router as rag_router
 from sensei.routers.settings import router as settings_router
+from sensei.routers.setup import router as setup_router
 from sensei.routers.stats import router as stats_router
 from sensei.routers.watch import router as watch_router
 from sensei.routers.webhook import router as webhook_router
@@ -220,6 +221,7 @@ app.include_router(maintenance_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
 app.include_router(rag_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
+app.include_router(setup_router, prefix="/api")
 app.include_router(stats_router, prefix="/api")
 app.include_router(watch_router, prefix="/api")
 app.include_router(webhook_router, prefix="/api")

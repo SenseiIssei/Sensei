@@ -69,6 +69,11 @@ class RateLimiter:
         with self._lock:
             self._buckets.pop(client_id, None)
 
+    def reset_all(self) -> None:
+        """Forget every client. Used to isolate tests from one another."""
+        with self._lock:
+            self._buckets.clear()
+
     def stats(self) -> dict[str, int]:
         """Return rate limiter statistics."""
         with self._lock:
