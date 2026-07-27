@@ -83,7 +83,7 @@ export function AuthPage() {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Your name"
                 required
-                className="w-full glass text-white text-sm rounded-xl pl-10 pr-4 py-3 border border-gray-700/50 focus:border-sensei-600/50 focus:outline-none"
+                className="w-full glass text-white text-sm rounded-xl pl-10 pr-4 py-3 border border-gray-700/50 focus:border-sensei-600/50 focus:outline-hidden"
               />
             </div>
           )}
@@ -95,7 +95,7 @@ export function AuthPage() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="email@example.com"
               required
-              className="w-full glass text-white text-sm rounded-xl pl-10 pr-4 py-3 border border-gray-700/50 focus:border-sensei-600/50 focus:outline-none"
+              className="w-full glass text-white text-sm rounded-xl pl-10 pr-4 py-3 border border-gray-700/50 focus:border-sensei-600/50 focus:outline-hidden"
             />
           </div>
           <div className="relative">
@@ -107,7 +107,7 @@ export function AuthPage() {
               placeholder={mode === "register" ? "At least 8 characters" : "Password"}
               required
               minLength={mode === "register" ? 8 : undefined}
-              className="w-full glass text-white text-sm rounded-xl pl-10 pr-4 py-3 border border-gray-700/50 focus:border-sensei-600/50 focus:outline-none"
+              className="w-full glass text-white text-sm rounded-xl pl-10 pr-4 py-3 border border-gray-700/50 focus:border-sensei-600/50 focus:outline-hidden"
             />
           </div>
 

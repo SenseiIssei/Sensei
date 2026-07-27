@@ -15,9 +15,11 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
-    "baseUrl": ".",
+    "types": ["vite/client"],
+    // TypeScript 7 removed `baseUrl`; path mappings are now resolved relative
+    // to this file, so they need an explicit leading "./".
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src"]
