@@ -93,17 +93,26 @@ paths produce identical output.
 3. Ensure all tests pass (`pytest -v` for backend, `npx tsc --noEmit` for frontend)
 4. Update documentation if needed
 5. Open a PR with a clear description
-6. **Direct commits to `main` are blocked** — all changes go through PR review
-7. At least 1 approving review is required before merge
-8. Linear history is enforced (no merge commits, rebase instead)
+6. **Direct commits to `main` are blocked** — everything goes through a PR
+7. Linear history is enforced — rebase, don't merge
 
-### Branch Protection Rules
+### What branch protection actually enforces
 
-- `main` branch is protected — no direct pushes
-- Force pushes are blocked
-- Branch deletion is blocked
-- PR requires 1 approving review
-- Stale reviews are dismissed on new commits
+Stating this accurately matters, because a rule people believe in but that
+isn't configured is worse than no rule.
+
+- `main` rejects direct pushes, including from admins (`enforce_admins` is on)
+- Force pushes and branch deletion are blocked
+- Stale reviews are dismissed when new commits land
+- **Approving reviews are not currently required** (the count is 0), so a PR
+  can be merged by its author
+- **CI is not currently a required status check.** It runs on every PR and you
+  should not merge a red one, but nothing at the platform level stops you
+
+The `CI OK` job in `ci.yml` exists precisely to be pointed at: it aggregates
+every other job, so setting it as the single required status check gates merges
+on the whole matrix without needing reconfiguration when a job is added.
+Turning that on is a repository setting, not something this file can do.
 
 ### How to Contribute
 

@@ -3,6 +3,33 @@ name: Release Please
 # Keeps a rolling "chore: release" PR open. Merging it writes CHANGELOG.md,
 # bumps the version in every manifest, and pushes the tag — which is what
 # triggers release.yml.
+#
+# ── Turning this on ─────────────────────────────────────────────────────────
+#
+# It needs one repository setting that cannot live in this file:
+#
+#   Settings → Actions → General → Workflow permissions
+#     ☑ Allow GitHub Actions to create and approve pull requests
+#
+# Without it the action fails with "GitHub Actions is not permitted to create
+# or approve pull requests" — after having already created its branch, so the
+# failure looks more mysterious than it is.
+#
+# Then set the repository variable RELEASE_PLEASE_ENABLED=true
+# (Settings → Secrets and variables → Actions → Variables).
+#
+# The gate exists so an unconfigured optional automation doesn't sit red on
+# every push to main. A permanently failing check is worse than no check: it
+# trains everyone to ignore the badge, and then a real failure goes unnoticed.
+#
+# ── A note on that checkbox ─────────────────────────────────────────────────
+#
+# It grants *create and approve* together; GitHub offers no way to separate
+# them. In this repository only this workflow requests `pull-requests: write`,
+# and every action here is pinned to a commit SHA, so the exposure is limited
+# to this job. If `main` is ever configured to require approving reviews, be
+# aware that a workflow holding this permission could satisfy that requirement
+# on its own.
 
 on:
   push:
@@ -14,6 +41,8 @@ permissions:
 
 jobs:
   release-please:
+    # `vars` is empty on forks, so this also keeps forks green.
+    if: vars.RELEASE_PLEASE_ENABLED == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
