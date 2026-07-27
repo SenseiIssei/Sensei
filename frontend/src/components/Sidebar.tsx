@@ -364,7 +364,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               className="w-full bg-gray-800 text-white text-sm rounded-lg p-3 border border-gray-700 focus:border-sensei-600 focus:outline-hidden resize-none"
               rows={3}
               placeholder="You are Sensei, a helpful AI assistant..."
-              defaultValue="You are Sensei, a helpful AI assistant powered by GLM-5.2. Be concise and accurate."
+              defaultValue="You are Sensei, a helpful AI assistant. Be concise and accurate."
             />
           </div>
 
