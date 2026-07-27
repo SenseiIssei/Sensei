@@ -1,0 +1,103 @@
+{
+  "_comment": [
+    "Curated starting points for local inference via Ollama, not an exhaustive",
+    "registry — Ollama publishes no API for browsing its library, so this list",
+    "is maintained by hand and is meant to be edited.",
+    "",
+    "size_mb is the approximate on-disk/in-memory footprint of the default",
+    "quantization Ollama pulls for that tag. Treat it as a sizing hint, not a",
+    "guarantee: quantization choices move these numbers considerably.",
+    "",
+    "Verify a tag exists before relying on it: `ollama show <tag>`."
+  ],
+  "models": [
+    {
+      "id": "qwen2.5:0.5b",
+      "name": "Qwen2.5 0.5B",
+      "size_mb": 400,
+      "params": "0.5B",
+      "good_for": "Smoke-testing the pipeline on any machine, including a Pi.",
+      "quality": "basic"
+    },
+    {
+      "id": "llama3.2:1b",
+      "name": "Llama 3.2 1B",
+      "size_mb": 1300,
+      "params": "1B",
+      "good_for": "Fast replies on a laptop with no dedicated GPU.",
+      "quality": "basic"
+    },
+    {
+      "id": "llama3.2:3b",
+      "name": "Llama 3.2 3B",
+      "size_mb": 2000,
+      "params": "3B",
+      "good_for": "General chat on modest hardware. A sensible floor.",
+      "quality": "decent"
+    },
+    {
+      "id": "phi4",
+      "name": "Phi-4",
+      "size_mb": 9100,
+      "params": "14B",
+      "good_for": "Reasoning and maths well above its size class.",
+      "quality": "good"
+    },
+    {
+      "id": "qwen2.5-coder:7b",
+      "name": "Qwen2.5 Coder 7B",
+      "size_mb": 4700,
+      "params": "7B",
+      "good_for": "Code completion and review. Pairs well with the gateway.",
+      "quality": "good"
+    },
+    {
+      "id": "qwen2.5-coder:32b",
+      "name": "Qwen2.5 Coder 32B",
+      "size_mb": 20000,
+      "params": "32B",
+      "good_for": "The strongest local coding model most desktops can hold.",
+      "quality": "excellent"
+    },
+    {
+      "id": "mistral-small",
+      "name": "Mistral Small",
+      "size_mb": 14000,
+      "params": "22B",
+      "good_for": "Balanced general use with a long context.",
+      "quality": "good"
+    },
+    {
+      "id": "deepseek-r1:14b",
+      "name": "DeepSeek R1 14B",
+      "size_mb": 9000,
+      "params": "14B",
+      "good_for": "Step-by-step reasoning you can watch.",
+      "quality": "good"
+    },
+    {
+      "id": "deepseek-r1:70b",
+      "name": "DeepSeek R1 70B",
+      "size_mb": 43000,
+      "params": "70B",
+      "good_for": "Serious reasoning, if you have the VRAM for it.",
+      "quality": "excellent"
+    },
+    {
+      "id": "llama3.3:70b",
+      "name": "Llama 3.3 70B",
+      "size_mb": 43000,
+      "params": "70B",
+      "good_for": "Broad general capability at the top of consumer hardware.",
+      "quality": "excellent"
+    },
+    {
+      "id": "glm-5.2",
+      "name": "GLM-5.2",
+      "size_mb": 400000,
+      "params": "744B MoE",
+      "good_for": "The model Sensei is designed around. Needs a server, not a desktop — most people should reach it through an API provider instead.",
+      "quality": "excellent"
+    }
+  ]
+}

@@ -116,7 +116,7 @@ ignore = [
 # Routers are imported at the bottom of main.py, after `app` exists.
 "sensei/main.py" = ["E402"]
 # Tests may assert, use fixtures with shadowing names, and hardcode credentials.
-"tests/*.py" = ["S101", "S105", "S106", "S311", "ASYNC230"]
+"tests/*.py" = ["S101", "S104", "S105", "S106", "S311", "ASYNC230"]
 "benchmarks/*.py" = ["S101"]
 
 [tool.pytest.ini_options]
