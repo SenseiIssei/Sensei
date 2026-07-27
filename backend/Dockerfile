@@ -1,4 +1,4 @@
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /app
 
@@ -11,7 +11,7 @@ COPY sensei/ ./sensei/
 RUN pip install --no-cache-dir -e ".[dev]"
 
 # ── Production image ──────────────────────────────────────────
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
