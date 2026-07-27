@@ -45,8 +45,8 @@ class TestAPIEndpoints:
 
     def test_rate_limit_headers(self, client):
         resp = client.get("/api/models")
-        assert "x-ratelimit-limit" in {k.lower() for k in resp.headers.keys()}
-        assert "x-ratelimit-remaining" in {k.lower() for k in resp.headers.keys()}
+        assert "x-ratelimit-limit" in {k.lower() for k in resp.headers}
+        assert "x-ratelimit-remaining" in {k.lower() for k in resp.headers}
 
     def test_rate_limit_enforcement(self, client):
         # Make many requests to trigger rate limit
@@ -58,7 +58,7 @@ class TestAPIEndpoints:
     def test_health_not_rate_limited(self, client):
         # Health endpoint should not have rate limit headers
         resp = client.get("/health")
-        assert "x-ratelimit-remaining" not in {k.lower() for k in resp.headers.keys()}
+        assert "x-ratelimit-remaining" not in {k.lower() for k in resp.headers}
 
     def test_openapi_docs(self, client):
         resp = client.get("/openapi.json")

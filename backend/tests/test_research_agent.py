@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 
 import sensei.agents.toolbox as tb
-import sensei.agents.webtools as webtools
 import sensei.rag.store as store_mod
+from sensei.agents import webtools
 from sensei.agents.runner import run_agent
 from sensei.agents.toolbox import build_default_registry, crawl_site, ingest_url
 from sensei.config import settings
@@ -18,7 +18,11 @@ class _ScriptedProvider:
 
     async def chat(self, messages, model=None, temperature=0.7, max_tokens=4096, stream=False):
         return ChatCompletion(
-            id="x", model="fake", content=self._responses.pop(0), role=Role.assistant, usage=UsageStats()
+            id="x",
+            model="fake",
+            content=self._responses.pop(0),
+            role=Role.assistant,
+            usage=UsageStats(),
         )
 
 
@@ -26,7 +30,11 @@ async def test_ingest_url_indexes(tmp_path, monkeypatch):
     monkeypatch.setattr(store_mod, "_store", DocumentStore(tmp_path / "rag.json"))
 
     async def fake_core(url, max_chars=200_000):
-        return {"url": url, "status": 200, "content": "Exampleland's capital is Exampleton, a fine city."}
+        return {
+            "url": url,
+            "status": 200,
+            "content": "Exampleland's capital is Exampleton, a fine city.",
+        }
 
     monkeypatch.setattr(webtools, "_fetch_core", fake_core)
     res = await ingest_url("http://example.com/wiki")
@@ -62,11 +70,13 @@ async def test_agent_research_flow(tmp_path, monkeypatch):
 
     monkeypatch.setattr(tb, "crawl_site", fake_crawl)
 
-    provider = _ScriptedProvider([
-        json.dumps({"tool": "crawl_site", "args": {"url": "http://example.com"}}),
-        json.dumps({"tool": "rag_search", "args": {"query": "capital of Exampleland"}}),
-        json.dumps({"answer": "The capital is Exampleton."}),
-    ])
+    provider = _ScriptedProvider(
+        [
+            json.dumps({"tool": "crawl_site", "args": {"url": "http://example.com"}}),
+            json.dumps({"tool": "rag_search", "args": {"query": "capital of Exampleland"}}),
+            json.dumps({"answer": "The capital is Exampleton."}),
+        ]
+    )
     result = await run_agent("what is the capital of Exampleland?", provider=provider, max_steps=5)
     assert result["stopped"] == "done"
     assert [s["tool"] for s in result["steps"]] == ["crawl_site", "rag_search"]

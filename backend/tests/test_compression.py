@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 from fastapi.testclient import TestClient
 
 from sensei.compression.codecomp import CodeCompressor
@@ -23,11 +22,13 @@ class TestSmartCrusher:
 
     def test_compress_array_of_dicts(self):
         crusher = SmartCrusher()
-        original = json.dumps([
-            {"id": 1, "name": "Alice", "email": None},
-            {"id": 2, "name": "Bob", "email": None},
-            {"id": 3, "name": "Charlie", "email": None},
-        ])
+        original = json.dumps(
+            [
+                {"id": 1, "name": "Alice", "email": None},
+                {"id": 2, "name": "Bob", "email": None},
+                {"id": 3, "name": "Charlie", "email": None},
+            ]
+        )
         result = crusher.compress(original)
         # New format: a CSV-schema table. `email` is constant (null) and hoisted;
         # id and name vary across rows.
@@ -120,7 +121,7 @@ class TestTextCompressor:
         assert result[0].isupper()
 
     def test_rust_matches_python(self):
-        import unittest.mock as mock
+        from unittest import mock
 
         from sensei.compression import textcomp
 
@@ -163,7 +164,7 @@ class TestLogCompressor:
     def test_rust_matches_python(self):
         # When the Rust accelerator is built, its output must be byte-identical
         # to the pure-Python path.
-        import unittest.mock as mock
+        from unittest import mock
 
         from sensei.compression import logcomp
 
@@ -183,7 +184,7 @@ class TestContentRouter:
     def test_detect_json(self):
         router = ContentRouter(enable_caching=False)
         assert router.detect_type('{"key": "value"}') == ContentType.json
-        assert router.detect_type('[1, 2, 3]') == ContentType.json
+        assert router.detect_type("[1, 2, 3]") == ContentType.json
 
     def test_detect_code(self):
         router = ContentRouter(enable_caching=False)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import time
@@ -82,10 +83,7 @@ class CCRStore:
     def stats(self) -> dict[str, Any]:
         """Return cache statistics."""
         now = time.time()
-        active = sum(
-            1 for e in self._index.values()
-            if now - e["stored_at"] <= self.ttl_seconds
-        )
+        active = sum(1 for e in self._index.values() if now - e["stored_at"] <= self.ttl_seconds)
         total_original = sum(len(e["original"]) for e in self._index.values())
         total_compressed = sum(len(e["compressed"]) for e in self._index.values())
 
@@ -101,7 +99,8 @@ class CCRStore:
         """Remove expired entries. Returns count of evicted entries."""
         now = time.time()
         expired = [
-            ccr_id for ccr_id, entry in self._index.items()
+            ccr_id
+            for ccr_id, entry in self._index.items()
             if now - entry["stored_at"] > self.ttl_seconds
         ]
         for ccr_id in expired:
@@ -120,10 +119,8 @@ class CCRStore:
         """Remove an entry from index and disk."""
         self._index.pop(ccr_id, None)
         path = self.cache_dir / f"{ccr_id}.json"
-        try:
+        with contextlib.suppress(OSError):
             path.unlink(missing_ok=True)
-        except OSError:
-            pass
 
     def _load_index(self) -> None:
         """Load existing entries from disk."""

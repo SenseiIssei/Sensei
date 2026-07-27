@@ -17,8 +17,13 @@ def test_chunking_splits_and_hard_splits():
 def test_store_relevance_and_persistence(tmp_path):
     path = tmp_path / "rag.json"
     s = DocumentStore(path)
-    s.add_document("networking", "Configure the reverse proxy with Nginx or Caddy. Disable buffering for SSE.")
-    s.add_document("security", "The vault encrypts API keys using AES. Redaction strips secrets before sending.")
+    s.add_document(
+        "networking", "Configure the reverse proxy with Nginx or Caddy. Disable buffering for SSE."
+    )
+    s.add_document(
+        "security",
+        "The vault encrypts API keys using AES. Redaction strips secrets before sending.",
+    )
 
     res = s.search("where are api keys stored in the vault", 1)
     assert res and res[0]["doc"] == "security"
@@ -42,7 +47,10 @@ def test_rag_endpoints(tmp_path, monkeypatch):
 
     r = client.post(
         "/api/rag/documents",
-        json={"name": "doc1", "content": "Sensei compresses prompts. The gateway speaks OpenAI and Anthropic."},
+        json={
+            "name": "doc1",
+            "content": "Sensei compresses prompts. The gateway speaks OpenAI and Anthropic.",
+        },
     )
     assert r.status_code == 200 and r.json()["chunks"] >= 1
     assert client.get("/api/rag/documents").json()["documents"][0]["name"] == "doc1"

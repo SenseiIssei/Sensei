@@ -9,18 +9,22 @@ from sensei.savings import SavingsTracker
 class TestSavingsTracker:
     def test_record_and_snapshot(self):
         t = SavingsTracker()
-        t.record({
-            "prompt_tokens_before": 1000,
-            "prompt_tokens_after": 300,
-            "tokens_saved": 700,
-            "blocks_compressed": 2,
-        })
-        t.record({
-            "prompt_tokens_before": 500,
-            "prompt_tokens_after": 200,
-            "tokens_saved": 300,
-            "blocks_compressed": 1,
-        })
+        t.record(
+            {
+                "prompt_tokens_before": 1000,
+                "prompt_tokens_after": 300,
+                "tokens_saved": 700,
+                "blocks_compressed": 2,
+            }
+        )
+        t.record(
+            {
+                "prompt_tokens_before": 500,
+                "prompt_tokens_after": 200,
+                "tokens_saved": 300,
+                "blocks_compressed": 1,
+            }
+        )
         snap = t.snapshot()
         assert snap["requests"] == 2
         assert snap["tokens_saved"] == 1000

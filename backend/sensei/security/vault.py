@@ -4,6 +4,7 @@ Stores provider API keys encrypted at rest with AES (via ``LocalCrypto``) so
 keys never sit in plaintext on disk. Encryption key is derived from an optional
 master password (``SENSEI_VAULT_PASSWORD``) or, by default, the machine key.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -37,7 +38,7 @@ class KeyVault:
         try:
             blob = self.path.read_bytes()
             if blob.startswith(_MAGIC):
-                self._data = json.loads(self._crypto.decrypt(blob[len(_MAGIC):]))
+                self._data = json.loads(self._crypto.decrypt(blob[len(_MAGIC) :]))
         except Exception as exc:  # wrong password / corrupt / tampered
             logger.warning("Could not read key vault (%s) — ignoring.", exc)
             self._data = {}

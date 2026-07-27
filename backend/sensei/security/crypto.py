@@ -5,8 +5,6 @@ import logging
 import os
 from pathlib import Path
 
-from sensei.config import settings
-
 logger = logging.getLogger(__name__)
 
 # Authenticated AES-256-GCM for local data at rest, with a zero-dependency XOR
@@ -45,7 +43,11 @@ class LocalCrypto:
 
     def _derive_machine_key(self) -> bytes:
         """Derive a machine-specific key from environment (robust on headless hosts)."""
-        node = os.uname().nodename if hasattr(os, "uname") else os.environ.get("COMPUTERNAME", "localhost")
+        node = (
+            os.uname().nodename
+            if hasattr(os, "uname")
+            else os.environ.get("COMPUTERNAME", "localhost")
+        )
         # os.getlogin() raises OSError without a controlling tty (CI, daemons),
         # so prefer getpass/env which work headless.
         try:
@@ -88,9 +90,9 @@ class LocalCrypto:
         """Read and decrypt a file. Returns None if it can't be decoded."""
         data = path.read_bytes()
         if data.startswith(b"SENSEI_ENC2:"):
-            return self.decrypt(data[len(b"SENSEI_ENC2:"):])
+            return self.decrypt(data[len(b"SENSEI_ENC2:") :])
         if data.startswith(b"SENSEI_ENC:"):  # legacy XOR container
-            return self._xor(data[len(b"SENSEI_ENC:"):]).decode("utf-8")
+            return self._xor(data[len(b"SENSEI_ENC:") :]).decode("utf-8")
         try:
             return data.decode("utf-8")
         except UnicodeDecodeError:

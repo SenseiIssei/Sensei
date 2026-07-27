@@ -4,6 +4,7 @@ leave the machine. One-way (the real value never reaches the provider).
 Default-off (``SENSEI_REDACTION_ENABLED``); PII patterns are additionally gated
 behind ``SENSEI_REDACTION_PII`` since they're more prone to false positives.
 """
+
 from __future__ import annotations
 
 import re
@@ -14,7 +15,12 @@ from sensei.config import settings
 # High-confidence secret patterns (redacted whenever redaction is enabled).
 # Order matters: more specific keys first so they win over generic ones.
 SECRET_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    ("private_key", re.compile(r"-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z ]+ )?PRIVATE KEY-----")),
+    (
+        "private_key",
+        re.compile(
+            r"-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z ]+ )?PRIVATE KEY-----"
+        ),
+    ),
     ("anthropic_key", re.compile(r"sk-ant-[A-Za-z0-9_\-]{20,}")),
     ("openai_key", re.compile(r"sk-[A-Za-z0-9]{20,}")),
     ("github_token", re.compile(r"gh[pousr]_[A-Za-z0-9]{36,}")),

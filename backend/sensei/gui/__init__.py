@@ -12,12 +12,12 @@ Features:
 
 Requires: pip install sensei[gui]
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
 import sys
-import time
 
 from sensei.config import settings
 
@@ -27,9 +27,28 @@ logger = logging.getLogger(__name__)
 def _import_qt():
     """Import PySide6 with helpful error message."""
     try:
-        from PySide6.QtCore import Qt, QThread, Signal
-        from PySide6.QtGui import QFont, QIcon, QColor, QPalette
+        from PySide6.QtCore import QThread, Signal
+        from PySide6.QtGui import QColor, QFont, QIcon, QPalette
         from PySide6.QtWidgets import (
+            QApplication,
+            QHBoxLayout,
+            QLabel,
+            QLineEdit,
+            QMainWindow,
+            QPushButton,
+            QStatusBar,
+            QTextEdit,
+            QVBoxLayout,
+            QWidget,
+        )
+
+        return (
+            QThread,
+            Signal,
+            QFont,
+            QIcon,
+            QColor,
+            QPalette,
             QApplication,
             QMainWindow,
             QWidget,
@@ -39,17 +58,7 @@ def _import_qt():
             QLineEdit,
             QPushButton,
             QLabel,
-            QComboBox,
             QStatusBar,
-            QScrollBar,
-        )
-        return (
-            Qt, QThread, Signal,
-            QFont, QIcon, QColor, QPalette,
-            QApplication, QMainWindow, QWidget,
-            QVBoxLayout, QHBoxLayout,
-            QTextEdit, QLineEdit, QPushButton,
-            QLabel, QComboBox, QStatusBar, QScrollBar,
         )
     except ImportError:
         print(
@@ -65,10 +74,10 @@ class ChatWorker:
     """Async chat worker that runs in a separate thread."""
 
     def __init__(self):
-        from sensei.models.registry import get_provider
-        from sensei.compression.router import ContentRouter
         from sensei.compression.ccr import CCRStore
+        from sensei.compression.router import ContentRouter
         from sensei.models.base import ChatMessage, Role
+        from sensei.models.registry import get_provider
 
         self._get_provider = get_provider
         self._ContentRouter = ContentRouter
@@ -88,13 +97,18 @@ class ChatWorker:
         if settings.compression_enabled:
             compressed, results = self._content_router.compress_messages(msg_dicts)
             self._tokens_saved += sum(r.tokens_saved for r in results)
-            messages = [self._ChatMessage(role=self._Role(m["role"]), content=m["content"]) for m in compressed]
+            messages = [
+                self._ChatMessage(role=self._Role(m["role"]), content=m["content"])
+                for m in compressed
+            ]
         else:
             messages = self._messages
 
         provider = await self._get_provider()
         completion = await provider.chat(messages=messages)
-        self._messages.append(self._ChatMessage(role=self._Role.assistant, content=completion.content))
+        self._messages.append(
+            self._ChatMessage(role=self._Role.assistant, content=completion.content)
+        )
 
         return completion.content, self._tokens_saved
 
@@ -106,12 +120,22 @@ class ChatWorker:
 def run_gui():
     """Launch the Qt GUI application."""
     (
-        Qt, QThread, Signal,
-        QFont, QIcon, QColor, QPalette,
-        QApplication, QMainWindow, QWidget,
-        QVBoxLayout, QHBoxLayout,
-        QTextEdit, QLineEdit, QPushButton,
-        QLabel, QComboBox, QStatusBar, QScrollBar,
+        QThread,
+        Signal,
+        QFont,
+        QIcon,
+        QColor,
+        QPalette,
+        QApplication,
+        QMainWindow,
+        QWidget,
+        QVBoxLayout,
+        QHBoxLayout,
+        QTextEdit,
+        QLineEdit,
+        QPushButton,
+        QLabel,
+        QStatusBar,
     ) = _import_qt()
 
     class ChatThread(QThread):
@@ -127,9 +151,7 @@ def run_gui():
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                response, tokens = loop.run_until_complete(
-                    self.worker.send_message(self.message)
-                )
+                response, tokens = loop.run_until_complete(self.worker.send_message(self.message))
                 self.response_ready.emit(response, tokens)
             except Exception as e:
                 self.error_occurred.emit(str(e))
@@ -249,9 +271,9 @@ def run_gui():
             self.chat_display.setHtml(
                 '<div style="color: #888; text-align: center; padding: 40px;">'
                 '<h2 style="color: #22c55e;">Welcome to Sensei</h2>'
-                '<p>Self-hosted AI workspace with token compression, powered by GLM-5.2</p>'
+                "<p>Self-hosted AI workspace with token compression, powered by GLM-5.2</p>"
                 '<p style="color: #555; font-size: 12px;">Start typing to begin a conversation.</p>'
-                '</div>'
+                "</div>"
             )
 
             # Check model availability
@@ -263,6 +285,7 @@ def run_gui():
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 from sensei.models.registry import list_available_models
+
                 models = loop.run_until_complete(list_available_models())
                 if models:
                     available = [m for m in models if m.status == "available"]
@@ -272,8 +295,8 @@ def run_gui():
                     else:
                         self.model_label.setText("No model available — check config")
                         self.model_label.setStyleSheet("color: #f59e0b; font-size: 11px;")
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("model status refresh failed: %s", exc)
 
         def send_message(self):
             text = self.input_field.text().strip()
@@ -313,7 +336,7 @@ def run_gui():
                 f'<div style="margin: 8px 0;">'
                 f'<b style="color: {color};">{sender}:</b>'
                 f'<span style="color: #e0e0e0; white-space: pre-wrap;"> {text}</span>'
-                f'</div>'
+                f"</div>"
             )
             self.chat_display.verticalScrollBar().setValue(
                 self.chat_display.verticalScrollBar().maximum()
@@ -326,10 +349,11 @@ def run_gui():
     try:
         icon_path = __file__.replace("__init__.py", "icon.svg")
         import os
+
         if os.path.exists(icon_path):
             app.setWindowIcon(QIcon(icon_path))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("window icon not applied: %s", exc)
 
     window = SenseiWindow()
     window.show()

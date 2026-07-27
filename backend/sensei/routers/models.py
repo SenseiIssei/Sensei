@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from sensei.models.registry import list_available_models, detect_gpu
+from sensei.models.registry import detect_gpu, list_available_models
 
 router = APIRouter(prefix="/models", tags=["models"])
 

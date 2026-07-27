@@ -4,8 +4,9 @@ import hashlib
 import hmac
 import logging
 import secrets
+from typing import ClassVar
 
-from fastapi import Request, Response
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
@@ -36,7 +37,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     """Token-based authentication middleware."""
 
     # Paths that don't require auth
-    PUBLIC_PATHS = {"/", "/health", "/docs", "/openapi.json", "/redoc"}
+    PUBLIC_PATHS: ClassVar[set[str]] = {"/", "/health", "/docs", "/openapi.json", "/redoc"}
     PUBLIC_PREFIXES = ("/api/health", "/api/auth/")
 
     async def dispatch(self, request: Request, call_next):

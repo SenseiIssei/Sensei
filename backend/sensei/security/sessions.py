@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import time
 import uuid
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from sensei.config import settings
 
@@ -22,7 +24,7 @@ class Session:
         created_at: float | None = None,
         last_active: float | None = None,
         data: dict[str, Any] | None = None,
-        on_change: Callable[["Session"], None] | None = None,
+        on_change: Callable[[Session], None] | None = None,
     ):
         self.session_id = session_id
         self.user_id = user_id
@@ -44,11 +46,13 @@ class Session:
         return time.time() - self.last_active > timeout_minutes * 60
 
     def add_message(self, role: str, content: str) -> None:
-        self._conversations.append({
-            "role": role,
-            "content": content,
-            "timestamp": time.time(),
-        })
+        self._conversations.append(
+            {
+                "role": role,
+                "content": content,
+                "timestamp": time.time(),
+            }
+        )
         self.touch()
         self._changed()
 
@@ -75,7 +79,7 @@ class Session:
     def from_dict(
         cls,
         data: dict[str, Any],
-        on_change: Callable[["Session"], None] | None = None,
+        on_change: Callable[[Session], None] | None = None,
     ) -> Session:
         sess = cls(
             session_id=data["session_id"],
@@ -149,18 +153,21 @@ class SessionManager:
                 continue
             if user_id and session.user_id != user_id:
                 continue
-            sessions.append({
-                "session_id": sid,
-                "user_id": session.user_id,
-                "created_at": session.created_at,
-                "last_active": session.last_active,
-            })
+            sessions.append(
+                {
+                    "session_id": sid,
+                    "user_id": session.user_id,
+                    "created_at": session.created_at,
+                    "last_active": session.last_active,
+                }
+            )
         return sessions
 
     def cleanup_expired(self) -> int:
         """Remove all expired sessions. Returns count removed."""
         expired = [
-            sid for sid, session in self._sessions.items()
+            sid
+            for sid, session in self._sessions.items()
             if session.is_expired(self.timeout_minutes)
         ]
         for sid in expired:
@@ -179,10 +186,8 @@ class SessionManager:
 
     def _delete_session_file(self, session_id: str) -> None:
         path = self.session_dir / f"{session_id}.json"
-        try:
+        with contextlib.suppress(OSError):
             path.unlink(missing_ok=True)
-        except OSError:
-            pass
 
     def _load_sessions(self) -> None:
         if not self.session_dir.exists():

@@ -5,10 +5,12 @@ case-insensitively against the requested model) and ``SENSEI_BLOCKED_PATTERNS``
 (comma-separated regexes matched against any string in the request). Empty
 lists allow everything.
 """
+
 from __future__ import annotations
 
 import re
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 from sensei.config import settings
 

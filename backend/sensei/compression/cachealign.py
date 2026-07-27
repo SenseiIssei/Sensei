@@ -4,7 +4,7 @@ import hashlib
 import logging
 import re
 from collections import OrderedDict
-from typing import Any
+from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class CacheAligner:
 
     # Patterns to strip from system messages (volatile content). Order matters:
     # full ISO datetimes are consumed before bare date / time fragments.
-    VOLATILE_PATTERNS = [
+    VOLATILE_PATTERNS: ClassVar[list[str]] = [
         r"\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[.\d]*Z?\b",  # ISO datetimes
         r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",  # UUIDs
         r"\b\d{4}-\d{2}-\d{2}\b",  # dates YYYY-MM-DD
@@ -88,24 +88,34 @@ class CacheAligner:
 
         # Sort system messages by content hash for canonical ordering
         system_msgs.sort(
-            key=lambda m: hashlib.md5((m.get("content") or "").encode()).hexdigest()
+            key=lambda m: hashlib.md5(
+                (m.get("content") or "").encode(), usedforsecurity=False
+            ).hexdigest()
         )
 
         # Strip volatile patterns from system messages
         for msg in system_msgs:
             content = self._strip_volatile(msg.get("content") or "").strip()
             if content:
-                result.append({"role": "system", "content": content, **{
-                    k: v for k, v in msg.items() if k not in ("role", "content")
-                }})
+                result.append(
+                    {
+                        "role": "system",
+                        "content": content,
+                        **{k: v for k, v in msg.items() if k not in ("role", "content")},
+                    }
+                )
 
         # Add other messages in order
         for msg in other_msgs:
             # Ensure consistent whitespace
             content = (msg.get("content") or "").strip()
-            result.append({"role": msg.get("role", "user"), "content": content, **{
-                k: v for k, v in msg.items() if k not in ("role", "content")
-            }})
+            result.append(
+                {
+                    "role": msg.get("role", "user"),
+                    "content": content,
+                    **{k: v for k, v in msg.items() if k not in ("role", "content")},
+                }
+            )
 
         return result
 
@@ -116,4 +126,4 @@ class CacheAligner:
             role = msg.get("role", "")
             content_len = len(msg.get("content") or "")
             parts.append(f"{role}:{content_len}")
-        return hashlib.md5("|".join(parts).encode()).hexdigest()
+        return hashlib.md5("|".join(parts).encode(), usedforsecurity=False).hexdigest()

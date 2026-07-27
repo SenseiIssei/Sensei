@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
-from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Awaitable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Tool:
     """Represents a tool that the AI model can call."""
+
     name: str
     description: str
     parameters: dict[str, Any] = field(default_factory=dict)
@@ -67,6 +68,7 @@ class ToolRegistry:
 
 # ── Built-in tools ──────────────────────────────────────────
 
+
 async def retrieve_original_tool_handler(
     ccr_id: str,
     content_router: Any = None,
@@ -86,6 +88,7 @@ async def retrieve_original_tool_handler(
 
 def retrieve_original_tool(content_router: Any) -> Tool:
     """Create the CCR retrieve tool bound to a content router."""
+
     async def handler(ccr_id: str) -> dict[str, Any]:
         return await retrieve_original_tool_handler(ccr_id, content_router)
 

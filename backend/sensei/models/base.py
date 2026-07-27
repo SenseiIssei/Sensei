@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import time
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from enum import Enum
-from typing import AsyncIterator, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field
 

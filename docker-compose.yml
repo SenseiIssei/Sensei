@@ -6,7 +6,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "${SENSEI_PORT:-7000}:7000"
+      - "${SENSEI_BIND:-127.0.0.1}:${SENSEI_PORT:-7000}:7000"
     env_file:
       - .env
     volumes:
@@ -29,7 +29,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "${FRONTEND_PORT:-5173}:5173"
+      - "${SENSEI_BIND:-127.0.0.1}:${FRONTEND_PORT:-5173}:5173"
     depends_on:
       sensei-backend:
         condition: service_healthy
@@ -41,7 +41,7 @@ services:
   ollama:
     image: ollama/ollama:latest
     ports:
-      - "11434:11434"
+      - "${SENSEI_BIND:-127.0.0.1}:11434:11434"
     volumes:
       - ollama-models:/root/.ollama
     deploy:

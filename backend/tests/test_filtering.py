@@ -21,7 +21,10 @@ def test_check_policy_model(monkeypatch):
 def test_check_policy_content(monkeypatch):
     monkeypatch.setattr(settings, "blocked_models", "")
     monkeypatch.setattr(settings, "blocked_patterns", r"confidential|secret-project")
-    blocked = {"model": "x", "messages": [{"role": "user", "content": "about secret-project alpha"}]}
+    blocked = {
+        "model": "x",
+        "messages": [{"role": "user", "content": "about secret-project alpha"}],
+    }
     assert check_policy(blocked) is not None
     ok = {"model": "x", "messages": [{"role": "user", "content": "hello world"}]}
     assert check_policy(ok) is None
@@ -30,4 +33,6 @@ def test_check_policy_content(monkeypatch):
 def test_check_policy_allows_by_default(monkeypatch):
     monkeypatch.setattr(settings, "blocked_models", "")
     monkeypatch.setattr(settings, "blocked_patterns", "")
-    assert check_policy({"model": "anything", "messages": [{"role": "user", "content": "x"}]}) is None
+    assert (
+        check_policy({"model": "anything", "messages": [{"role": "user", "content": "x"}]}) is None
+    )

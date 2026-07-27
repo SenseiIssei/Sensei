@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from sensei.config import Settings
 
 
@@ -11,7 +9,7 @@ class TestConfig:
         assert s.model_provider == "auto"
         assert s.compression_enabled is True
         assert s.memory_enabled is True
-        assert s.host == "0.0.0.0"
+        assert s.host == "127.0.0.1"
         assert s.port == 7000
 
     def test_multi_provider_defaults(self):

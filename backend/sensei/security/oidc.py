@@ -6,6 +6,7 @@ Here we validate it (RS256 signature against the issuer's JWKS, plus iss/aud/exp
 and provision a Sensei user just-in-time. Off by default. RSA verification uses
 the ``cryptography`` library already in the dependency set — no JWT lib needed.
 """
+
 from __future__ import annotations
 
 import base64
@@ -64,7 +65,7 @@ def _verify_rs256(signing_input: bytes, signature: bytes, jwk: dict) -> bool:
     try:
         pub.verify(signature, signing_input, padding.PKCS1v15(), hashes.SHA256())
         return True
-    except Exception:  # noqa: BLE001
+    except Exception:
         return False
 
 
@@ -78,7 +79,7 @@ def verify_id_token(token: str) -> dict:
     header_b64, payload_b64, sig_b64 = parts
     try:
         header = _json_b64(header_b64)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         raise OIDCError("bad header") from e
     if header.get("alg") != "RS256":
         raise OIDCError(f"unsupported alg: {header.get('alg')}")

@@ -8,6 +8,7 @@
   you control (``SENSEI_CODE_EXEC_ENABLED=true``). Real isolation (Docker) is a
   future item.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -85,7 +86,7 @@ async def _fetch_core(url: str, max_chars: int = 200_000, extract: bool = True) 
     final = str(resp.url)
     if not extract:  # raw body (e.g. HTML for table parsing)
         return {"url": final, "status": resp.status_code, "content": resp.text[:max_chars]}
-    path = final.split("?")[0].lower()
+    path = final.split("?", maxsplit=1)[0].lower()
     if "pdf" in ctype or path.endswith(".pdf"):
         text = extract_pdf_text(resp.content)
     elif "wordprocessingml" in ctype or path.endswith(".docx"):
@@ -104,20 +105,29 @@ async def fetch_url(url: str) -> dict[str, Any]:
 
 async def web_search(query: str) -> dict[str, Any]:
     if not settings.brave_api_key:
-        return {"error": "Web search not configured (set SENSEI_BRAVE_API_KEY); use fetch_url for known pages."}
+        return {
+            "error": "Web search not configured (set SENSEI_BRAVE_API_KEY); use fetch_url for known pages."
+        }
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(
                 "https://api.search.brave.com/res/v1/web/search",
                 params={"q": query, "count": 5},
-                headers={"X-Subscription-Token": settings.brave_api_key, "Accept": "application/json"},
+                headers={
+                    "X-Subscription-Token": settings.brave_api_key,
+                    "Accept": "application/json",
+                },
             )
             resp.raise_for_status()
             data = resp.json()
     except httpx.HTTPError as e:
         return {"error": f"search failed: {e}"}
     results = [
-        {"title": r.get("title"), "url": r.get("url"), "snippet": _html_to_text(r.get("description", ""))}
+        {
+            "title": r.get("title"),
+            "url": r.get("url"),
+            "snippet": _html_to_text(r.get("description", "")),
+        }
         for r in (data.get("web", {}).get("results") or [])[:5]
     ]
     return {"query": query, "results": results}
@@ -125,18 +135,23 @@ async def web_search(query: str) -> dict[str, Any]:
 
 async def run_python(code: str) -> dict[str, Any]:
     if not settings.code_exec_enabled:
-        return {"error": "Code execution is disabled (SENSEI_CODE_EXEC_ENABLED). It is not sandboxed — runs on the host."}
+        return {
+            "error": "Code execution is disabled (SENSEI_CODE_EXEC_ENABLED). It is not sandboxed — runs on the host."
+        }
     try:
         proc = await asyncio.create_subprocess_exec(
-            sys.executable, "-I", "-c", code,
+            sys.executable,
+            "-I",
+            "-c",
+            code,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         return {"error": str(e)}
     try:
         out, err = await asyncio.wait_for(proc.communicate(), timeout=settings.code_exec_timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         return {"error": f"timed out after {settings.code_exec_timeout}s"}
     return {

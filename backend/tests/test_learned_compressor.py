@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import sensei.compression.learned as learned
+from sensei.compression import learned
 from sensei.compression.router import ContentRouter, ContentType
 
 
@@ -40,7 +40,9 @@ def test_enabled_but_missing_checkpoint_falls_back(monkeypatch, tmp_path):
 def test_router_uses_rule_based_by_default():
     learned.reset_cache()
     router = ContentRouter(enable_caching=False)
-    res = router.compress("Basically, in order to ship we really must test things.", force_type=ContentType.text)
+    res = router.compress(
+        "Basically, in order to ship we really must test things.", force_type=ContentType.text
+    )
     assert res.metadata["compressor"] == "textcompressor"
 
 
@@ -49,8 +51,10 @@ def test_router_uses_learned_when_available(monkeypatch):
         def compress(self, text: str) -> str:
             return "LEARNED::" + text[:6]
 
-    monkeypatch.setattr(learned, "get_prose_compressor", lambda: _Fake())
+    monkeypatch.setattr(learned, "get_prose_compressor", _Fake)
     router = ContentRouter(enable_caching=False)
-    res = router.compress("Some plain verbose prose that should be compressed here.", force_type=ContentType.text)
+    res = router.compress(
+        "Some plain verbose prose that should be compressed here.", force_type=ContentType.text
+    )
     assert res.compressed.startswith("LEARNED::")
     assert res.metadata["compressor"] == "learned-compressor"

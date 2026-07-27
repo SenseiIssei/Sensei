@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-import json
-import os
-import tempfile
 import time
-from pathlib import Path
 
 import pytest
 
-from sensei.security.auth import generate_token, hash_token, check_auth
+from sensei.security.auth import generate_token, hash_token
+from sensei.security.crypto import LocalCrypto
 from sensei.security.rate_limit import RateLimiter
 from sensei.security.sessions import Session, SessionManager
-from sensei.security.crypto import LocalCrypto
 
 
 class TestAuth:
@@ -36,6 +32,7 @@ class TestAuth:
 
     def test_check_auth_disabled(self, monkeypatch):
         from sensei.config import settings
+
         monkeypatch.setattr(settings, "auth_enabled", False)
         # When auth is disabled, any request should pass
         assert settings.auth_enabled is False
@@ -44,7 +41,7 @@ class TestAuth:
 class TestRateLimiter:
     def test_allows_under_limit(self):
         limiter = RateLimiter(max_requests=5, window_seconds=60)
-        for i in range(5):
+        for _ in range(5):
             allowed, remaining, _ = limiter.check("client1")
             assert allowed is True
         assert remaining == 0
@@ -248,16 +245,17 @@ class TestLocalCrypto:
         c = LocalCrypto(key=b"k" * 32)
         enc = bytearray(c.encrypt("important"))
         enc[-1] ^= 0x01  # flip a ciphertext bit
-        import pytest
 
-        with pytest.raises(Exception):
+        from cryptography.exceptions import InvalidTag
+
+        with pytest.raises(InvalidTag):
             c.decrypt(bytes(enc))
 
     def test_reads_legacy_xor_file(self, tmp_path):
         # A file written by the pre-AES version (SENSEI_ENC: + raw XOR).
         c = LocalCrypto(key=b"test-key-32-bytes-long-1234567890")
         path = tmp_path / "legacy.enc"
-        path.write_bytes(b"SENSEI_ENC:" + c._xor("legacy secret".encode()))
+        path.write_bytes(b"SENSEI_ENC:" + c._xor(b"legacy secret"))
         assert c.decrypt_file(path) == "legacy secret"
 
     def test_decrypt_unencrypted_file(self, tmp_path):

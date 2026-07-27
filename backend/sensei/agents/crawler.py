@@ -4,6 +4,7 @@ Same-domain only, depth- and page-capped, robots.txt respected, SSRF-guarded on
 every URL. Each page becomes a RAG document keyed by its URL (so answers can
 cite live links). Built on the same guards as ``webtools.fetch_url``.
 """
+
 from __future__ import annotations
 
 import re
@@ -30,8 +31,8 @@ async def _robots_disallow(client: httpx.AsyncClient, base: str) -> list[str]:
         return []
     disallow: list[str] = []
     applies = False
-    for line in resp.text.splitlines():
-        line = line.strip()
+    for raw_line in resp.text.splitlines():
+        line = raw_line.strip()
         if line.lower().startswith("user-agent:"):
             ua = line.split(":", 1)[1].strip().lower()
             applies = ua == "*" or "sensei" in ua
@@ -76,7 +77,7 @@ async def crawl_to_rag(start_url: str, max_pages: int = 10, max_depth: int = 2) 
 
     domain = parsed.netloc
     visited: set[str] = set()
-    queue: list[tuple[str, int]] = [(start_url.split("#")[0], 0)]
+    queue: list[tuple[str, int]] = [(start_url.split("#", maxsplit=1)[0], 0)]
     indexed: list[str] = []
     store = get_store()
 

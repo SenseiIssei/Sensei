@@ -6,6 +6,7 @@ change, the page is re-indexed and a change alert is POSTed to the watch's
 notify_url (or the global ``watch_notify_url``). Fetches are SSRF-guarded
 (via ``webtools.fetch_url``).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -48,15 +49,17 @@ class WatchStore:
     def add(self, url: str, interval_minutes: int = 60, notify_url: str = "") -> str:
         with self._lock:
             wid = secrets.token_hex(8)
-            self._watches.append({
-                "id": wid,
-                "url": url,
-                "interval_minutes": max(1, interval_minutes),
-                "notify_url": notify_url,
-                "last_hash": "",
-                "last_checked": 0.0,
-                "last_changed": 0.0,
-            })
+            self._watches.append(
+                {
+                    "id": wid,
+                    "url": url,
+                    "interval_minutes": max(1, interval_minutes),
+                    "notify_url": notify_url,
+                    "last_hash": "",
+                    "last_checked": 0.0,
+                    "last_changed": 0.0,
+                }
+            )
             self._save()
             return wid
 
@@ -74,9 +77,7 @@ class WatchStore:
 
     def due(self, now: float) -> list[dict[str, Any]]:
         return [
-            dict(w)
-            for w in self._watches
-            if now - w["last_checked"] >= w["interval_minutes"] * 60
+            dict(w) for w in self._watches if now - w["last_checked"] >= w["interval_minutes"] * 60
         ]
 
     def update(self, wid: str, **fields: Any) -> None:

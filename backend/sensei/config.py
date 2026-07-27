@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Load .env from the repo root regardless of the process working directory, so
@@ -25,9 +23,20 @@ class Settings(BaseSettings):
 
     # API provider selection
     api_provider: Literal[
-        "zai", "openrouter", "huggingface", "openai", "anthropic",
-        "google", "groq", "mistral", "together", "deepseek", "cohere",
-        "fireworks", "perplexity", "custom"
+        "zai",
+        "openrouter",
+        "huggingface",
+        "openai",
+        "anthropic",
+        "google",
+        "groq",
+        "mistral",
+        "together",
+        "deepseek",
+        "cohere",
+        "fireworks",
+        "perplexity",
+        "custom",
     ] = "openrouter"
 
     # Local model
@@ -168,7 +177,11 @@ class Settings(BaseSettings):
     code_exec_timeout: int = 5
 
     # Server
-    host: str = "0.0.0.0"
+    # Loopback by default: a self-hosted workspace holding your API keys and
+    # conversations should not be reachable from the LAN unless you say so.
+    # Set SENSEI_HOST=0.0.0.0 to expose it (the Docker image does exactly that,
+    # where the container boundary is the isolation).
+    host: str = "127.0.0.1"
     port: int = 7000
     # Optional rotating log file for the (often hidden) background server.
     log_file: str = ""

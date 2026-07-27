@@ -33,10 +33,14 @@ def test_extract_tables_without_header():
 
 
 def test_extract_endpoint_tables(monkeypatch):
-    import sensei.agents.webtools as webtools
+    from sensei.agents import webtools
 
     async def _fake_fetch(url, max_chars=200_000, extract=True):
-        return {"url": url, "status": 200, "content": "<table><tr><th>K</th></tr><tr><td>v</td></tr></table>"}
+        return {
+            "url": url,
+            "status": 200,
+            "content": "<table><tr><th>K</th></tr><tr><td>v</td></tr></table>",
+        }
 
     monkeypatch.setattr(webtools, "_fetch_core", _fake_fetch)
     client = TestClient(app)
@@ -46,8 +50,8 @@ def test_extract_endpoint_tables(monkeypatch):
 
 
 def test_extract_endpoint_fields(monkeypatch):
-    import sensei.agents.webtools as webtools
-    import sensei.models.registry as registry
+    from sensei.agents import webtools
+    from sensei.models import registry
 
     async def _fake_fetch(url, max_chars=200_000, extract=True):
         return {"url": url, "status": 200, "content": "Acme Corp was founded in 1999 in Berlin."}
@@ -68,7 +72,9 @@ def test_extract_endpoint_fields(monkeypatch):
     monkeypatch.setattr(webtools, "_fetch_core", _fake_fetch)
     monkeypatch.setattr(registry, "get_provider", _get)
     client = TestClient(app)
-    resp = client.post("/api/extract", json={"url": "https://x.test", "fields": ["company", "year", "city"]})
+    resp = client.post(
+        "/api/extract", json={"url": "https://x.test", "fields": ["company", "year", "city"]}
+    )
     assert resp.status_code == 200
     assert resp.json()["fields"] == {"company": "Acme Corp", "year": 1999, "city": "Berlin"}
 

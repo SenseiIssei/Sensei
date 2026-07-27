@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import json
-import re
-from typing import Any
+from typing import Any, ClassVar
 
 # Optional Rust accelerator (built from rust/sensei_core via maturin). When
 # present, the JSON→CSV-schema hot path runs in Rust; otherwise pure Python is
@@ -25,7 +24,7 @@ class SmartCrusher:
     """
 
     # Keys that are commonly redundant in tool outputs
-    REDUNDANT_KEYS = {"_links", "self", "href", "type", "url"}
+    REDUNDANT_KEYS: ClassVar[set[str]] = {"_links", "self", "href", "type", "url"}
 
     # Max value length before truncation
     MAX_VALUE_LEN = 200
@@ -93,10 +92,14 @@ class SmartCrusher:
 
         header = "@csv"
         if const:
-            header += " const(" + ",".join(f"{k}={self._csv_field(v)}" for k, v in const.items()) + ")"
+            header += (
+                " const(" + ",".join(f"{k}={self._csv_field(v)}" for k, v in const.items()) + ")"
+            )
         header += " cols=" + ",".join(self._csv_field(keys[ci]) for ci in var_idx)
         if extra:
-            header += " extra(" + ",".join(f"{k}={self._csv_field(v)}" for k, v in extra.items()) + ")"
+            header += (
+                " extra(" + ",".join(f"{k}={self._csv_field(v)}" for k, v in extra.items()) + ")"
+            )
 
         lines = [header]
         for r in rows:
@@ -139,7 +142,7 @@ class SmartCrusher:
             if depth > 0 and key in self.REDUNDANT_KEYS:
                 continue
             # Skip null/empty values
-            if value is None or value == "" or value == [] or value == {}:
+            if value is None or value in ("", [], {}):
                 continue
             result[key] = self._compress_value(value, depth + 1)
         return result

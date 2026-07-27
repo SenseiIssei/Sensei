@@ -5,10 +5,10 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from sensei.compression import learned
 from sensei.compression.cachealign import CacheAligner
 from sensei.compression.ccr import CCRStore
 from sensei.compression.codecomp import CodeCompressor
-from sensei.compression import learned
 from sensei.compression.logcomp import LogCompressor
 from sensei.compression.smartcrusher import SmartCrusher
 from sensei.compression.textcomp import TextCompressor
@@ -25,6 +25,7 @@ class ContentType(str, Enum):
 @dataclass
 class CompressionResult:
     """Result of compressing a single content block."""
+
     original: str
     compressed: str
     content_type: ContentType
@@ -64,8 +65,8 @@ def _detect_json(text: str) -> bool:
 
 _LOG_LEVEL_RE = re.compile(r"\b(INFO|DEBUG|WARN(?:ING)?|ERROR|TRACE|FATAL|CRITICAL)\b")
 _LOG_LINE_START = re.compile(
-    r'^\s*(\[?\d{4}-\d{2}-\d{2}|\d{2}:\d{2}:\d{2}|'
-    r'\[(?:INFO|DEBUG|WARN|ERROR|TRACE|FATAL)\]|'
+    r"^\s*(\[?\d{4}-\d{2}-\d{2}|\d{2}:\d{2}:\d{2}|"
+    r"\[(?:INFO|DEBUG|WARN|ERROR|TRACE|FATAL)\]|"
     r'(?:INFO|DEBUG|WARN|ERROR|TRACE|FATAL):|at |File "|Traceback)'
 )
 
@@ -223,11 +224,13 @@ class ContentRouter:
             result = self.compress(content)
             results.append(result)
 
-            compressed_msgs.append({
-                "role": role,
-                "content": result.compressed,
-                **({"name": msg["name"]} if "name" in msg else {}),
-            })
+            compressed_msgs.append(
+                {
+                    "role": role,
+                    "content": result.compressed,
+                    **({"name": msg["name"]} if "name" in msg else {}),
+                }
+            )
 
         return compressed_msgs, results
 

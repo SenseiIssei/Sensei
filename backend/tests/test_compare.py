@@ -25,7 +25,9 @@ async def _fake_get_provider():
 def test_compare_runs_all_models(monkeypatch):
     monkeypatch.setattr(chatmod, "get_provider", _fake_get_provider)
     client = TestClient(app)
-    resp = client.post("/api/chat/compare", json={"message": "hi", "models": ["model-a", "model-b"]})
+    resp = client.post(
+        "/api/chat/compare", json={"message": "hi", "models": ["model-a", "model-b"]}
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert len(data["results"]) == 2

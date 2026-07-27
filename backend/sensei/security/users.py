@@ -3,6 +3,7 @@
 Supports registration, login, and JWT-based session tokens.
 User data is stored in a simple JSON file (easily swapable for a database).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -13,7 +14,6 @@ import os
 import secrets
 import time
 from pathlib import Path
-from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -44,7 +44,7 @@ class UserOut(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105 — an OAuth token *type*, not a secret
     user: UserOut
 
 
@@ -87,24 +87,28 @@ def _create_token(user_id: str, email: str, role: str = "user") -> str:
 
 def _b64_encode(data: str) -> str:
     import base64
+
     return base64.urlsafe_b64encode(data.encode()).decode().rstrip("=")
 
 
 def _b64_decode(data: str) -> str:
     import base64
+
     padding = 4 - len(data) % 4
     if padding != 4:
         data += "=" * padding
     return base64.urlsafe_b64decode(data.encode()).decode()
 
 
-def verify_token(token: str) -> Optional[dict]:
+def verify_token(token: str) -> dict | None:
     try:
         parts = token.split(".")
         if len(parts) != 2:
             return None
         payload_b64, sig = parts
-        expected_sig = hmac.new(JWT_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+        expected_sig = hmac.new(
+            JWT_SECRET.encode(), payload_b64.encode(), hashlib.sha256
+        ).hexdigest()
         if not secrets.compare_digest(sig, expected_sig):
             return None
         payload = json.loads(_b64_decode(payload_b64))
@@ -115,7 +119,7 @@ def verify_token(token: str) -> Optional[dict]:
         return None
 
 
-def register_user(email: str, password: str, name: str) -> tuple[Optional[TokenResponse], Optional[str]]:
+def register_user(email: str, password: str, name: str) -> tuple[TokenResponse | None, str | None]:
     users = _load_users()
     email_lower = email.lower()
     if email_lower in users:
@@ -143,11 +147,13 @@ def register_user(email: str, password: str, name: str) -> tuple[Optional[TokenR
 
     logger.info("New user registered: %s (%s) [%s]", name, email_lower, role)
     token = _create_token(user_id, email_lower, role)
-    user_out = UserOut(id=user_id, email=email_lower, name=name, created_at=users[email_lower]["created_at"])
+    user_out = UserOut(
+        id=user_id, email=email_lower, name=name, created_at=users[email_lower]["created_at"]
+    )
     return TokenResponse(access_token=token, user=user_out), None
 
 
-def login_user(email: str, password: str) -> tuple[Optional[TokenResponse], Optional[str]]:
+def login_user(email: str, password: str) -> tuple[TokenResponse | None, str | None]:
     users = _load_users()
     email_lower = email.lower()
     user = users.get(email_lower)
@@ -158,7 +164,9 @@ def login_user(email: str, password: str) -> tuple[Optional[TokenResponse], Opti
         return None, "Invalid email or password"
 
     token = _create_token(user["id"], email_lower, user.get("role", "user"))
-    user_out = UserOut(id=user["id"], email=email_lower, name=user["name"], created_at=user["created_at"])
+    user_out = UserOut(
+        id=user["id"], email=email_lower, name=user["name"], created_at=user["created_at"]
+    )
     logger.info("User logged in: %s", email_lower)
     return TokenResponse(access_token=token, user=user_out), None
 
@@ -193,11 +201,13 @@ def provision_sso_user(email: str, name: str = "") -> TokenResponse:
         _save_users(users)
 
     token = _create_token(user["id"], email_lower, user["role"])
-    user_out = UserOut(id=user["id"], email=email_lower, name=user["name"], created_at=user["created_at"])
+    user_out = UserOut(
+        id=user["id"], email=email_lower, name=user["name"], created_at=user["created_at"]
+    )
     return TokenResponse(access_token=token, user=user_out)
 
 
-def get_user_from_token(token: str) -> Optional[dict]:
+def get_user_from_token(token: str) -> dict | None:
     payload = verify_token(token)
     if not payload:
         return None

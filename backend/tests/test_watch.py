@@ -59,6 +59,8 @@ async def test_check_detects_change_and_indexes(tmp_path, monkeypatch):
 def test_watch_endpoints(tmp_path, monkeypatch):
     monkeypatch.setattr(watchmod, "_store", WatchStore(tmp_path / "watch.json"))
     client = TestClient(app)
-    wid = client.post("/api/watch", json={"url": "https://example.com", "interval_minutes": 30}).json()["id"]
+    wid = client.post(
+        "/api/watch", json={"url": "https://example.com", "interval_minutes": 30}
+    ).json()["id"]
     assert client.get("/api/watch").json()["watches"][0]["url"] == "https://example.com"
     assert client.delete(f"/api/watch/{wid}").json()["removed"] is True

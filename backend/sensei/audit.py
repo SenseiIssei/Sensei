@@ -1,6 +1,7 @@
 """Append-only audit log — records *metadata* about model calls and config
 changes (never prompt contents). One JSON object per line.
 """
+
 from __future__ import annotations
 
 import json

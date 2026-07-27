@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import asyncio
 import logging
-import time
 import uuid
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
+from typing import ClassVar
 
 import httpx
 
+from sensei.config import settings
 from sensei.models.base import (
     ChatCompletion,
     ChatMessage,
@@ -17,7 +17,6 @@ from sensei.models.base import (
     Role,
     UsageStats,
 )
-from sensei.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -30,24 +29,49 @@ class APIModelProvider(ModelProvider):
     Cohere, Fireworks AI, Perplexity, and any custom OpenAI-compatible endpoint.
     """
 
-    PROVIDER_DEFAULTS = {
+    PROVIDER_DEFAULTS: ClassVar[dict[str, dict[str, str]]] = {
         "zai": {"base_url": "https://open.bigmodel.cn/api/paas/v4", "model": "glm-5.2"},
         "openrouter": {"base_url": "https://openrouter.ai/api/v1", "model": "zhipuai/glm-5.2"},
-        "huggingface": {"base_url": "https://api-inference.huggingface.co/models", "model": "THUDM/glm-5.2-744b"},
+        "huggingface": {
+            "base_url": "https://api-inference.huggingface.co/models",
+            "model": "THUDM/glm-5.2-744b",
+        },
         "openai": {"base_url": "https://api.openai.com/v1", "model": "gpt-4o"},
-        "anthropic": {"base_url": "https://api.anthropic.com/v1", "model": "claude-3-5-sonnet-20241022"},
-        "google": {"base_url": "https://generativelanguage.googleapis.com/v1beta", "model": "gemini-2.0-flash"},
+        "anthropic": {
+            "base_url": "https://api.anthropic.com/v1",
+            "model": "claude-3-5-sonnet-20241022",
+        },
+        "google": {
+            "base_url": "https://generativelanguage.googleapis.com/v1beta",
+            "model": "gemini-2.0-flash",
+        },
         "groq": {"base_url": "https://api.groq.com/openai/v1", "model": "llama-3.3-70b-versatile"},
         "mistral": {"base_url": "https://api.mistral.ai/v1", "model": "mistral-large-latest"},
-        "together": {"base_url": "https://api.together.xyz/v1", "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo"},
+        "together": {
+            "base_url": "https://api.together.xyz/v1",
+            "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        },
         "deepseek": {"base_url": "https://api.deepseek.com/v1", "model": "deepseek-chat"},
         "cohere": {"base_url": "https://api.cohere.com/v1", "model": "command-r-plus"},
-        "fireworks": {"base_url": "https://api.fireworks.ai/inference/v1", "model": "accounts/fireworks/models/llama-v3p3-70b-instruct"},
+        "fireworks": {
+            "base_url": "https://api.fireworks.ai/inference/v1",
+            "model": "accounts/fireworks/models/llama-v3p3-70b-instruct",
+        },
         "perplexity": {"base_url": "https://api.perplexity.ai", "model": "sonar-pro"},
     }
 
     # Providers that use OpenAI-compatible chat/completions endpoint
-    OPENAI_COMPATIBLE = {"openai", "openrouter", "groq", "together", "deepseek", "fireworks", "perplexity", "zai", "mistral"}
+    OPENAI_COMPATIBLE: ClassVar[set[str]] = {
+        "openai",
+        "openrouter",
+        "groq",
+        "together",
+        "deepseek",
+        "fireworks",
+        "perplexity",
+        "zai",
+        "mistral",
+    }
 
     def __init__(
         self,
@@ -61,18 +85,62 @@ class APIModelProvider(ModelProvider):
         # Resolve settings based on provider
         provider_settings_map = {
             "zai": (settings.zai_api_base_url, settings.zai_api_key, settings.zai_api_model),
-            "openrouter": (settings.openrouter_api_base_url, settings.openrouter_api_key, settings.openrouter_api_model),
-            "huggingface": (settings.huggingface_api_base_url, settings.huggingface_api_key, settings.huggingface_api_model),
-            "openai": (settings.openai_api_base_url, settings.openai_api_key, settings.openai_api_model),
-            "anthropic": (settings.anthropic_api_base_url, settings.anthropic_api_key, settings.anthropic_api_model),
-            "google": (settings.google_api_base_url, settings.google_api_key, settings.google_api_model),
+            "openrouter": (
+                settings.openrouter_api_base_url,
+                settings.openrouter_api_key,
+                settings.openrouter_api_model,
+            ),
+            "huggingface": (
+                settings.huggingface_api_base_url,
+                settings.huggingface_api_key,
+                settings.huggingface_api_model,
+            ),
+            "openai": (
+                settings.openai_api_base_url,
+                settings.openai_api_key,
+                settings.openai_api_model,
+            ),
+            "anthropic": (
+                settings.anthropic_api_base_url,
+                settings.anthropic_api_key,
+                settings.anthropic_api_model,
+            ),
+            "google": (
+                settings.google_api_base_url,
+                settings.google_api_key,
+                settings.google_api_model,
+            ),
             "groq": (settings.groq_api_base_url, settings.groq_api_key, settings.groq_api_model),
-            "mistral": (settings.mistral_api_base_url, settings.mistral_api_key, settings.mistral_api_model),
-            "together": (settings.together_api_base_url, settings.together_api_key, settings.together_api_model),
-            "deepseek": (settings.deepseek_api_base_url, settings.deepseek_api_key, settings.deepseek_api_model),
-            "cohere": (settings.cohere_api_base_url, settings.cohere_api_key, settings.cohere_api_model),
-            "fireworks": (settings.fireworks_api_base_url, settings.fireworks_api_key, settings.fireworks_api_model),
-            "perplexity": (settings.perplexity_api_base_url, settings.perplexity_api_key, settings.perplexity_api_model),
+            "mistral": (
+                settings.mistral_api_base_url,
+                settings.mistral_api_key,
+                settings.mistral_api_model,
+            ),
+            "together": (
+                settings.together_api_base_url,
+                settings.together_api_key,
+                settings.together_api_model,
+            ),
+            "deepseek": (
+                settings.deepseek_api_base_url,
+                settings.deepseek_api_key,
+                settings.deepseek_api_model,
+            ),
+            "cohere": (
+                settings.cohere_api_base_url,
+                settings.cohere_api_key,
+                settings.cohere_api_model,
+            ),
+            "fireworks": (
+                settings.fireworks_api_base_url,
+                settings.fireworks_api_key,
+                settings.fireworks_api_model,
+            ),
+            "perplexity": (
+                settings.perplexity_api_base_url,
+                settings.perplexity_api_key,
+                settings.perplexity_api_model,
+            ),
         }
 
         if self.provider_name in provider_settings_map:
@@ -82,13 +150,17 @@ class APIModelProvider(ModelProvider):
             self.model = model or s_model
         else:
             # Custom or legacy
-            self.base_url = base_url or settings.api_base_url or self.PROVIDER_DEFAULTS.get(
-                self.provider_name, {}
-            ).get("base_url", "")
+            self.base_url = (
+                base_url
+                or settings.api_base_url
+                or self.PROVIDER_DEFAULTS.get(self.provider_name, {}).get("base_url", "")
+            )
             self.api_key = api_key or settings.api_key
-            self.model = model or settings.api_model or self.PROVIDER_DEFAULTS.get(
-                self.provider_name, {}
-            ).get("model", "glm-5.2")
+            self.model = (
+                model
+                or settings.api_model
+                or self.PROVIDER_DEFAULTS.get(self.provider_name, {}).get("model", "glm-5.2")
+            )
 
         self.base_url = self.base_url.rstrip("/")
         self._client: httpx.AsyncClient | None = None
@@ -226,7 +298,6 @@ class APIModelProvider(ModelProvider):
             # Fallback: try a minimal request
             try:
                 client = await self._get_client()
-                test_msg = ChatMessage(role=Role.user, content="ping")
                 resp = await client.post(
                     "/chat/completions",
                     json={

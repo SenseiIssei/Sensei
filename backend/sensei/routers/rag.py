@@ -109,7 +109,9 @@ async def rag_chat(req: RagChatIn) -> dict[str, Any]:
 
     full = f"Context:\n{context}\n\nQuestion: {req.message}"
     resp = await chat_handler(ChatRequest(message=full, model=req.model, system_prompt=system))
-    get_audit_log().record("rag.chat", sources=[c["doc"] for c in chunks], tokens_saved=resp.tokens_saved)
+    get_audit_log().record(
+        "rag.chat", sources=[c["doc"] for c in chunks], tokens_saved=resp.tokens_saved
+    )
     return {
         "answer": resp.message,
         "model": resp.model,
