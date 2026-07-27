@@ -3,6 +3,7 @@ import { Menu } from "lucide-react";
 import { Sidebar, StatsPanel, SettingsPanel } from "@/components/Sidebar";
 import { ChatView } from "@/components/ChatView";
 import { SetupWizard } from "@/components/SetupWizard";
+import { ConnectionBanner } from "@/components/ConnectionBanner";
 import { useChat } from "@/hooks/useChat";
 import { api } from "@/lib/api";
 import type { Conversation, SetupStatus } from "@/types";
@@ -100,7 +101,8 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden">
+    <div className="relative flex h-dvh w-full overflow-hidden">
+      <ConnectionBanner />
       {/* Below `md` the sidebar is a drawer; the backdrop closes it. */}
       {sidebarOpen && (
         <button
