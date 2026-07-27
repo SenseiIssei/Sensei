@@ -40,6 +40,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "  sensei wrap aider -- --model gpt-4o\n"
             "  sensei doctor                diagnose a broken setup\n"
             "  sensei models --pull llama3.2:3b\n"
+            "  sensei mcp                   serve compression as MCP tools\n"
         ),
     )
     parser.add_argument("-V", "--version", action="version", version=f"sensei {__version__}")
@@ -76,6 +77,19 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("stats", help="tokens and dollars saved by compression")
     sub.add_parser("chat", help="interactive console chat")
+
+    p_mcp = sub.add_parser(
+        "mcp",
+        help="run as an MCP server (stdio)",
+        description="Exposes sensei_compress / sensei_retrieve / sensei_stats to any "
+        "MCP client. Normally launched by the client, not by hand.",
+    )
+    p_mcp.add_argument(
+        "--transport",
+        choices=["stdio", "sse", "streamable-http"],
+        default="stdio",
+        help="stdio is what MCP clients spawn; the others are for remote setups",
+    )
 
     return parser
 
@@ -131,6 +145,11 @@ def main(argv: list[str] | None = None) -> int:
             from sensei.cli import chat
 
             return chat.run()
+
+        if args.command == "mcp":
+            from sensei import mcp_server
+
+            return mcp_server.run(transport=args.transport)
 
         parser.print_help()
         return 0

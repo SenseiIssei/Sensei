@@ -413,10 +413,13 @@ takes `--json` and `--min-aggregate`, which is what the nightly guard uses.
 
 **Phase 3 — the Headroom catch-up.** In order of leverage:
 
-1. **MCP server** (`sensei_compress`, `sensei_retrieve`, `sensei_stats`). Sensei
-   has no MCP surface at all, and it is the single change that makes it usable
-   from every MCP client rather than only from tools with a configurable base
-   URL.
+1. ~~**MCP server** (`sensei_compress`, `sensei_retrieve`, `sensei_stats`).~~
+   **Done.** `sensei mcp` over stdio, behind the optional `sensei[mcp]` extra.
+   Verified against a real MCP client: 582 → 287 tokens on a 40-record JSON
+   array, original recovered byte-identical. `sensei_retrieve` is what makes it
+   safe rather than lossy-by-default, and the server's instructions tell the
+   client so — a capability the model doesn't know about might as well not
+   exist.
 2. **Output-token shaping with a holdout group**, so any claimed saving carries
    a real confidence interval instead of a point estimate.
 3. **Live-zone compression** — compress only the delta, keep the frozen prefix
