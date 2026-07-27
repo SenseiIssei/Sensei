@@ -6,6 +6,12 @@ import { fileURLToPath } from "node:url";
 const root = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+  // Relative asset URLs, because the built UI is not always served from the
+  // web root. `sensei up` and the packaged binaries mount it at `/app/`, where
+  // an absolute `/assets/...` reference 404s — and since FastAPI answers a 404
+  // with JSON, the browser refuses to execute it as a module and you get a
+  // blank page with nothing in the console to explain it.
+  base: "./",
   plugins: [react()],
   resolve: {
     alias: {

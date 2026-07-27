@@ -12,6 +12,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "check:offline": "node scripts/check-no-external-assets.mjs dist",
+    "check:subpath": "node scripts/check-subpath-safe.mjs dist",
     "audit:gate": "node scripts/audit-gate.mjs --level=high"
   },
   "browserslist": [
