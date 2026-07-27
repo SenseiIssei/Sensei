@@ -104,6 +104,11 @@ jobs:
         # Sensei claims to work offline and to leak nothing about you. A stray
         # CDN font or analytics tag silently breaks both, so it is checked.
         run: npm run check:offline
+      - name: The web UI must survive being mounted under /app/
+        if: matrix.os == 'ubuntu-latest'
+        # `sensei up` serves it there. Root-absolute asset URLs render a blank
+        # page with an empty console — this shipped once already.
+        run: npm run check:subpath
       - name: Enforce the JS bundle budget
         if: matrix.os == 'ubuntu-latest'
         shell: bash

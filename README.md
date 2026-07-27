@@ -4,177 +4,443 @@
 
 # Sensei
 
-**The self-hosted AI workspace that compresses your prompts before they leave your machine.**
+### Your AI tools, using a fraction of the tokens.
 
 [![CI](https://github.com/SenseiIssei/Sensei/actions/workflows/ci.yml/badge.svg)](https://github.com/SenseiIssei/Sensei/actions/workflows/ci.yml)
 [![Security](https://github.com/SenseiIssei/Sensei/actions/workflows/security.yml/badge.svg)](https://github.com/SenseiIssei/Sensei/actions/workflows/security.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%20|%203.12%20|%203.13-3776AB)](https://python.org)
 
-[Quick start](#quick-start) · [What it does](#what-it-does) · [Configuration](docs/configuration.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md)
-
 </div>
 
 ---
 
-## Quick start
+## The idea in one picture
 
-```bash
-pip install -e ./backend && sensei up
+AI tools send a lot of text to the model. Most of it is repetitive — file
+listings, build logs, JSON blobs. You pay for every character of it.
+
+Sensei sits in the middle and squeezes that text down before it's sent. The
+model still gets everything it needs; you just stop paying for the padding.
+
+```mermaid
+flowchart LR
+    A["🧑‍💻 Your AI tool<br/><sub>Claude Code, Cursor, Aider…</sub>"]
+    B["🥋 Sensei<br/><sub>runs on your machine</sub>"]
+    C["☁️ The model<br/><sub>Anthropic, OpenAI, or local</sub>"]
+
+    A -- "50,000 tokens" --> B
+    B -- "10,000 tokens" --> C
+    C -- "answer" --> B
+    B -- "answer" --> A
+
+    style B fill:#16a34a,stroke:#22c55e,color:#fff
 ```
 
-That opens the web UI and asks you one question: local model or hosted provider.
-No config file to edit.
+**Nothing changes about how you work.** Same tools, same API key, same answers.
+Just a smaller bill.
 
-**Or with Docker:**
+---
+
+## How much smaller?
+
+These are real measurements, not estimates. You can run them yourself with one
+command (see [For the nerds](#-for-the-nerds)).
+
+```mermaid
+xychart-beta
+    title "Tokens removed, by kind of content"
+    x-axis ["Build logs", "JSON output", "Search results", "Stack traces", "Prose", "Code"]
+    y-axis "% removed" 0 --> 100
+    bar [88, 79, 69, 61, 44, 40]
+```
+
+**Across a realistic mix: 79% fewer tokens.**
+
+For JSON and logs — which is where AI coding tools spend most of their budget —
+nothing is lost. Sensei restructures the text rather than summarising it, so the
+model sees the same facts.
+
+> **What that means in money.** If you spend €100/month on API calls, a 79%
+> reduction on the input side is a large part of that bill. Sensei shows you the
+> running total: `sensei stats`.
+
+---
+
+## Get started
+
+You need Python 3.11 or newer. That's it.
+
+**1. Install**
+
+```bash
+pip install -e ./backend
+```
+
+**2. Start it**
+
+```bash
+sensei up
+```
+
+Your browser opens and asks you one question: do you want to run a model on your
+own computer (free), or use a service like OpenAI (paste a key). Pick one, click
+save. Done.
+
+**3. Point a tool at it**
+
+```bash
+sensei wrap claude
+```
+
+Claude Code now runs through Sensei. Everything works exactly as before.
+
+Same for `codex`, `aider`, `cursor-agent`, `cline`, `continue`, `opencode`,
+`goose` and `crush` — just swap the name.
+
+<details>
+<summary><b>Prefer Docker?</b></summary>
 
 ```bash
 git clone https://github.com/SenseiIssei/Sensei.git && cd Sensei
 docker compose up -d
 ```
 
-**Then point your coding agent at it:**
+Then open <http://localhost:7000/app/>.
+
+</details>
+
+---
+
+## What it looks like
+
+> **Screenshots wanted.** These aren't in the repo yet. If you run Sensei, a
+> screenshot of the setup screen and the chat window would be a genuinely
+> useful contribution — drop them in `docs/screenshots/` and open a PR.
+> See [`docs/screenshots/README.md`](docs/screenshots/README.md).
+
+Here is what the command line shows, which is real output:
+
+```console
+$ sensei models
+
+Your machine
+
+  System   Windows 11 (AMD64)
+  CPU      16 cores
+  RAM      15.3 GB
+  GPU      none detected — models will run on the CPU
+  Budget   7.7 GB usable for a model
+
+Suggestions for this machine
+
+  Qwen2.5 Coder 7B             7B     4.6 GB  fits comfortably
+    Code completion and review. Pairs well with the gateway.
+  Llama 3.2 3B                 3B     2.0 GB  fits comfortably
+    General chat on modest hardware. A sensible floor.
+  GLM-5.2                744B MoE   390.6 GB  too large
+
+Start here:  sensei models --pull qwen2.5-coder:7b
+```
+
+Something not working? Sensei tells you what to do about it:
+
+```console
+$ sensei doctor
+
+  [+] Python             3.12.10 on Windows AMD64
+  [+] Config file        D:\Sensei\.env
+  [!] Ollama             not installed
+        -> Optional. For free local inference: https://ollama.com
+  [x] Model access       no local model and no API key — Sensei cannot answer anything
+        -> Either install Ollama (free, local) or run 'sensei up' and paste an
+           API key into the setup wizard.
+  [+] Port               127.0.0.1:7000 is free
+  [+] Bind address       127.0.0.1
+```
+
+---
+
+## Your data stays yours
+
+This matters more than the token savings, so it's worth being specific.
+
+| | |
+|---|---|
+| 🔒 **Runs only on your machine** | Sensei listens on `127.0.0.1`. Nothing on your network can reach it unless you deliberately change that. |
+| 🚫 **No telemetry, ever** | No analytics, no crash reporting, no "anonymous usage data". Not in any build, not behind any flag. |
+| 📡 **No third-party requests** | The interface loads no fonts, scripts or trackers from anyone. This is checked automatically on every commit. |
+| 🔑 **Your key stays yours** | Sensei forwards your API key to the provider you chose and to nobody else. It's encrypted on disk, never written in plain text. |
+| ✂️ **Secrets stripped** | Optionally, Sensei removes passwords, tokens and keys from prompts before they leave your computer. |
+| 📴 **Works offline** | If the server isn't running, the interface still opens and tells you how to start it. |
+
+---
+
+## Common questions
+
+<details>
+<summary><b>Does this make the AI worse?</b></summary>
+
+For logs and JSON — the bulk of what coding tools send — no. Sensei rewrites
+that text into a denser form containing the same facts, rather than summarising
+it. For prose it removes filler ("it is important to note that" → nothing),
+which is the kind of text a model ignores anyway.
+
+If the model ever does need the original, it can ask for it: Sensei keeps a
+local copy of everything it compressed and hands it back on request.
+
+</details>
+
+<details>
+<summary><b>Do I need to change my code or my tools?</b></summary>
+
+No. `sensei wrap claude` sets one environment variable for that program and
+launches it. Nothing is written to your shell profile, nothing is installed into
+your tool, and closing it puts everything back.
+
+</details>
+
+<details>
+<summary><b>Do I still need an API key?</b></summary>
+
+Only if you want to use a hosted model. Sensei can run entirely on your own
+computer with [Ollama](https://ollama.com) — `sensei models` tells you which
+models actually fit in your memory.
+
+</details>
+
+<details>
+<summary><b>Is it really free?</b></summary>
+
+Yes. MIT licensed, no paid tier, no feature held back. See the
+[principles](ROADMAP.md#principles).
+
+</details>
+
+<details>
+<summary><b>What if I don't like it?</b></summary>
+
+`pip uninstall sensei`. Sensei keeps its data in dot-directories next to where
+you ran it; delete them and nothing remains.
+
+</details>
+
+---
+
+## 🤓 For the nerds
+
+<details>
+<summary><b>Architecture</b></summary>
+
+Sensei is a FastAPI service that speaks both the OpenAI and Anthropic wire
+formats, so anything with a configurable base URL routes through it unchanged.
+
+```mermaid
+flowchart TB
+    subgraph client["Clients"]
+        CC["Claude Code<br/><sub>ANTHROPIC_BASE_URL</sub>"]
+        CX["Codex / Cursor / Aider<br/><sub>OPENAI_BASE_URL</sub>"]
+        WEB["Web UI"]
+        CLI["CLI · Qt app · VS Code ext"]
+    end
+
+    subgraph sensei["Sensei"]
+        GW["Gateway<br/><sub>/v1/chat/completions · /v1/messages</sub>"]
+        RT["ContentRouter<br/><sub>detects type, picks a compressor</sub>"]
+        subgraph comp["Compressors"]
+            SC["SmartCrusher<br/><sub>JSON → CSV schema</sub>"]
+            LC["LogCompressor<br/><sub>triage + dedupe</sub>"]
+            CD["CodeCompressor<br/><sub>comments, imports</sub>"]
+            TC["TextCompressor<br/><sub>filler, boilerplate</sub>"]
+        end
+        CA["CacheAligner<br/><sub>keeps the prefix byte-exact</sub>"]
+        CCR["CCR store<br/><sub>originals, retrievable</sub>"]
+        RED["DLP redaction<br/><sub>strips secrets</sub>"]
+    end
+
+    PROV["Provider<br/><sub>Anthropic · OpenAI · Ollama · 11 more</sub>"]
+
+    CC --> GW
+    CX --> GW
+    WEB --> GW
+    CLI --> GW
+    GW --> RT
+    RT --> SC & LC & CD & TC
+    SC & LC & CD & TC --> CA
+    CA --> RED
+    RED --> PROV
+    RT -.stores originals.-> CCR
+    CCR -.on request.-> PROV
+
+    style sensei fill:#0a0a0f,stroke:#22c55e
+    style comp fill:#111827,stroke:#374151
+```
+
+The system prompt is left byte-identical on purpose. Providers cache on an exact
+prefix match, so touching it would invalidate the cache and cost more in latency
+than compression saves.
+
+</details>
+
+<details>
+<summary><b>How each compressor works</b></summary>
+
+**SmartCrusher — JSON.** An array of objects with the same keys repeats every key
+name on every element. It's rewritten as a header plus rows, which is what a CSV
+is, and drops redundant link/self/href keys. Lossless.
+
+```
+[{"id":1,"name":"a","url":"…"},{"id":2,"name":"b","url":"…"}, …20 more]
+  ↓
+id|name|url
+1|a|…
+2|b|…
+```
+
+**LogCompressor — build and test output.** Keeps the head, the tail, every line
+matching an error/warning/summary pattern, and a few lines of context after each.
+Identical lines are collapsed after normalising timestamps, hex addresses and
+UUIDs, so a thousand near-identical worker lines become one with a count.
+
+**CodeCompressor — source.** Strips comments, docstrings, blank lines and
+trailing whitespace, and folds consecutive import blocks. Regex-driven per
+language rather than a full parse, for speed and zero dependencies.
+
+**TextCompressor — prose.** Phrase substitution ("in order to" → "to"), filler
+removal, boilerplate sentence stripping, and line-level dedupe.
+
+**CCR — reversible compression.** Every original is written to a local cache
+keyed by id. If the model decides it needs the untouched text, it asks for it by
+id and gets it back. Compression is therefore never destructive in practice.
+
+</details>
+
+<details>
+<summary><b>Performance</b></summary>
+
+Compression sits on the hot path of every request, so its own cost matters.
+Measured on an 86 kB agent turn — system prompt, exchanges, a large JSON tool
+result, build logs and source:
+
+| | before optimisation | after |
+|---|---|---|
+| median | 8.14 ms | **4.68 ms** |
+| p95 | 12.53 ms | **6.31 ms** |
+| cold start | 9.34 ms | 6.91 ms |
+
+What that took: compiling the detector patterns once instead of per line,
+bounding the type-detection scan to the sample it actually reads instead of
+splitting the whole payload, and removing ~11,000 `re` cache lookups per request.
+
+An optional Rust accelerator (`sensei_core`, PyO3, abi3) makes the JSON hot path
+roughly twice as fast again. CI builds the wheel and re-runs the entire test
+suite against it on every commit, so "byte-identical to the Python path" is
+verified rather than asserted.
+
+</details>
+
+<details>
+<summary><b>Reproducing the numbers</b></summary>
 
 ```bash
-sensei wrap claude
+python backend/benchmarks/compression_benchmark.py
 ```
 
-That's the whole setup. Claude Code now runs through Sensei, using your own
-Anthropic key, with every prompt compressed on the way out.
+Real `tiktoken` (`cl100k_base`) counts over a fixed corpus of tool outputs, logs,
+stack traces, source and prose. `--json` gives machine-readable output and
+`--min-aggregate 75` exits non-zero below a floor — which is what nightly CI
+runs, so a regression in compression quality fails the build rather than being
+noticed months later.
 
-Also works with `codex`, `aider`, `cursor-agent`, `cline`, `continue`,
-`opencode`, `goose` and `crush`.
+</details>
 
----
+<details>
+<summary><b>Security model</b></summary>
 
-## What it does
+Sensei assumes the machine it runs on is trusted and that anyone who can reach
+the port is authorised. Everything else follows from that:
 
-Sensei sits between your AI tools and whatever model you use, and makes the
-prompts smaller before they're sent. You keep your own API key; Sensei never
-sees your provider account.
+- Binds to `127.0.0.1`. Exposing it is a deliberate act, and `sensei doctor`
+  reports it as a failure if you do it without enabling auth.
+- API keys live in an encrypted vault (AES-256-GCM), not in `.env`.
+- Optional DLP redaction strips API keys, tokens, private keys, JWTs and
+  optionally PII from prompts before they leave the machine.
+- Optional per-user auth, JWT sessions, OIDC SSO, and RBAC on admin endpoints.
+- `run_python` is off by default. When enabled it is a subprocess with a
+  timeout, not a container — the docs say so plainly.
 
-### Measured token reduction
+Full scope and reporting process: [SECURITY.md](SECURITY.md).
 
-Real `tiktoken` counts, not estimates. Reproduce them yourself with
-`python backend/benchmarks/compression_benchmark.py`:
+</details>
 
-| Content | Reduction |
-|---|---|
-| JSON tool output | **79%** |
-| Build & test logs | **88%** |
-| JSON search results | **69%** |
-| Stack traces | **61%** |
-| Prose | 44% |
-| Source code | 40% |
-| **Aggregate** | **79%** |
-
-The JSON and log wins are **lossless** — tabular compaction and log triage, not
-summarisation. Nightly CI fails if this number regresses.
-
-### Where it fits
+<details>
+<summary><b>Repository layout</b></summary>
 
 ```
-your agent  ──▶  Sensei  ──▶  your model provider
-                   │
-                   ├─ compresses tool results, logs, code, prose
-                   ├─ keeps the system prompt byte-exact (cache-safe)
-                   ├─ stores originals locally, retrievable on request
-                   └─ redacts secrets before anything leaves the machine
+backend/          FastAPI service, compression pipeline, CLI, tests
+  sensei/
+    compression/  SmartCrusher, LogCompressor, CodeCompressor, TextCompressor,
+                  CacheAligner, CCR, ContentRouter
+    routers/      gateway, chat, RAG, agent, settings, setup, stats, …
+    security/     auth, crypto, vault, redaction, RBAC, OIDC, sessions
+    cli/          up · wrap · doctor · models · stats · chat
+  benchmarks/     the compression benchmark
+frontend/         React 19 + Tailwind 4 + Vite 8, PWA
+rust/sensei_core/ optional PyO3 accelerator
+extensions/vscode VS Code extension
+training/         Sensei-Compressor fine-tuning scaffold
+deploy/           nginx · Caddy · Traefik · systemd
+docs/             configuration reference (generated), the plan
 ```
 
-Sensei speaks both the OpenAI and Anthropic wire formats, so anything with a
-configurable base URL works:
+</details>
 
-```bash
-export OPENAI_BASE_URL=http://localhost:7000/v1     # OpenAI SDK, Codex, Cursor…
-export ANTHROPIC_BASE_URL=http://localhost:7000     # Claude Code, Anthropic SDK
-```
+<details>
+<summary><b>What CI actually enforces</b></summary>
 
-### The rest of it
+Every action is pinned to a commit SHA. On each pull request:
 
-Chat UI · CLI · Qt desktop app · VS Code extension · RAG over your own documents ·
-a tool-using agent · 14 model providers · per-user sessions · encryption at rest ·
-OIDC SSO · RBAC · DLP redaction.
+- backend tests across **{Linux, macOS, Windows} × Python {3.11, 3.12, 3.13}**
+- `ruff` lint and format, with the rule set pinned so a new ruff release can't
+  fail an unrelated PR
+- the Rust accelerator built and the **whole suite re-run against it** to prove
+  byte-parity
+- Playwright on three operating systems
+- a 450 kB JavaScript budget
+- the config reference regenerated from the pydantic model and compared
+- the built UI checked for third-party origins, and for root-absolute asset
+  URLs that would blank the page when mounted under `/app/`
+- Docker image built and `/health` smoke-tested
+- pip-audit, npm audit, cargo audit, CodeQL, gitleaks, Trivy, SBOM, Scorecard
 
----
+Nightly: the compression benchmark with a regression floor, Rust/Python output
+diffed for parity, and the suite against eagerly-upgraded dependencies.
 
-## Commands
+</details>
 
-```
-sensei up          start the server and open the web UI
-sensei wrap <tool> run a coding agent through the compression gateway
-sensei doctor      diagnose a setup that isn't working
-sensei models      what this machine can run, and what it already has
-sensei stats       tokens and dollars saved
-sensei chat        console chat
-```
+<details>
+<summary><b>Credits and licensing</b></summary>
 
-`sensei models` reads your actual RAM and VRAM and tells you which models fit —
-the thing that usually blocks people on local inference isn't installing Ollama,
-it's knowing what their machine can hold.
+Sensei builds on ideas from two projects:
 
----
+- **[Headroom](https://github.com/headroomlabs-ai/headroom)** (Apache-2.0) — the
+  context-compression strategies this pipeline is modelled on.
+- **[Odysseus](https://github.com/pewdiepie-archdaemon/odysseus)** (AGPL-3.0) —
+  the self-hosted workspace shape.
 
-## Privacy
+Sensei is a clean-room implementation. No Odysseus code is used, which is what
+lets Sensei stay MIT rather than inheriting AGPL.
 
-- **Binds to `127.0.0.1` by default.** Exposing Sensei to your network is a
-  deliberate act, not the default state.
-- **No telemetry.** Nothing is phoned home, in any build, ever.
-- **No remote assets.** The web UI loads no fonts, scripts or trackers from
-  third parties, so it works fully offline.
-- **API keys are encrypted at rest** in a local vault, not written to `.env` in
-  plaintext.
-- **Secrets are redacted** from prompts before they reach a provider, if you
-  turn `SENSEI_REDACTION_ENABLED` on.
-
-If you put Sensei on a network, read [SECURITY.md](SECURITY.md) first.
-
----
-
-## Install
-
-| Platform | |
-|---|---|
-| Any | `pip install -e ./backend` |
-| Docker | `docker compose up -d` |
-| Windows / macOS / Linux | signed-free installers on the [releases page](https://github.com/SenseiIssei/Sensei/releases) |
-| VS Code | the `.vsix` on the releases page |
-
-Release builds are unsigned — verify them with the published `SHA256SUMS` and
-Sigstore signatures rather than trusting the OS warning dialog. Each release
-explains how.
-
-Optional: a Rust accelerator (`sensei_core`) makes the hottest compression path
-about twice as fast. It's byte-for-byte identical to the Python path — CI proves
-that on every commit — and everything works without it.
+</details>
 
 ---
 
 ## Contributing
 
-Issues and PRs welcome. [CONTRIBUTING.md](CONTRIBUTING.md) has the setup and the
-house rules; the short version is that CI runs on Linux, macOS and Windows
-across Python 3.11–3.13, and changes to the compression pipeline need a
-before/after benchmark.
-
-Areas that would help most right now: compression heuristics for more languages,
-an MCP server, mobile UI, and provider integrations.
-
----
-
-## Credits
-
-Sensei is built on ideas from two open-source projects:
-
-- **[Headroom](https://github.com/headroomlabs-ai/headroom)** (Apache-2.0) — the
-  context-compression strategies this pipeline is modelled on.
-- **[Odysseus](https://github.com/pewdiepie-archdaemon/odysseus)** (AGPL-3.0) —
-  the self-hosted workspace shape. Sensei is a clean-room implementation; no
-  Odysseus code is used, which is why Sensei can stay MIT.
-
-MIT licensed. Free forever, and the core will never be paywalled — see
-[ROADMAP.md](ROADMAP.md#principles).
+Issues and PRs welcome — [CONTRIBUTING.md](CONTRIBUTING.md) has the setup.
+Most useful right now: an MCP server, compression heuristics for more languages,
+mobile polish, and screenshots for this page.
 
 <div align="center">
-<sub>Built by <a href="https://github.com/SenseiIssei">@SenseiIssei</a></sub>
+<sub>MIT · built by <a href="https://github.com/SenseiIssei">@SenseiIssei</a></sub>
 </div>
