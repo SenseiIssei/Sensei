@@ -154,11 +154,16 @@ class TextCompressor:
         return text.strip()
 
     def _cleanup(self, text: str) -> str:
-        text = re.sub(r"[ \t]+", " ", text)  # collapse spaces/tabs
-        text = re.sub(r" *\n *", "\n", text)  # trim around newlines
-        text = re.sub(r"\s+([,.;:!?])", r"\1", text)  # no space before punctuation
-        text = re.sub(r"(,\s*){2,}", ", ", text)  # collapse repeated commas
-        text = re.sub(r"^[ \t]*[,;:][ \t]*", "", text, flags=re.MULTILINE)  # leading punct
+        # Written for linear time: this runs on untrusted text (crawled pages,
+        # tool output, gateway prompts). `(?<!\s)` prevents a whitespace run
+        # from being re-scanned at every offset inside it, and possessive
+        # quantifiers prevent backtracking within an attempt. Each rewrite is
+        # byte-identical to the naive form — see tests/test_regex_redos.py.
+        text = re.sub(r"[ \t]++", " ", text)  # collapse spaces/tabs
+        text = re.sub(r" *+\n *+", "\n", text)  # trim around newlines
+        text = re.sub(r"(?<!\s)\s++([,.;:!?])", r"\1", text)  # no space before punctuation
+        text = re.sub(r"(?:,\s*+){2,}", ", ", text)  # collapse repeated commas
+        text = re.sub(r"^[ \t]*+[,;:][ \t]*+", "", text, flags=re.MULTILINE)  # leading punct
         return text
 
     def _dedupe_lines(self, text: str) -> str:

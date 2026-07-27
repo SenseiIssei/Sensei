@@ -31,21 +31,35 @@ jobs:
         run: |
           pip install pip-audit
           pip install -e ".[dev]"
-          pip-audit --strict --desc
+          # --skip-editable: `sensei` itself is installed editable and is not on
+          # PyPI, so --strict would abort on "could not be audited" before
+          # looking at a single dependency. We audit what we depend on.
+          pip-audit --strict --desc --skip-editable
 
   deps-node:
-    name: npm audit (${{ matrix.dir }})
+    name: npm audit (frontend)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        dir: [frontend, extensions/vscode]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
-      - working-directory: ${{ matrix.dir }}
+      - working-directory: frontend
+        # Not a plain `npm audit`: advisories that have been assessed and don't
+        # apply are recorded in audit-allowlist.json with a reason and an expiry.
+        # That keeps this a hard gate instead of something someone eventually
+        # appends `|| true` to. Expired waivers fail the build.
+        run: node scripts/audit-gate.mjs --level=high
+
+  deps-extension:
+    name: npm audit (extension)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - working-directory: extensions/vscode
         run: npm audit --audit-level=high
 
   deps-rust:
