@@ -5,7 +5,10 @@ import App from "./App";
 import { PublicChat } from "@/components/PublicChat";
 import { AuthPage } from "@/components/AuthPage";
 import { authApi } from "@/lib/auth";
+import { registerServiceWorker } from "@/lib/registerSW";
 import "./index.css";
+
+registerServiceWorker();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (!authApi.isAuthenticated()) {

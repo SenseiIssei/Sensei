@@ -363,10 +363,64 @@ takes `--json` and `--min-aggregate`, which is what the nightly guard uses.
 - Nothing has been pushed to GitHub, and nothing is committed — the branch
   `chore/foundation-m1` holds the working tree, awaiting your review.
 
-## 10. Next up
+## 10. Milestone 2 — Phase 2 delivered
 
-M2 was going to be the frontend upgrade — that landed early inside M1, so the
-next milestone is **Phase 2 (zero friction)**: the `sensei` CLI with
-`sensei wrap claude`, the first-run web wizard, the 12-line `.env.example`, the
-README rewrite, and the PWA/mobile layout. Phase 3 (MCP server, output shaper,
-live-zone compression) follows.
+| Item | Status |
+|---|---|
+| `sensei` CLI (`up` / `wrap` / `doctor` / `models` / `stats` / `chat`) | done |
+| First-run web wizard, no text editor required | done |
+| Live provider model lists instead of a hardcoded catalogue | done |
+| `.env.example` 125 → 23 lines; full reference generated from the model | done |
+| README 34 kB → readable | done |
+| Hardware-aware local model sizing (the "Cookbook" idea) | done |
+| Mobile layout + PWA manifest | done |
+| Service worker, offline app shell, connection banner | done |
+| Docs site on GitHub Pages | **not done** — deferred to Phase 6 |
+
+### Things found along the way
+
+- **`SENSEI_HOST` was `0.0.0.0`** — fixed in M1.
+- **Tailwind 4 broke the glass effect in Firefox** — Lightning CSS drops the
+  unprefixed `backdrop-filter` when a hand-written `-webkit-` variant exists.
+- **The web UI loaded fonts from Google** — a privacy leak and an offline
+  break in a tool whose premise is neither. CI now fails on any third-party
+  origin in the built assets.
+- **`"java": ("import ")`** in the code compressor was a string, not a tuple,
+  so every Java line starting with i/m/p/o/r/t/space was folded away as an
+  import. Java source had been silently mangled.
+- **Three polynomial regexes** in the compression cleanup, on paths that
+  process untrusted text. 11 s → under 2 ms.
+- **The test suite shared one rate-limit budget**, so adding tests made
+  unrelated tests fail. Fixed with an autouse fixture.
+- **The service worker cached nothing on a real deploy** — assets are fetched
+  before the worker takes control, so they must be precached at install, and
+  `updateViaCache: "none"` is required or the browser keeps running an old
+  worker with a stale asset list. Both only surfaced by testing offline with
+  the server actually stopped.
+
+### Measured
+
+| | before | after |
+|---|---|---|
+| Gateway compression, median | 8.14 ms | **4.68 ms** |
+| Gateway compression, p95 | 12.53 ms | **6.31 ms** |
+| Frontend app chunk | 336 kB | **44.9 kB** (9.2 kB gzip) |
+| Backend tests | 204 | **273** |
+| Frontend tests | 2 | **28** |
+| Ruff findings | 146 | **0** |
+
+## 11. Next up
+
+**Phase 3 — the Headroom catch-up.** In order of leverage:
+
+1. **MCP server** (`sensei_compress`, `sensei_retrieve`, `sensei_stats`). Sensei
+   has no MCP surface at all, and it is the single change that makes it usable
+   from every MCP client rather than only from tools with a configurable base
+   URL.
+2. **Output-token shaping with a holdout group**, so any claimed saving carries
+   a real confidence interval instead of a point estimate.
+3. **Live-zone compression** — compress only the delta, keep the frozen prefix
+   byte-identical so provider prompt caches still hit.
+4. **Tree-sitter CodeCompressor** for Go, Rust, Java, C/C++, C#, Ruby, PHP.
+5. **Quality-preservation evals** in nightly CI, proving compression doesn't
+   degrade answers rather than only that it shrinks tokens.
