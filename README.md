@@ -516,8 +516,13 @@ assumes a very large context window.
 ## Contributing
 
 Issues and PRs welcome — [CONTRIBUTING.md](CONTRIBUTING.md) has the setup.
-Most useful right now: compression heuristics for more languages, mobile polish,
-and [screenshots for this page](docs/screenshots/README.md).
+
+**[docs/ROADMAP-NEXT.md](docs/ROADMAP-NEXT.md) is the queue** — what's planned,
+in what order, and why. It also lists the things that cost real time to discover
+and aren't visible from reading the code.
+
+Most useful right now: compression heuristics for more languages, output-token
+shaping, mobile polish, and [screenshots for this page](docs/screenshots/README.md).
 
 <div align="center">
 <sub>MIT · built by <a href="https://github.com/SenseiIssei">@SenseiIssei</a></sub>
