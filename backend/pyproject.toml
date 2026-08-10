@@ -78,7 +78,11 @@ sensei = "sensei.cli:main"
 where = ["."]
 
 [tool.setuptools.package-data]
-sensei = ["py.typed"]
+# `webui` is the built frontend, copied in by the release workflow before the
+# wheel is built. Without it a `pip install` served the Swagger page and told
+# the user to run an npm command inside a repository they had never cloned.
+# It is not in version control — see .gitignore.
+sensei = ["py.typed", "webui/**/*"]
 
 [tool.ruff]
 line-length = 100

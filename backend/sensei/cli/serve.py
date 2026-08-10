@@ -17,16 +17,31 @@ from sensei.config import settings
 
 
 def _frontend_dist() -> Path | None:
-    """Find a built web UI, whether running from source or a frozen bundle."""
+    """Find a built web UI, in any of the four ways Sensei can be installed.
+
+    The third candidate is the one that matters most and was missing until
+    2026-08-10: a `pip install` shipped no web UI at all, because the wheel is
+    built from `backend/` and the UI lives in `frontend/`. Every pip and pipx
+    user therefore landed on the Swagger page instead of the dashboard, with
+    "the web UI isn't built" telling them to run an npm command inside a
+    repository they had never cloned. The wheel now carries the built UI as
+    package data at `sensei/webui`.
+    """
     import sys
 
-    candidates = []
-    meipass = getattr(sys, "_MEIPASS", None)
-    if meipass:
-        candidates.append(Path(meipass) / "frontend" / "dist")
-    # backend/sensei/cli/serve.py -> repo root
-    candidates.append(Path(__file__).resolve().parents[3] / "frontend" / "dist")
-    return next((c for c in candidates if c.exists()), None)
+    candidates = [
+        # PyInstaller bundle.
+        *(
+            [Path(meipass) / "frontend" / "dist"]
+            if (meipass := getattr(sys, "_MEIPASS", None))
+            else []
+        ),
+        # Installed wheel: package data next to this module.
+        Path(__file__).resolve().parents[1] / "webui",
+        # Source checkout: backend/sensei/cli/serve.py -> repo root.
+        Path(__file__).resolve().parents[3] / "frontend" / "dist",
+    ]
+    return next((c for c in candidates if c.exists() and any(c.iterdir())), None)
 
 
 def run(
