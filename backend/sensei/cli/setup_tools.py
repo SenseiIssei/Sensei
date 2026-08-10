@@ -12,6 +12,8 @@ nothing left for the user to configure by hand.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from sensei import integrations
 
 _GLYPH = {
@@ -62,8 +64,14 @@ def run(
     dry_run: bool = False,
     include_undetected: bool = False,
     only: list[str] | None = None,
+    project: str | None = None,
 ) -> int:
     selection = set(only) if only else None
+    project_root = Path(project).resolve() if project else None
+
+    if project_root is not None and not project_root.is_dir():
+        print(f"Not a directory: {project_root}")
+        return 2
 
     if selection:
         known = {i.id for i in (*integrations.REGISTRY, *integrations.BLOCK_REGISTRY)}
@@ -103,6 +111,9 @@ def run(
     ep = integrations.endpoints()
     print()
     print(f"  Pointing tools at {ep.anthropic}")
+    if project_root:
+        print(f"  Scoped to {project_root}")
+        print("  Only tools that read per-repository config are touched.")
     if dry_run:
         print("  Dry run — nothing will be written.")
     print()
@@ -111,7 +122,13 @@ def run(
         only=selection,
         include_undetected=include_undetected,
         dry_run=dry_run,
+        project=project_root,
     )
+
+    if project_root and not outcomes:
+        print("  None of the selected tools support per-repository configuration.")
+        print()
+        return 0
     _print_outcomes(outcomes, verb="configured")
 
     if not dry_run and any(o.status == "applied" for o in outcomes):

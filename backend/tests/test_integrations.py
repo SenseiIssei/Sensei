@@ -266,6 +266,90 @@ def test_a_dotfile_in_home_does_not_count_as_installed(tmp_path: Path) -> None:
     assert entry.detect() is False
 
 
+# ── Per-project scoping ─────────────────────────────────────────────────────
+
+
+def _project_integration(name: str = "fake") -> Integration:
+    return Integration(
+        id=name,
+        name="Fake Tool",
+        path=lambda: Path.home() / ".fake" / "config.json",
+        project_path=lambda root: root / ".fake" / "config.json",
+        apply=integrations._mcp_apply(("mcpServers",)),
+        revert=integrations._mcp_revert(("mcpServers",)),
+    )
+
+
+def test_project_mode_writes_inside_the_checkout(
+    sandbox: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = sandbox / "repo"
+    repo.mkdir()
+    _install(monkeypatch, _project_integration())
+
+    outcomes = integrations.apply_all(project=repo)
+
+    assert [o.status for o in outcomes] == ["applied"]
+    written = repo / ".fake" / "config.json"
+    assert written.is_file()
+    assert "sensei" in json.loads(written.read_text(encoding="utf-8"))["mcpServers"]
+
+
+def test_project_mode_skips_tools_without_repo_config(
+    sandbox: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reported as absent rather than written to the wrong place."""
+    _install(monkeypatch, _json_integration(sandbox / "tool" / "config.json"))
+    assert integrations.apply_all(project=sandbox) == []
+
+
+def test_project_mode_ignores_detection(sandbox: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Committing a `.cursor/mcp.json` for a teammate who has Cursor when you do
+    not is a legitimate thing to want."""
+    repo = sandbox / "repo"
+    repo.mkdir()
+    entry = _project_integration()
+    _install(monkeypatch, entry)
+    assert entry.detect() is False
+    assert integrations.apply_all(project=repo)[0].status == "applied"
+
+
+def test_project_and_machine_records_coexist(
+    sandbox: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Undoing one must not make Sensei forget it ever touched the other.
+
+    The manifest used to be keyed by tool id alone, so wiring the same tool
+    machine-wide and then inside a repo silently dropped the first record — and
+    with it the backup that `--undo` needs.
+    """
+    repo = sandbox / "repo"
+    repo.mkdir()
+    machine_cfg = sandbox / "home" / "config.json"
+    machine_cfg.parent.mkdir()
+
+    entry = Integration(
+        id="fake",
+        name="Fake Tool",
+        path=lambda: machine_cfg,
+        project_path=lambda root: root / ".fake" / "config.json",
+        apply=integrations._mcp_apply(("mcpServers",)),
+        revert=integrations._mcp_revert(("mcpServers",)),
+    )
+    _install(monkeypatch, entry)
+
+    integrations.apply_all()
+    integrations.apply_all(project=repo)
+
+    paths = {e["path"] for e in integrations._read_manifest()["entries"]}
+    assert str(machine_cfg) in paths
+    assert str(repo / ".fake" / "config.json") in paths
+
+    integrations.undo_all()
+    assert not machine_cfg.exists()
+    assert not (repo / ".fake" / "config.json").exists()
+
+
 def test_an_existing_tool_directory_counts_as_installed(
     sandbox: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

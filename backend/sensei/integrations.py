@@ -210,6 +210,11 @@ class Integration:
     revert: Callable[[dict[str, Any]], bool]
     binaries: tuple[str, ...] = ()
     extra_dirs: tuple[Callable[[], Path], ...] = ()
+    # Where this tool reads per-repository configuration, if it does. Set means
+    # `--project` can scope the change to one checkout instead of the machine —
+    # which is what someone wants when only some of their work should route
+    # through a local gateway.
+    project_path: Callable[[Path], Path] | None = None
     note: str = ""
     # False when the format is documented but Sensei has not been able to verify
     # it end to end against the real tool. Surfaced in the output, because a
@@ -255,6 +260,17 @@ def _xdg_config() -> Path:
     if sys.platform == "win32":
         return Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
     return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+
+
+def _claude_desktop_config() -> Path:
+    """Claude Desktop's config, which is in a different place on all three."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+    elif sys.platform == "darwin":
+        base = Path.home() / "Library" / "Application Support"
+    else:
+        base = _xdg_config()
+    return base / "Claude" / "claude_desktop_config.json"
 
 
 def _mcp_entry(ep: Endpoints) -> dict[str, Any]:
@@ -334,18 +350,63 @@ REGISTRY: tuple[Integration, ...] = (
         name="Claude Code",
         binaries=("claude",),
         path=lambda: Path.home() / ".claude" / "settings.json",
+        project_path=lambda root: root / ".claude" / "settings.json",
         apply=_claude_code_apply,
         revert=_claude_code_revert,
         note="Routes sessions through the gateway and registers the MCP tools.",
     ),
     Integration(
+        id="claude-desktop",
+        name="Claude Desktop",
+        path=_claude_desktop_config,
+        apply=_mcp_apply(("mcpServers",)),
+        revert=_mcp_revert(("mcpServers",)),
+        note="MCP server. The desktop app talks to Anthropic directly, so only "
+        "the compression tools are exposed — its traffic does not route here.",
+    ),
+    Integration(
         id="cursor",
         name="Cursor",
         path=lambda: Path.home() / ".cursor" / "mcp.json",
+        project_path=lambda root: root / ".cursor" / "mcp.json",
         apply=_mcp_apply(("mcpServers",)),
         revert=_mcp_revert(("mcpServers",)),
         note="MCP server. The chat model's base URL lives in Cursor's own "
         "settings UI and cannot be set from a file.",
+    ),
+    Integration(
+        id="zed",
+        name="Zed",
+        binaries=("zed",),
+        path=lambda: _xdg_config() / "zed" / "settings.json",
+        apply=_mcp_apply(("context_servers",)),
+        revert=_mcp_revert(("context_servers",)),
+        note="Zed calls them context servers. Its settings file allows comments, "
+        "and a file with any is reported as a manual step rather than rewritten.",
+        verified=False,
+    ),
+    Integration(
+        id="roo",
+        name="Roo Code (VS Code)",
+        path=lambda: (
+            _vscode_global_storage()
+            / "rooveterinaryinc.roo-cline"
+            / "settings"
+            / "mcp_settings.json"
+        ),
+        apply=_mcp_apply(("mcpServers",)),
+        revert=_mcp_revert(("mcpServers",)),
+        verified=False,
+    ),
+    Integration(
+        id="kilo",
+        name="Kilo Code (VS Code)",
+        path=lambda: (
+            _vscode_global_storage() / "kilocode.kilo-code" / "settings" / "mcp_settings.json"
+        ),
+        apply=_mcp_apply(("mcpServers",)),
+        revert=_mcp_revert(("mcpServers",)),
+        verified=False,
     ),
     Integration(
         id="windsurf",
@@ -492,8 +553,17 @@ def _record(
     backup: Path | None,
     kind: str,
 ) -> None:
-    """Remember one edit, replacing any earlier record for the same tool."""
-    manifest["entries"] = [e for e in manifest["entries"] if e.get("tool_id") != tool_id]
+    """Remember one edit, replacing any earlier record for the same file.
+
+    Keyed by (tool_id, path) rather than tool_id alone: the same tool can be
+    wired machine-wide and again inside a checkout, and undoing one must not
+    make Sensei forget it ever touched the other.
+    """
+    manifest["entries"] = [
+        e
+        for e in manifest["entries"]
+        if not (e.get("tool_id") == tool_id and e.get("path") == str(path))
+    ]
     manifest["entries"].append(
         {
             "tool_id": tool_id,
@@ -516,8 +586,9 @@ def _apply_json(
     stamp: str,
     *,
     dry_run: bool,
+    project: Path | None = None,
 ) -> Outcome:
-    path = integration.path()
+    path = integration.project_path(project) if project else integration.path()
     doc = _load_json(path)
     if doc is None:
         return Outcome(
@@ -540,6 +611,8 @@ def _apply_json(
 
     backup = _backup(path, stamp)
     _atomic_write(path, _dump_json(doc))
+    # Keyed by id *and* path so a project-scoped edit does not evict the record
+    # of the machine-wide one — undoing one must not silently forget the other.
     _record(manifest, tool_id=integration.id, path=path, backup=backup, kind="json")
     return Outcome(integration.id, integration.name, "applied", path=path)
 
@@ -587,8 +660,15 @@ def apply_all(
     dry_run: bool = False,
     host: str | None = None,
     port: int | None = None,
+    project: Path | None = None,
 ) -> list[Outcome]:
-    """Wire up every detected tool. Returns one Outcome per tool considered."""
+    """Wire up every detected tool. Returns one Outcome per tool considered.
+
+    With ``project`` set, only tools that read per-repository configuration are
+    touched, and only inside that directory. Detection is skipped in that mode:
+    committing a `.cursor/mcp.json` for a teammate who has Cursor and you do not
+    is a legitimate thing to want.
+    """
     ep = endpoints(host, port)
     manifest = _read_manifest()
     stamp = time.strftime("%Y%m%d-%H%M%S")
@@ -598,14 +678,21 @@ def apply_all(
     for integration in candidates:
         if only is not None and integration.id not in only:
             continue
-        if not include_undetected and not integration.detect():
+
+        if project is not None:
+            if not isinstance(integration, Integration) or integration.project_path is None:
+                continue
+        elif not include_undetected and not integration.detect():
             results.append(
                 Outcome(integration.id, integration.name, "not-found", detail="not installed")
             )
             continue
+
         try:
             if isinstance(integration, Integration):
-                results.append(_apply_json(integration, ep, manifest, stamp, dry_run=dry_run))
+                results.append(
+                    _apply_json(integration, ep, manifest, stamp, dry_run=dry_run, project=project)
+                )
             else:
                 results.append(_apply_block(integration, ep, manifest, stamp, dry_run=dry_run))
         except OSError as exc:

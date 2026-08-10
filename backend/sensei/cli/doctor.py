@@ -247,6 +247,172 @@ async def collect() -> list[Check]:
     return checks
 
 
+# ── End-to-end verification ─────────────────────────────────────────────────
+#
+# Everything above is a static check: a file exists, a port is free, a key is
+# set. None of it proves a request actually reaches the gateway and comes back
+# compressed, which is the only thing the user cares about. `setup-tools` in
+# particular writes configuration files and then nobody confirms they worked —
+# the most common way for that to be wrong is the port changing afterwards,
+# which no static check can see.
+
+# Deliberately an array of near-identical records: SmartCrusher rewrites it to
+# a header plus rows, so a gateway that is compressing at all cannot report
+# zero. A single short sentence would legitimately compress to nothing and make
+# a working setup look broken.
+_PROBE = [
+    {"id": i, "name": f"item {i}", "state": "ready", "url": f"https://example.com/i/{i}"}
+    for i in range(30)
+]
+
+
+async def verify() -> list[Check]:
+    """Send one real request through the gateway and report what came back."""
+    import httpx
+
+    from sensei.cli.wrap import gateway_base
+
+    base = gateway_base()
+    checks: list[Check] = []
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{base}/v1/chat/completions",
+                headers={"X-Sensei-Client": "sensei doctor"},
+                json={
+                    "model": "probe",
+                    "max_tokens": 1,
+                    "messages": [{"role": "user", "content": str(_PROBE)}],
+                },
+            )
+    except httpx.HTTPError as exc:
+        return [
+            Check(
+                "Gateway",
+                FAIL,
+                f"nothing answering at {base} ({exc.__class__.__name__})",
+                "Start it first: sensei up",
+            )
+        ]
+
+    checks.append(Check("Gateway", OK, f"reachable at {base}"))
+
+    # The savings headers are attached before the request is forwarded, so they
+    # are present even when there is no upstream configured. That is what makes
+    # this check useful on a machine that has not finished setup: it separates
+    # "compression is not working" from "you have not added a key yet".
+    saved = resp.headers.get("X-Sensei-Tokens-Saved")
+    enabled = resp.headers.get("X-Sensei-Compression-Enabled")
+
+    if saved is None:
+        checks.append(
+            Check(
+                "Compression",
+                FAIL,
+                "the gateway answered but reported no savings headers",
+                "This is a bug — please open an issue with the output of 'sensei doctor -v'.",
+            )
+        )
+    elif enabled == "false":
+        checks.append(
+            Check(
+                "Compression",
+                WARN,
+                "turned off (SENSEI_COMPRESSION_ENABLED=false)",
+                "Traffic is proxied untouched. Set it to true to actually save anything.",
+            )
+        )
+    elif int(saved or 0) <= 0:
+        checks.append(
+            Check(
+                "Compression",
+                FAIL,
+                "ran, but saved nothing on a payload that should compress ~70%",
+                "Something is wrong with the compression pipeline, not your setup.",
+            )
+        )
+    else:
+        ratio = resp.headers.get("X-Sensei-Compression-Ratio", "?")
+        checks.append(
+            Check("Compression", OK, f"{saved} tokens saved on the probe (ratio {ratio})")
+        )
+
+    # Upstream is reported separately: a 502 here means the compression half
+    # works and only the provider is missing, which is a different problem with
+    # a different fix.
+    if resp.status_code == 200:
+        checks.append(Check("Upstream", OK, "the provider answered"))
+    else:
+        body = resp.text[:120].replace("\n", " ")
+        checks.append(
+            Check(
+                "Upstream",
+                WARN,
+                f"HTTP {resp.status_code} — compression works, the model call did not",
+                f"{body}  ->  run 'sensei up' and add a key, or install Ollama.",
+            )
+        )
+
+    checks.extend(_wired_tool_checks(base))
+    return checks
+
+
+def _wired_tool_checks(base: str) -> list[Check]:
+    """Do the tools `setup-tools` configured still point at this server?
+
+    Changing SENSEI_PORT after running `setup-tools` leaves every tool pointing
+    at a port with nothing on it, and the tool's own error message for that is
+    usually "connection refused" with no mention of Sensei.
+    """
+    from sensei import integrations
+
+    checks: list[Check] = []
+    manifest = integrations._read_manifest()
+    entries = manifest.get("entries", [])
+
+    if not entries:
+        checks.append(
+            Check(
+                "Wired tools",
+                WARN,
+                "none — no tool on this machine is routed through Sensei",
+                "Connect the ones you have: sensei setup-tools",
+            )
+        )
+        return checks
+
+    stale: list[str] = []
+    for entry in entries:
+        path = Path(str(entry.get("path", "")))
+        if not path.exists():
+            stale.append(f"{entry.get('tool_id')} (config gone)")
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        # A textual check on purpose: the point is "does this file mention the
+        # address we are serving on", which holds across every format without
+        # needing a parser per tool.
+        if base not in text and f"{base}/v1" not in text:
+            stale.append(str(entry.get("tool_id")))
+
+    if stale:
+        checks.append(
+            Check(
+                "Wired tools",
+                FAIL,
+                f"{len(entries)} configured, but these no longer point here: {', '.join(stale)}",
+                f"The server moved to {base}. Re-run: sensei setup-tools",
+            )
+        )
+    else:
+        names = ", ".join(str(e.get("tool_id")) for e in entries)
+        checks.append(Check("Wired tools", OK, f"{len(entries)} pointing here: {names}"))
+    return checks
+
+
 def render(checks: list[Check], color: bool = True) -> str:
     lines = []
     for c in checks:
@@ -259,10 +425,16 @@ def render(checks: list[Check], color: bool = True) -> str:
     return "\n".join(lines)
 
 
-def run() -> int:
+def run(verify_routing: bool = False) -> int:
     checks = asyncio.run(collect())
     print("\nSensei doctor\n")
     print(render(checks))
+
+    if verify_routing:
+        live = asyncio.run(verify())
+        print("\nEnd-to-end\n")
+        print(render(live))
+        checks = checks + live
 
     failed = [c for c in checks if c.status == FAIL]
     warned = [c for c in checks if c.status == WARN]
