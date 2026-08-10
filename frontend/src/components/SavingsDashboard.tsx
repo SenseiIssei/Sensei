@@ -277,9 +277,11 @@ function OutputShaping({ effect }: { effect: OutputEffect }) {
 // ── page ────────────────────────────────────────────────────────────────────
 
 export function SavingsDashboard({
+  needsSetup = false,
   onOpenChat,
   onOpenSettings,
 }: {
+  needsSetup?: boolean;
   onOpenChat: () => void;
   onOpenSettings: () => void;
 }) {
@@ -426,6 +428,25 @@ export function SavingsDashboard({
         {error && (
           <div className="rounded-lg border border-red-900/60 bg-red-950/30 p-4 text-sm text-red-300">
             {error}
+          </div>
+        )}
+
+        {/* A note, not an interstitial. No provider configured is a normal
+            state for someone routing a subscription through the gateway — it
+            only limits the parts of Sensei that originate a request. */}
+        {needsSetup && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-cyber-border bg-cyber-surface px-4 py-3 text-xs">
+            <span className="text-cyber-text">No model provider configured.</span>
+            <span className="text-cyber-faint">
+              The gateway works regardless — your tools send their own credentials. A provider is
+              only needed for the built-in chat, RAG and the agent.
+            </span>
+            <button
+              onClick={onOpenSettings}
+              className="ml-auto rounded-md border border-cyber-border-bright px-3 py-1.5 text-cyber-dim transition-colors hover:text-[--color-accent]"
+            >
+              Set one up
+            </button>
           </div>
         )}
 

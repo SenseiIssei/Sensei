@@ -36,6 +36,25 @@ const SAVINGS = {
   price_per_million_usd: 3,
 };
 
+/** A real `/api/setup/status` from a machine with nothing configured. The
+ *  wizard renders the catalogue, so a two-field stub leaves it with nothing to
+ *  draw and the test fails for the wrong reason. */
+const NEEDS_SETUP = {
+  ready: false,
+  needs_setup: true,
+  configured_providers: [],
+  active_provider: "openrouter",
+  model_provider: "auto",
+  ollama: { running: false, host: "http://localhost:11434", models: [], active_model: "glm-5.2" },
+  hardware: { os: "Linux", arch: "x86_64", cpu_count: 8, ram_mb: 16000, gpus: [], usable_vram_mb: 0 },
+  recommended_local_model: null,
+  catalog: [
+    { id: "ollama", name: "Ollama (local)", free: true, models: ["glm-5.2"] },
+    { id: "openrouter", name: "OpenRouter", free: true, models: ["openai/gpt-4o"] },
+  ],
+  compression_enabled: true,
+};
+
 test.beforeEach(async ({ page }) => {
   // No backend in E2E — answer the calls the app makes on load.
   await page.route("**/api/conversations", (route) => route.fulfill({ json: [] }));
@@ -58,6 +77,33 @@ test("the dashboard says whether it is actually streaming", async ({ page }) => 
   // that always reads "live". With no backend it must not claim to be live.
   await page.goto("/");
   await expect(page.getByText(/LIVE|POLLING/)).toBeVisible();
+});
+
+test("the setup wizard does not drop on top of the dashboard", async ({ page }) => {
+  // It used to. `setup` starts null, so the dashboard rendered immediately and
+  // the wizard replaced it once the probe came back — 2.7 seconds later on a
+  // machine with no Ollama to find. You read your savings, then lost them.
+  //
+  // The premise was wrong too: `needs_setup` means "no provider of Sensei's
+  // own", and the gateway does not need one — it forwards whatever credential
+  // the calling tool sent. So the dashboard stays and says so.
+  await page.route("**/api/setup/status", (route) => route.fulfill({ json: NEEDS_SETUP }));
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: /SAVINGS/ })).toBeVisible();
+  await expect(page.getByText("No model provider configured.")).toBeVisible();
+
+  // Long enough for the old behaviour to have swapped the view out.
+  await page.waitForTimeout(3000);
+  await expect(page.getByRole("heading", { name: /SAVINGS/ })).toBeVisible();
+});
+
+test("the wizard still guards the chat, which does need a provider", async ({ page }) => {
+  await page.route("**/api/setup/status", (route) => route.fulfill({ json: NEEDS_SETUP }));
+
+  await page.goto("/#/workspace");
+  await expect(page.getByRole("heading", { name: "Welcome to Sensei" })).toBeVisible();
+  await expect(page.getByRole("tablist", { name: "Setup method" })).toBeVisible();
 });
 
 test("chat is reachable from the dashboard header", async ({ page }) => {
