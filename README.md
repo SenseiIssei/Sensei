@@ -116,10 +116,25 @@ save. Done.
 sensei setup-tools
 ```
 
-Sensei finds the AI tools already on your machine — Claude Code, Cursor,
-Windsurf, Cline, Continue, Codex, Aider — and configures them. You are shown
-exactly which files it will touch before it touches them, every one is backed
-up, and `sensei setup-tools --undo` puts them all back.
+Sensei finds the AI tools already on your machine — Claude Code, Claude Desktop,
+Cursor, Windsurf, Cline, Roo, Kilo, Zed, Continue, Codex, Aider — and configures
+them. You are shown exactly which files it will touch before it touches them,
+every one is backed up, and `sensei setup-tools --undo` puts them all back.
+
+Only some of your work should route through it? `sensei setup-tools --project`
+writes the configuration into the current repository instead of the machine, so
+you can commit it for everyone or keep it to one checkout.
+
+To confirm it actually worked rather than assuming:
+
+```bash
+sensei doctor --verify
+```
+
+That sends a real request through the running gateway and reports what came
+back — separately from whether your provider is set up, because "compression is
+broken" and "you haven't added a key yet" are different problems with different
+fixes.
 
 For a tool you launch from a terminal, there is also the no-config version,
 which sets one environment variable for that process and nothing else:

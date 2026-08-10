@@ -95,8 +95,22 @@ def _build_parser() -> argparse.ArgumentParser:
         action="append",
         help="restrict to one tool (repeatable); see --status for the ids",
     )
+    p_tools.add_argument(
+        "--project",
+        nargs="?",
+        const=".",
+        metavar="PATH",
+        help="write per-repository config into PATH (default: here) instead of "
+        "configuring the whole machine",
+    )
 
-    sub.add_parser("doctor", help="check the setup and report what's wrong")
+    p_doctor = sub.add_parser("doctor", help="check the setup and report what's wrong")
+    p_doctor.add_argument(
+        "--verify",
+        action="store_true",
+        help="also send a real request through the running gateway and confirm it "
+        "came back compressed",
+    )
 
     p_models = sub.add_parser("models", help="what this machine can run")
     p_models.add_argument("--pull", metavar="ID", help="download a model with Ollama")
@@ -161,12 +175,13 @@ def main(argv: list[str] | None = None) -> int:
                 dry_run=args.dry_run,
                 include_undetected=args.include_undetected,
                 only=args.only,
+                project=args.project,
             )
 
         if args.command == "doctor":
             from sensei.cli import doctor
 
-            return doctor.run()
+            return doctor.run(verify_routing=args.verify)
 
         if args.command == "models":
             from sensei.cli import models
