@@ -12,6 +12,8 @@ how a working install gets thrown away.
 
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 
@@ -183,6 +185,27 @@ class TestWiredTools:
 
         checks = doctor._wired_tool_checks("http://127.0.0.1:7000")
         assert checks[0].status == doctor.OK
+
+    def test_a_windows_path_survives_json_escaping(self, tmp_path, monkeypatch) -> None:
+        r"""The second half of the same bug, and the reason it took two goes.
+
+        JSON escapes backslashes, so a Windows path is stored with doubled
+        separators and a plain substring test never matches the path as Python
+        knows it. Every Windows user with an MCP-wired tool would be told their
+        working setup was broken.
+        """
+        exe = r"C:\Program Files\Sensei\Sensei.exe"
+        config = tmp_path / "claude_desktop_config.json"
+        config.write_text(json.dumps({"mcpServers": {"sensei": {"command": exe, "args": ["mcp"]}}}))
+        assert "\\\\" in config.read_text(encoding="utf-8")  # the escaping is real
+
+        monkeypatch.setattr(
+            "sensei.integrations._read_manifest",
+            lambda: {"entries": [{"tool_id": "claude-desktop", "path": str(config)}]},
+        )
+        monkeypatch.setattr("sensei.integrations.endpoints", lambda: doctor_endpoints(exe))
+
+        assert doctor._wired_tool_checks("http://127.0.0.1:7000")[0].status == doctor.OK
 
     def test_an_mcp_tool_whose_binary_moved_is_caught(self, tmp_path, monkeypatch) -> None:
         """The staleness this kind of wiring actually suffers from."""
