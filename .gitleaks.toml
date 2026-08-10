@@ -1,0 +1,43 @@
+# gitleaks configuration
+#
+# The nightly Security workflow scans the full history (`fetch-depth: 0`), so a
+# finding cannot be cleared by editing the file at HEAD — the commit that
+# introduced it is still there. Assessed false positives therefore have to be
+# allowlisted here, with the reasoning attached, rather than "fixed".
+#
+# The same rule as `frontend/audit-allowlist.json` applies: an entry is a
+# security decision. If you cannot write down why the match is not a secret,
+# it is a secret.
+
+[extend]
+# Start from the upstream ruleset and only subtract. Replacing it wholesale is
+# how a repo ends up scanning for four things it happens to remember.
+useDefault = true
+
+[allowlist]
+description = "Assessed and not secrets"
+
+paths = [
+  # Redaction tests. The whole point of these files is to contain strings that
+  # look exactly like real credentials — that is what the Redactor is being
+  # asserted against. The values are synthetic: the OpenAI key is 'abcdefghij…'
+  # and the GitHub token is the letter 'a' thirty-six times.
+  '''backend/tests/test_redaction\.py''',
+]
+
+regexes = [
+  # `X-Sensei-Webhook-Token: <token>` in the webhook router's module docstring.
+  # It is placeholder documentation for a header the operator sets themselves
+  # via SENSEI_WEBHOOK_TOKEN; there is no value here to leak.
+  '''X-Sensei-Webhook-Token:\s*<token>''',
+  # Documented environment-variable names, not assignments. `SENSEI_*_API_KEY=`
+  # followed by nothing is what .env.example and the installer emit.
+  '''SENSEI_[A-Z_]*(?:API_KEY|TOKEN|SECRET)=\s*$''',
+]
+
+stopwords = [
+  "example",
+  "placeholder",
+  "changeme",
+  "your-key-here",
+]

@@ -13,6 +13,7 @@ import {
   MessageCircle,
   FolderClosed,
   ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Conversation, StatsResponse } from "@/types";
@@ -26,6 +27,7 @@ interface SidebarProps {
   onDeleteConversation: (id: string) => void;
   onOpenSettings: () => void;
   onOpenStats: () => void;
+  onOpenSavings: () => void;
   tokensSaved: number;
 }
 
@@ -37,6 +39,7 @@ export function Sidebar({
   onDeleteConversation,
   onOpenSettings,
   onOpenStats,
+  onOpenSavings,
   tokensSaved,
 }: SidebarProps) {
   const [models, setModels] = useState<{ id: string; name: string; status: string }[]>([]);
@@ -152,9 +155,12 @@ export function Sidebar({
         </div>
       </div>
 
-      {/* Token Savings Badge */}
+      {/* Token Savings Badge — the number people actually want to click on. */}
       <div className="px-3 py-2 border-t border-gray-800/50">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg glass">
+        <button
+          onClick={onOpenSavings}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg glass glass-hover text-left transition-colors"
+        >
           <Zap className="w-4 h-4 text-sensei-400" />
           <div className="flex-1">
             <p className="text-xs text-gray-500">Tokens Saved</p>
@@ -162,7 +168,8 @@ export function Sidebar({
               {tokensSaved.toLocaleString()}
             </p>
           </div>
-        </div>
+          <ChevronRight className="w-4 h-4 text-gray-600" />
+        </button>
       </div>
 
       {/* Model Status */}

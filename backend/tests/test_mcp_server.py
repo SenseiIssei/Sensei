@@ -29,9 +29,18 @@ def server(tmp_path, monkeypatch):
 async def call(server, name: str, **kwargs) -> str:
     """Invoke a tool the way a client would, and return its text payload."""
     result = await server.call_tool(name, kwargs)
-    # FastMCP returns (content_blocks, structured) across recent versions;
-    # older ones return just the blocks.
-    blocks = result[0] if isinstance(result, tuple) else result
+    # Three shapes across SDK versions, all carrying the same text blocks:
+    #   mcp 2.x        a CallToolResult object with `.content`
+    #   FastMCP recent a (content_blocks, structured) tuple
+    #   FastMCP older  the blocks alone
+    # Normalising here rather than pinning the SDK keeps these tests about
+    # Sensei's tool surface instead of about the SDK's release notes.
+    if hasattr(result, "content"):
+        blocks = result.content
+    elif isinstance(result, tuple):
+        blocks = result[0]
+    else:
+        blocks = result
     return "".join(getattr(b, "text", "") for b in blocks)
 
 

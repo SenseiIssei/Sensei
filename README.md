@@ -91,16 +91,36 @@ Your browser opens and asks you one question: do you want to run a model on your
 own computer (free), or use a service like OpenAI (paste a key). Pick one, click
 save. Done.
 
-**3. Point a tool at it**
+**3. Point your tools at it**
+
+```bash
+sensei setup-tools
+```
+
+Sensei finds the AI tools already on your machine — Claude Code, Cursor,
+Windsurf, Cline, Continue, Codex, Aider — and configures them. You are shown
+exactly which files it will touch before it touches them, every one is backed
+up, and `sensei setup-tools --undo` puts them all back.
+
+For a tool you launch from a terminal, there is also the no-config version,
+which sets one environment variable for that process and nothing else:
 
 ```bash
 sensei wrap claude
 ```
 
-Claude Code now runs through Sensei. Everything works exactly as before.
-
 Same for `codex`, `aider`, `cursor-agent`, `cline`, `continue`, `opencode`,
 `goose` and `crush` — just swap the name.
+
+**4. Watch the number go up**
+
+Open <http://localhost:7000/app/> and click **Tokens Saved**: what you saved
+today, over the last thirty days, and which tool saved it. `sensei stats` prints
+the same thing in the terminal.
+
+The history is a SQLite file on your own disk holding counters and model names —
+no prompts, no responses, nothing transmitted. `SENSEI_SAVINGS_PERSIST=false`
+turns it off and the totals go back to being per-process.
 
 **Or use it as an MCP server**
 
@@ -191,6 +211,7 @@ This matters more than the token savings, so it's worth being specific.
 | 🔒 **Runs only on your machine** | Sensei listens on `127.0.0.1`. Nothing on your network can reach it unless you deliberately change that. |
 | 🚫 **No telemetry, ever** | No analytics, no crash reporting, no "anonymous usage data". Not in any build, not behind any flag. |
 | 📡 **No third-party requests** | The interface loads no fonts, scripts or trackers from anyone. This is checked automatically on every commit. |
+| 💾 **The savings history is a local file** | `SENSEI_SAVINGS_PERSIST` writes counters and a model name per request to a SQLite file next to Sensei. No prompt text, no responses, and nothing leaves the machine. Delete the file, or turn it off. |
 | 🔑 **Your key stays yours** | Sensei forwards your API key to the provider you chose and to nobody else. It's encrypted on disk, never written in plain text. |
 | ✂️ **Secrets stripped** | Optionally, Sensei removes passwords, tokens and keys from prompts before they leave your computer. |
 | 📴 **Works offline** | If the server isn't running, the interface still opens and tells you how to start it. |
@@ -433,7 +454,9 @@ backend/          FastAPI service, compression pipeline, CLI, tests
                   CacheAligner, CCR, ContentRouter
     routers/      gateway, chat, RAG, agent, settings, setup, stats, …
     security/     auth, crypto, vault, redaction, RBAC, OIDC, sessions
-    cli/          up · wrap · doctor · models · stats · chat
+    integrations  writes Sensei into other tools' config files, reversibly
+    savings.py    in-memory totals + the local SQLite savings ledger
+    cli/          up · wrap · setup-tools · doctor · models · stats · chat
   benchmarks/     the compression benchmark
 frontend/         React 19 + Tailwind 4 + Vite 8, PWA
 rust/sensei_core/ optional PyO3 accelerator

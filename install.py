@@ -15,7 +15,8 @@ What it does:
     6. Generates .env file with your configuration
     7. Optionally downloads Ollama models
     8. Runs tests to verify everything works
-    9. Starts the server
+    9. Wires up the AI tools already installed (Claude Code, Cursor, ...)
+   10. Starts the server
 
 Works on: Linux, macOS, Windows
 """
@@ -509,8 +510,35 @@ def main() -> None:
         else:
             warn("Tests skipped")
 
-    # ── Step 7: Start ──
-    step(7, "Ready to launch!")
+    # ── Step 7: Wire up the AI tools already on this machine ──
+    if not use_docker and has_python:
+        step(7, "Connecting your AI tools")
+
+        print()
+        info("Sensei can configure the tools you already have so they route")
+        info("through the compression gateway without you editing any files.")
+        print()
+        info("Every file is backed up first, and this is reversible with:")
+        print(c("    sensei setup-tools --undo", "cyan"))
+        print()
+
+        # Show what would happen before asking. Consent to "we will edit some
+        # config files somewhere" is not consent to anything in particular.
+        run([sys.executable, "-m", "sensei.cli", "setup-tools", "--dry-run"],
+            cwd=str(backend_dir), check=False)
+
+        if prompt_yesno("Apply this configuration?", True):
+            code = run([sys.executable, "-m", "sensei.cli", "setup-tools"],
+                       cwd=str(backend_dir), check=False)
+            if code == 0:
+                ok("Tools connected")
+            else:
+                warn("Some tools need a manual step — see the output above")
+        else:
+            warn("Skipped — run 'sensei setup-tools' whenever you want")
+
+    # ── Step 8: Start ──
+    step(8, "Ready to launch!")
 
     print()
     print(c("  ╔══════════════════════════════════════════════════╗", "green"))
@@ -548,6 +576,10 @@ def main() -> None:
         info(f"Backend:  http://localhost:{port}")
         info("API docs: http://localhost:7000/docs")
 
+    print()
+    info("See what you've saved:")
+    print(c(f"    http://localhost:{port}/app/  →  Tokens Saved", "cyan"))
+    print(c("    sensei stats", "cyan"))
     print()
     info(c("Edit .env anytime to change providers or keys", "dim"))
     info(c("Support the project: https://ko-fi.com/senseiissei", "dim"))

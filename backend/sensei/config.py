@@ -127,6 +127,14 @@ class Settings(BaseSettings):
     output_shaper: bool = False
     # Price assumption for the "money saved" dashboard (USD per 1M input tokens).
     usd_per_million_tokens: float = 3.0
+    # Keep a local ledger of savings so the dashboard survives a restart.
+    # This is not telemetry: the file never leaves the machine, and it stores
+    # counters and a model name per request — never prompt or response text.
+    # Set to false and the totals go back to being per-process and in-memory.
+    savings_persist: bool = True
+    savings_db: str = ".sensei_savings.db"
+    # How long a row is kept. The dashboard's longest view is a year.
+    savings_retention_days: int = 400
     # Compress system prompts at the gateway too (where IDE tools hide most of
     # their tokens). Lossy — disable for byte-exact system prompts.
     gateway_compress_system: bool = True
@@ -256,6 +264,12 @@ class Settings(BaseSettings):
     def session_path(self) -> Path:
         p = Path(self.session_dir)
         p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    @property
+    def savings_db_path(self) -> Path:
+        p = Path(self.savings_db)
+        p.parent.mkdir(parents=True, exist_ok=True)
         return p
 
 

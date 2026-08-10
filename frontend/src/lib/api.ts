@@ -3,6 +3,7 @@ import type {
   ConversationDetail,
   ModelsResponse,
   ProviderModels,
+  SavingsResponse,
   SetupStatus,
   StatsResponse,
 } from "@/types";
@@ -47,6 +48,14 @@ export const api = {
 
   async getStats(): Promise<StatsResponse> {
     return fetchJSON(`${API_BASE}/stats`);
+  },
+
+  async getSavings(): Promise<SavingsResponse> {
+    return fetchJSON(`${API_BASE}/stats/savings`);
+  },
+
+  async forgetSavings(): Promise<{ ok: boolean; message: string }> {
+    return fetchJSON(`${API_BASE}/stats/savings/forget`, { method: "POST" });
   },
 
   async listConversations(): Promise<Conversation[]> {

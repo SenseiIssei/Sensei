@@ -1,6 +1,11 @@
 # Sensei one-command installer (Windows / PowerShell)
-# Usage:  powershell -ExecutionPolicy Bypass -File install.ps1 [-Run]
-param([switch]$Run)
+# Usage:  powershell -ExecutionPolicy Bypass -File install.ps1 [-Run] [-SkipTools]
+#
+# -SkipTools leaves your editors and CLIs untouched. Without it, the installer
+# wires the AI tools it finds on this machine into the gateway — after showing
+# you exactly which files it would change and asking. `sensei setup-tools --undo`
+# reverses all of it.
+param([switch]$Run, [switch]$SkipTools)
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -40,9 +45,23 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
     Write-Host "==> Node not found — skipping web UI build (API + gateway still work)." -ForegroundColor Yellow
 }
 
+# 5. Wire up the AI tools already on this machine
+if (-not $SkipTools) {
+    Write-Host "`n==> AI tools found on this machine"
+    & $vpy -m sensei.cli setup-tools --dry-run
+    $answer = Read-Host "    Apply this configuration? [Y/n]"
+    if ($answer -eq "" -or $answer -match '^[Yy]') {
+        & $vpy -m sensei.cli setup-tools
+    } else {
+        Write-Host "    Skipped. Run '$vpy -m sensei.cli setup-tools' whenever you want."
+    }
+}
+
 Write-Host "`n==> Sensei installed." -ForegroundColor Green
 Write-Host "    Start it:  $vpy -m uvicorn sensei.main:app --app-dir backend --port 7000"
 Write-Host "    Gateway :  point tools at http://localhost:7000/v1 (OpenAI) or http://localhost:7000 (Anthropic)"
+Write-Host "    Savings :  http://localhost:7000/app/  ->  Tokens Saved"
+Write-Host "    Undo    :  $vpy -m sensei.cli setup-tools --undo"
 
 if ($Run) {
     Write-Host "`n==> Starting Sensei on http://localhost:7000" -ForegroundColor Cyan

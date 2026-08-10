@@ -107,6 +107,11 @@ jobs:
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pointed at explicitly rather than relying on root discovery: the
+          # action runs gitleaks with its own working directory, and a config
+          # that is silently not loaded looks identical to one that found
+          # nothing to exclude.
+          GITLEAKS_CONFIG: ${{ github.workspace }}/.gitleaks.toml
 
   container:
     name: trivy (container + filesystem)
