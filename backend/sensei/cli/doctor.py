@@ -148,18 +148,35 @@ async def collect() -> list[Check]:
     if providers:
         checks.append(Check("API keys", OK, f"configured: {', '.join(providers)}"))
     else:
-        checks.append(Check("API keys", WARN, "none configured"))
+        checks.append(
+            Check("API keys", OK, "none — tools will use their own credentials (pass-through)")
+        )
 
     if ollama_up or providers:
         checks.append(Check("Model access", OK, "at least one way to reach a model"))
     else:
+        # Not a failure, and calling it one was wrong for the most common
+        # setup there is.
+        #
+        # The gateway forwards whatever credential the client sent —
+        # `Authorization: Bearer` or `x-api-key` — and only falls back to a
+        # server-configured key when the client sends none. A Claude Code or
+        # Copilot subscription therefore works through Sensei with no key
+        # configured here at all: the tool authenticates as itself and Sensei
+        # only compresses on the way past.
+        #
+        # What genuinely needs a key of Sensei's own is the built-in chat UI,
+        # RAG and the agent — the parts that originate a request rather than
+        # relay one. So this is a warning about those, not a verdict on the
+        # gateway.
         checks.append(
             Check(
                 "Model access",
-                FAIL,
-                "no local model and no API key — Sensei cannot answer anything",
-                "Either install Ollama (free, local) or run 'sensei up' and paste an "
-                "API key into the setup wizard.",
+                WARN,
+                "no key of its own — the gateway still works, the built-in chat does not",
+                "Nothing to do if you only route other tools through Sensei. For the "
+                "chat UI, RAG and the agent: install Ollama, or add a key in the setup "
+                "wizard.",
             )
         )
 
@@ -363,6 +380,22 @@ async def verify() -> list[Check]:
     # a different fix.
     if resp.status_code == 200:
         checks.append(Check("Upstream", OK, "the provider answered"))
+    elif not _configured_providers():
+        # The probe deliberately sends no credential, so with no key of our own
+        # a 502 here is the correct and expected answer — not a fault. Saying
+        # "the model call did not work" to somebody routing a Claude Code
+        # subscription through Sensei describes a problem they do not have and
+        # sends them looking for a key they do not need.
+        checks.append(
+            Check(
+                "Upstream",
+                OK,
+                "pass-through — your tools send their own credentials",
+                "The probe carries none, so it stops here. That is expected: a Claude "
+                "Code or Copilot subscription authenticates as itself and Sensei only "
+                "compresses on the way past.",
+            )
+        )
     else:
         body = resp.text[:120].replace("\n", " ")
         checks.append(

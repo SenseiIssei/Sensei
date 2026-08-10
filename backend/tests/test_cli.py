@@ -126,14 +126,30 @@ class TestHardwareSizing:
 
 
 class TestDoctor:
-    async def test_reports_no_model_access_as_a_failure(self, monkeypatch):
-        """The single most common broken state must be reported, not glossed over."""
+    async def test_no_key_of_its_own_is_a_warning_not_a_failure(self, monkeypatch):
+        """This used to assert FAIL — "Sensei cannot answer anything" — and that
+        was wrong for the most common setup there is.
+
+        The gateway forwards whatever credential the client sent and only falls
+        back to a server-configured key when the client sends none. A Claude
+        Code or Copilot subscription therefore routes through Sensei with no key
+        configured here at all: the tool authenticates as itself and Sensei only
+        compresses on the way past. Verified against the real thing — a request
+        carrying an OAuth bearer reaches Anthropic and comes back with
+        `authentication_error`, which is Anthropic answering, not Sensei
+        refusing.
+
+        What genuinely needs a key of Sensei's own is the built-in chat, RAG and
+        the agent — the parts that originate a request rather than relay one.
+        So the check warns about those and says so.
+        """
         monkeypatch.setattr(doctor_mod, "_ollama_running", _false)
         monkeypatch.setattr(doctor_mod, "_configured_providers", list)
 
         checks = await doctor_mod.collect()
         by_name = {c.name: c for c in checks}
-        assert by_name["Model access"].status == doctor_mod.FAIL
+        assert by_name["Model access"].status == doctor_mod.WARN
+        assert "gateway still works" in by_name["Model access"].detail
         assert "Ollama" in by_name["Model access"].fix
 
     async def test_exposed_without_auth_is_a_failure(self, monkeypatch):
