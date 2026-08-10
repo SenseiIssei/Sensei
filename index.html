@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sensei — compression, measured nightly</title>
+<style>
+  /* No fonts, scripts or images from anywhere. The same rule the app is held
+     to by scripts/check-no-external-assets.mjs applies here: a page that
+     exists to prove a claim about privacy should not phone home to render. */
+  :root {
+    color-scheme: light dark;
+    --bg: #0a0a0f; --fg: #e5e7eb; --dim: #6b7280; --line: #1f2937;
+    --accent: #22c55e; --accent-dim: #16a34a; --warn: #f59e0b;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #ffffff; --fg: #111827; --dim: #6b7280; --line: #e5e7eb; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1rem; background: var(--bg); color: var(--fg);
+    font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 62rem; margin: 0 auto; }
+  h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1rem; margin: 2.5rem 0 .75rem; font-weight: 600; }
+  p.lede { color: var(--dim); margin: 0 0 2rem; }
+  a { color: var(--accent); }
+  .cards { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); }
+  .card { border: 1px solid var(--line); border-radius: .6rem; padding: .9rem 1rem; }
+  .card .k { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); }
+  .card .v { font-size: 1.7rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .card .v.good { color: var(--accent); }
+  .card .s { font-size: .78rem; color: var(--dim); }
+  figure { margin: 0; border: 1px solid var(--line); border-radius: .6rem; padding: 1rem; }
+  figcaption { color: var(--dim); font-size: .8rem; margin-top: .5rem; }
+  svg { display: block; width: 100%; height: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+  th, td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--line); }
+  th { color: var(--dim); font-weight: 500; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .note { border-left: 2px solid var(--warn); padding-left: .9rem; color: var(--dim); font-size: .88rem; }
+  footer { margin-top: 3rem; color: var(--dim); font-size: .8rem; }
+  #empty { color: var(--dim); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Compression, measured nightly</h1>
+  <p class="lede">
+    The README claims 79% fewer tokens. This page is that claim, re-measured
+    every night against the current code, with every run kept.
+  </p>
+
+  <div class="cards" id="cards"></div>
+
+  <h2>Token savings over time</h2>
+  <figure>
+    <svg id="chart" viewBox="0 0 800 220" role="img"
+         aria-label="Aggregate token savings per nightly run"></svg>
+    <figcaption id="chart-caption">Aggregate savings across the benchmark corpus, per run.</figcaption>
+  </figure>
+
+  <h2>Fact retention</h2>
+  <p class="note">
+    Retention is a <strong>necessary condition, not a sufficient one</strong>. It
+    checks that every fact an agent would need — error locations, ids, values,
+    signatures — is still literally present after compression. It does not prove
+    a model answers correctly from the compressed text; that needs a model in
+    the loop and is a separate, opt-in check.
+  </p>
+  <figure>
+    <svg id="retention" viewBox="0 0 800 120" role="img"
+         aria-label="Fact retention per nightly run"></svg>
+  </figure>
+
+  <h2>Every run</h2>
+  <table id="runs"><thead><tr>
+    <th>Date</th><th>Commit</th>
+    <th class="n">Saved</th><th class="n">Rust</th><th class="n">Retention</th>
+  </tr></thead><tbody></tbody></table>
+  <p id="empty" hidden>No runs recorded yet. The first nightly build will fill this in.</p>
+
+  <footer>
+    Generated from <code>history.jsonl</code> by the Nightly workflow.
+    <a href="https://github.com/SenseiIssei/Sensei">Sensei</a> · MIT
+  </footer>
+</main>
+
+<script>
+const REPO = "https://github.com/SenseiIssei/Sensei";
+
+function pct(v) { return v === null || v === undefined ? "—" : v.toFixed(1) + "%"; }
+
+/** Draw a line chart with a filled area. Hand-rolled because a charting
+ *  library would be the only third-party asset on the page. */
+function lineChart(svg, points, { min, max, colour, label }) {
+  const W = 800, H = svg.viewBox.baseVal.height, P = { l: 42, r: 10, t: 12, b: 22 };
+  const iw = W - P.l - P.r, ih = H - P.t - P.b;
+  svg.textContent = "";
+  const ns = "http://www.w3.org/2000/svg";
+  const el = (n, a) => { const e = document.createElementNS(ns, n);
+    for (const k in a) e.setAttribute(k, a[k]); return e; };
+
+  const span = (max - min) || 1;
+  const x = i => P.l + (points.length < 2 ? iw / 2 : (i / (points.length - 1)) * iw);
+  const y = v => P.t + ih - ((v - min) / span) * ih;
+
+  for (let g = 0; g <= 4; g++) {
+    const v = min + (span * g) / 4;
+    const yy = y(v);
+    svg.appendChild(el("line", { x1: P.l, x2: W - P.r, y1: yy, y2: yy,
+      stroke: "currentColor", "stroke-opacity": ".12" }));
+    const t = el("text", { x: P.l - 6, y: yy + 4, "text-anchor": "end",
+      fill: "currentColor", "fill-opacity": ".45", "font-size": "10" });
+    t.textContent = v.toFixed(0) + "%";
+    svg.appendChild(t);
+  }
+
+  if (!points.length) return;
+  const d = points.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(" ");
+  svg.appendChild(el("path", {
+    d: `${d} L${x(points.length - 1)},${P.t + ih} L${x(0)},${P.t + ih} Z`,
+    fill: colour, "fill-opacity": ".12", stroke: "none",
+  }));
+  svg.appendChild(el("path", { d, fill: "none", stroke: colour, "stroke-width": "2" }));
+
+  points.forEach((p, i) => {
+    const c = el("circle", { cx: x(i), cy: y(p.value), r: 2.5, fill: colour });
+    const title = document.createElementNS(ns, "title");
+    title.textContent = `${p.date}: ${p.value.toFixed(1)}% ${label}`;
+    c.appendChild(title);
+    svg.appendChild(c);
+  });
+}
+
+function render(runs) {
+  const cards = document.getElementById("cards");
+  const tbody = document.querySelector("#runs tbody");
+  if (!runs.length) {
+    document.getElementById("empty").hidden = false;
+    return;
+  }
+  const latest = runs[runs.length - 1];
+  const first = runs[0];
+  const delta = latest.saved_pct - first.saved_pct;
+
+  cards.innerHTML = `
+    <div class="card"><div class="k">Latest savings</div>
+      <div class="v good">${pct(latest.saved_pct)}</div>
+      <div class="s">${latest.date}</div></div>
+    <div class="card"><div class="k">Fact retention</div>
+      <div class="v ${latest.retention_pct === 100 ? "good" : ""}">${pct(latest.retention_pct)}</div>
+      <div class="s">necessary condition</div></div>
+    <div class="card"><div class="k">Runs recorded</div>
+      <div class="v">${runs.length}</div>
+      <div class="s">since ${first.date}</div></div>
+    <div class="card"><div class="k">Change since first</div>
+      <div class="v">${delta >= 0 ? "+" : ""}${delta.toFixed(1)}pp</div>
+      <div class="s">aggregate savings</div></div>`;
+
+  const saved = runs.map(r => ({ date: r.date, value: r.saved_pct }));
+  const lo = Math.min(...saved.map(p => p.value)) - 3;
+  const hi = Math.max(...saved.map(p => p.value)) + 3;
+  lineChart(document.getElementById("chart"), saved,
+    { min: Math.max(0, lo), max: Math.min(100, hi), colour: "#22c55e", label: "saved" });
+
+  const ret = runs.filter(r => r.retention_pct != null)
+                  .map(r => ({ date: r.date, value: r.retention_pct }));
+  lineChart(document.getElementById("retention"), ret,
+    { min: 0, max: 100, colour: "#38bdf8", label: "facts retained" });
+
+  tbody.innerHTML = runs.slice().reverse().map(r => `
+    <tr>
+      <td>${r.date}</td>
+      <td><a href="${REPO}/commit/${r.commit}"><code>${String(r.commit).slice(0, 7)}</code></a></td>
+      <td class="n">${pct(r.saved_pct)}</td>
+      <td class="n">${pct(r.rust_saved_pct)}</td>
+      <td class="n">${pct(r.retention_pct)}</td>
+    </tr>`).join("");
+}
+
+fetch("history.jsonl")
+  .then(r => (r.ok ? r.text() : ""))
+  .then(text => {
+    const runs = text.split("\n").filter(Boolean).map(line => {
+      try { return JSON.parse(line); } catch { return null; }
+    }).filter(Boolean);
+    render(runs);
+  })
+  .catch(() => render([]));
+</script>
+</body>
+</html>
