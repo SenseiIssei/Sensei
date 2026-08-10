@@ -58,6 +58,11 @@ jobs:
           CIBW_SKIP: "*-musllinux_i686"
           CIBW_BEFORE_ALL_LINUX: "curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal"
           CIBW_ENVIRONMENT_LINUX: 'PATH="$HOME/.cargo/bin:$PATH"'
+          # The macOS runner is arm64 and this matrix entry builds both arches.
+          # Without the x86_64 target installed, the Intel wheel fails deep in a
+          # dependency with `can't find crate for 'core'`, which reads like a
+          # broken toolchain rather than a missing cross-compilation target.
+          CIBW_BEFORE_ALL_MACOS: "rustup target add x86_64-apple-darwin aarch64-apple-darwin"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: wheels-${{ matrix.os }}
@@ -269,6 +274,13 @@ jobs:
           cache: npm
           cache-dependency-path: extensions/vscode/package-lock.json
       - run: npm ci
+      # `main` is ./dist/extension.js, which esbuild produces. Packaging without
+      # compiling first fails with "Extension entrypoint(s) missing", which is
+      # what every release attempt did until v0.1.0 — the workflow called vsce
+      # directly instead of the package.json script that compiles first.
+      # `vscode:prepublish` now covers anyone who runs vsce by hand; this stays
+      # explicit so a CI reader can see the build step exists.
+      - run: npm run compile
       - run: npx vsce package --no-dependencies --out sensei.vsix
       - name: Publish to the VS Code Marketplace
         if: env.VSCE_PAT != ''

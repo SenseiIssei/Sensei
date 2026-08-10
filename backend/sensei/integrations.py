@@ -79,11 +79,23 @@ def endpoints(host: str | None = None, port: int | None = None) -> Endpoints:
     if h in ("0.0.0.0", "::", ""):  # noqa: S104 — comparison, not a bind
         h = "127.0.0.1"
     base = f"http://{h}:{port or settings.port}"
-    # `sensei` is on PATH after a pip install, but a PyInstaller build or a venv
-    # that is not activated is not. sys.executable -m is the form that always
-    # resolves, so prefer the console script only when it is actually findable.
-    command = "sensei" if shutil.which("sensei") else sys.executable
-    args: tuple[str, ...] = ("mcp",) if command == "sensei" else ("-m", "sensei.cli", "mcp")
+    command: str
+    args: tuple[str, ...]
+    # How an MCP client should spawn Sensei. Three cases, and getting the third
+    # wrong writes a broken server entry into someone's editor config:
+    #
+    #   frozen binary  the executable *is* sensei — `-m sensei.cli` is not a
+    #                  thing it can do, and PyInstaller's sys.executable points
+    #                  at the bundle, so the module form produces
+    #                  `sensei.exe -m sensei.cli mcp`, which fails at startup
+    #   on PATH        the console script, which is stable across venv changes
+    #   otherwise      this interpreter plus the module, which always resolves
+    if getattr(sys, "frozen", False):
+        command, args = sys.executable, ("mcp",)
+    elif shutil.which("sensei"):
+        command, args = "sensei", ("mcp",)
+    else:
+        command, args = sys.executable, ("-m", "sensei.cli", "mcp")
     return Endpoints(anthropic=base, openai=f"{base}/v1", mcp_command=command, mcp_args=args)
 
 

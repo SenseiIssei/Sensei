@@ -11,8 +11,16 @@ from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_submodules
 
-root = Path(SPECPATH).resolve().parents[0]
-repo = root.parent
+# SPECPATH is the directory holding this file, i.e. <repo>/packaging. So the
+# repository root is exactly one level up.
+#
+# This read `.parents[0]` and then `.parent` again, which lands one level above
+# the checkout — `ERROR: script '/home/runner/work/Sensei/packaging/launcher.py'
+# not found`, missing the second `Sensei/`. Every installer job had been failing
+# on it, which nobody saw because the release workflow had never been run: there
+# were no tags in the repository at all until v0.1.0.
+here = Path(SPECPATH).resolve()
+repo = here.parent
 
 # Bundle the built web UI if it exists.
 datas = []
