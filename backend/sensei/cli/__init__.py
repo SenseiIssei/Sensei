@@ -6,6 +6,7 @@ look up per tool. This replaces all of that:
 
     sensei up              start the server and open the web UI
     sensei wrap claude     route Claude Code through the compression gateway
+    sensei setup-tools     wire every AI tool on this machine into Sensei
     sensei doctor          find out exactly why something isn't working
     sensei models          what your machine can run, and what it already has
     sensei stats           tokens and dollars saved
@@ -38,6 +39,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "  sensei up --expose           also serve it to your local network\n"
             "  sensei wrap claude           run Claude Code through Sensei\n"
             "  sensei wrap aider -- --model gpt-4o\n"
+            "  sensei setup-tools --dry-run see what would be configured\n"
+            "  sensei setup-tools           wire up Cursor, Cline, Codex, ...\n"
             "  sensei doctor                diagnose a broken setup\n"
             "  sensei models --pull llama3.2:3b\n"
             "  sensei mcp                   serve compression as MCP tools\n"
@@ -68,6 +71,29 @@ def _build_parser() -> argparse.ArgumentParser:
     p_wrap.add_argument("tool", nargs="?", help="claude, codex, aider, cline, goose, ...")
     p_wrap.add_argument(
         "args", nargs=argparse.REMAINDER, help="arguments passed through to the tool"
+    )
+
+    p_tools = sub.add_parser(
+        "setup-tools",
+        help="wire every AI tool on this machine into Sensei",
+        description="The counterpart to `wrap`: `wrap` routes a tool you launch from a "
+        "terminal, this one edits the config files of tools you launch by clicking an "
+        "icon. Every file is backed up first and every edit is reversible with --undo.",
+    )
+    p_tools.add_argument("--dry-run", action="store_true", help="show changes, write nothing")
+    p_tools.add_argument("--status", action="store_true", help="what is installed and wired")
+    p_tools.add_argument("--undo", action="store_true", help="put every edited file back")
+    p_tools.add_argument(
+        "--all",
+        dest="include_undetected",
+        action="store_true",
+        help="configure tools that aren't installed yet, so they work when you install them",
+    )
+    p_tools.add_argument(
+        "--only",
+        metavar="ID",
+        action="append",
+        help="restrict to one tool (repeatable); see --status for the ids",
     )
 
     sub.add_parser("doctor", help="check the setup and report what's wrong")
@@ -125,6 +151,17 @@ def main(argv: list[str] | None = None) -> int:
             # argparse.REMAINDER keeps a leading "--" separator; drop it.
             passthrough = args.args[1:] if args.args[:1] == ["--"] else args.args
             return wrap.run(args.tool, passthrough)
+
+        if args.command == "setup-tools":
+            from sensei.cli import setup_tools
+
+            return setup_tools.run(
+                undo=args.undo,
+                show_status=args.status,
+                dry_run=args.dry_run,
+                include_undetected=args.include_undetected,
+                only=args.only,
+            )
 
         if args.command == "doctor":
             from sensei.cli import doctor

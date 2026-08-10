@@ -80,6 +80,52 @@ def _savings(before: int, after: int, saved: int, blocks: int) -> dict[str, Any]
     }
 
 
+# Which client sent this. Ordered most- to least-specific, because several of
+# these ship an SDK string as well as their own — Claude Code sends both
+# "claude-cli" and "anthropic-sdk-python", and attributing its savings to the
+# SDK would merge four different tools into one bar on the dashboard.
+_CLIENT_SIGNATURES: tuple[tuple[str, str], ...] = (
+    ("claude-cli", "Claude Code"),
+    ("claude-code", "Claude Code"),
+    ("cursor", "Cursor"),
+    ("windsurf", "Windsurf"),
+    ("codex", "Codex"),
+    ("aider", "Aider"),
+    ("cline", "Cline"),
+    ("continue", "Continue"),
+    ("opencode", "opencode"),
+    ("goose", "Goose"),
+    ("crush", "Crush"),
+    ("zed", "Zed"),
+    ("copilot", "Copilot"),
+    ("sensei", "Sensei UI"),
+    # SDKs last: a bare SDK string means "something we don't have a name for",
+    # which is still more useful on a chart than "unknown".
+    ("anthropic", "Anthropic SDK"),
+    ("openai", "OpenAI SDK"),
+    ("langchain", "LangChain"),
+    ("litellm", "LiteLLM"),
+    ("httpx", "httpx"),
+    ("curl", "curl"),
+)
+
+
+def _client_name(request: Request) -> str:
+    """A stable, human-readable name for whatever sent this request.
+
+    An explicit ``X-Sensei-Client`` header wins, so a tool that wants to be
+    labelled correctly can say so instead of being pattern-matched.
+    """
+    explicit = request.headers.get("x-sensei-client", "").strip()
+    if explicit:
+        return explicit[:64]
+    agent = request.headers.get("user-agent", "").lower()
+    for needle, label in _CLIENT_SIGNATURES:
+        if needle in agent:
+            return label
+    return ""
+
+
 def _savings_headers(savings: dict[str, Any]) -> dict[str, str]:
     return {
         "X-Sensei-Tokens-Saved": str(savings.get("tokens_saved", 0)),
@@ -258,11 +304,17 @@ async def _forward(
     stream: bool,
     meta: dict[str, Any] | None = None,
     redactions: int = 0,
+    tool: str = "",
 ) -> Any:
     headers = _savings_headers(savings)
     if redactions:
         headers["X-Sensei-Redactions"] = str(redactions)
-    get_savings_tracker().record(savings)
+    get_savings_tracker().record(
+        savings,
+        tool=tool,
+        provider=str((meta or {}).get("provider") or (meta or {}).get("api") or ""),
+        model=str((meta or {}).get("model") or ""),
+    )
     if meta is not None:
         from sensei.audit import get_audit_log
 
@@ -365,6 +417,7 @@ async def chat_completions(request: Request) -> Any:
         savings=savings,
         stream=bool(payload.get("stream")),
         redactions=red_total,
+        tool=_client_name(request),
         meta={
             "api": "openai",
             "provider": provider.provider_name,
@@ -439,6 +492,7 @@ async def messages_anthropic(request: Request) -> Any:
         savings=savings,
         stream=bool(payload.get("stream")),
         redactions=red_total,
+        tool=_client_name(request),
         meta={
             "api": "anthropic",
             "model": payload.get("model"),

@@ -32,6 +32,8 @@ logs/
 .sensei_vault.json
 .sensei_rag.json
 .sensei_watch.json
+# The savings ledger, plus the -wal/-shm files SQLite keeps beside it in WAL mode.
+.sensei_savings.db*
 /models/
 *.gguf
 *.safetensors

@@ -1,10 +1,45 @@
 # What's next
 
-Written 2026-07-27, after Phase 2 and the MCP server landed. This is the
-handover document: enough context that someone picking this up cold — including
-me, in six months — knows what to do and why, without re-deriving it.
+Written 2026-07-27, after Phase 2 and the MCP server landed. Revised 2026-08-10.
+This is the handover document: enough context that someone picking this up cold
+— including me, in six months — knows what to do and why, without re-deriving it.
 
 The strategic picture is in [MEGAPLAN.md](MEGAPLAN.md). This is the queue.
+
+---
+
+## Landed since this was written (2026-08-10)
+
+- **`sensei setup-tools`** — the config-file counterpart to `wrap`. Detects the
+  AI tools on the machine and writes the routing into their own configuration:
+  Claude Code, Cursor, Windsurf, Cline, Continue, Gemini CLI, opencode as JSON;
+  Codex and Aider as a marker-delimited appended block, because TOML and YAML
+  have no writer in the standard library and this project is not taking a
+  dependency for one. Backed up, idempotent, `--undo`, `--dry-run`. Wired into
+  `install.py` and `install.ps1`, so a fresh install ends with everything
+  already routed. See `sensei/integrations.py`.
+- **A savings ledger that survives a restart.** `SavingsTracker` was in-memory
+  only, which meant the answer to "how much have I saved" was always "since the
+  last time you closed the lid". There is now a local SQLite ledger recording
+  counters, tool, provider and model per request — no prompt text — behind
+  `SENSEI_SAVINGS_PERSIST`.
+- **The savings dashboard.** `/app/` → *Tokens Saved*: lifetime and session
+  totals, a 30-day chart, and breakdowns by tool, provider and model. The chart
+  is hand-drawn SVG; a charting library does not fit in the 450 kB budget.
+- **Security workflow back to green.** Three findings, all real, none of them a
+  vulnerability in Sensei: nanoid pinned to the patched 3.3.17+ via an override,
+  three transitive advisories in the extension's lockfile, and two gitleaks
+  false positives — the redaction test corpus and a placeholder in a docstring —
+  allowlisted with reasons in `.gitleaks.toml`.
+
+### Where Headroom is now ahead
+
+Worth checking before planning Phase 3, because it is the same problem being
+solved twice. Headroom has since shipped **output-token reduction** (verbosity
+steering and effort routing, which is exactly the item below), **cross-agent
+memory**, `headroom learn` for mining failed sessions, and Copilot-CLI OAuth
+support. The output-shaping design below was written independently and still
+holds — in particular the holdout requirement, which is the part worth keeping.
 
 ---
 

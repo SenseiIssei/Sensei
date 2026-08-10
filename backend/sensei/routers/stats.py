@@ -42,6 +42,43 @@ async def get_stats() -> dict[str, Any]:
     }
 
 
+@router.get("/savings")
+async def get_savings() -> dict[str, Any]:
+    """Everything the dashboard needs, in one request.
+
+    Deliberately one endpoint rather than four: the page draws a single
+    coherent picture, and four independent fetches would let it render a
+    lifetime total next to a daily series computed a second later.
+    """
+    tracker = get_savings_tracker()
+    ledger = tracker.ledger
+    return {
+        "session": tracker.snapshot(),
+        "lifetime": ledger.totals(),
+        "daily": ledger.daily(days=30),
+        "by_tool": ledger.breakdown("tool"),
+        "by_provider": ledger.breakdown("provider"),
+        "by_model": ledger.breakdown("model"),
+        "persisted": settings.savings_persist,
+        "price_per_million_usd": settings.usd_per_million_tokens,
+    }
+
+
+@router.get("/savings/daily")
+async def get_savings_daily(days: int = 30) -> dict[str, Any]:
+    """The time series on its own, for a longer window than the page loads."""
+    return {"daily": get_savings_tracker().ledger.daily(days=days)}
+
+
+@router.post("/savings/forget")
+async def forget_savings() -> dict[str, Any]:
+    """Delete the local history. There is no copy of it anywhere else."""
+    tracker = get_savings_tracker()
+    tracker.ledger.clear()
+    tracker.reset()
+    return {"ok": True, "message": "Savings history deleted."}
+
+
 @router.get("/ccr/{ccr_id}")
 async def get_ccr_info(ccr_id: str) -> dict[str, Any]:
     """Get info about a specific CCR entry."""

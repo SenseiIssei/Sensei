@@ -131,6 +131,55 @@ export interface StatsResponse {
   savings?: SavingsStats;
 }
 
+/** One day's bucket in the savings history. Days with no traffic are present
+ *  with zeroes rather than absent — see the backend's `daily()`. */
+export interface SavingsDay {
+  date: string;
+  tokens_before: number;
+  tokens_after: number;
+  tokens_saved: number;
+  requests: number;
+  estimated_cost_saved_usd: number;
+}
+
+/** Savings grouped by tool, provider or model. */
+export interface SavingsSlice {
+  key: string;
+  tokens_before: number;
+  tokens_after: number;
+  tokens_saved: number;
+  requests: number;
+  percent_saved: number;
+  estimated_cost_saved_usd: number;
+}
+
+export interface SavingsTotals {
+  requests: number;
+  tokens_before: number;
+  tokens_after: number;
+  tokens_saved: number;
+  blocks_compressed: number;
+  compression_ratio: number;
+  percent_saved: number;
+  estimated_cost_saved_usd: number;
+  price_per_million_usd: number;
+  since: number;
+}
+
+export interface SavingsResponse {
+  /** Since this server process started. */
+  session: SavingsTotals;
+  /** Everything in the local ledger, across every run. */
+  lifetime: SavingsTotals;
+  daily: SavingsDay[];
+  by_tool: SavingsSlice[];
+  by_provider: SavingsSlice[];
+  by_model: SavingsSlice[];
+  /** False when SENSEI_SAVINGS_PERSIST is off — lifetime then equals session. */
+  persisted: boolean;
+  price_per_million_usd: number;
+}
+
 export interface WSMeta {
   type: "meta";
   conversation_id: string;

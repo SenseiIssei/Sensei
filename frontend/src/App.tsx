@@ -3,6 +3,7 @@ import { Menu } from "lucide-react";
 import { Sidebar, StatsPanel, SettingsPanel } from "@/components/Sidebar";
 import { ChatView } from "@/components/ChatView";
 import { SetupWizard } from "@/components/SetupWizard";
+import { SavingsDashboard } from "@/components/SavingsDashboard";
 import { ConnectionBanner } from "@/components/ConnectionBanner";
 import { useChat } from "@/hooks/useChat";
 import { api } from "@/lib/api";
@@ -11,6 +12,7 @@ import type { Conversation, SetupStatus } from "@/types";
 export default function App() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [showStats, setShowStats] = useState(false);
+  const [showSavings, setShowSavings] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [setup, setSetup] = useState<SetupStatus | null>(null);
@@ -100,6 +102,12 @@ export default function App() {
     return <SetupWizard status={setup} onDone={handleSetupDone} />;
   }
 
+  // A full view rather than a slide-over: this is the page people open on a
+  // second monitor and leave there, and a drawer over the chat cannot be that.
+  if (showSavings) {
+    return <SavingsDashboard onClose={() => setShowSavings(false)} />;
+  }
+
   return (
     <div className="relative flex h-dvh w-full overflow-hidden">
       <ConnectionBanner />
@@ -131,6 +139,10 @@ export default function App() {
           onDeleteConversation={handleDeleteConversation}
           onOpenSettings={() => setShowSettings(true)}
           onOpenStats={() => setShowStats(true)}
+          onOpenSavings={() => {
+            setSidebarOpen(false);
+            setShowSavings(true);
+          }}
           tokensSaved={tokensSaved}
         />
       </div>

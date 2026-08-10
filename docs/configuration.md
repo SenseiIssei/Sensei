@@ -192,6 +192,9 @@ Webhooks and external channels.
 | `SENSEI_API_BASE_URL` | _(empty)_ |
 | `SENSEI_API_KEY` | _(empty)_ |
 | `SENSEI_API_MODEL` | _(empty)_ |
+| `SENSEI_SAVINGS_DB` | `.sensei_savings.db` |
+| `SENSEI_SAVINGS_PERSIST` | `true` |
+| `SENSEI_SAVINGS_RETENTION_DAYS` | `400` |
 
 ## Notes on a few that matter
 
