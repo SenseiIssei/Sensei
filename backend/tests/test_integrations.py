@@ -19,11 +19,20 @@ from sensei.integrations import Endpoints, Integration
 
 @pytest.fixture
 def sandbox(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Point Sensei's bookkeeping at a temporary directory."""
+    """Point Sensei's bookkeeping at a temporary directory.
+
+    `mcp_available` is pinned true because most of these assert that an MCP
+    server entry gets written, and whether it does depends on the optional
+    `mcp` extra being installed. Left to the environment, the suite passes on a
+    developer machine with the extra and fails in CI without it — which is
+    exactly what happened. The one place that behaviour is under test pins it
+    explicitly instead.
+    """
     home = tmp_path / "sensei-home"
     monkeypatch.setattr(integrations, "SENSEI_HOME", home)
     monkeypatch.setattr(integrations, "MANIFEST_PATH", home / "integrations.json")
     monkeypatch.setattr(integrations, "BACKUP_ROOT", home / "backups")
+    monkeypatch.setattr(integrations, "mcp_available", lambda: True)
     return tmp_path
 
 
