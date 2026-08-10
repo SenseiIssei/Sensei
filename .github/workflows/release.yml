@@ -163,7 +163,12 @@ jobs:
       - name: Install build deps
         run: |
           pip install pyinstaller
-          pip install -e ./backend
+          # The `mcp` extra has to be present at build time or PyInstaller has
+          # nothing to bundle. Without it the binary ships a `sensei mcp` that
+          # dies with ModuleNotFoundError — and `setup-tools` writes that
+          # command into seven editors, every one of which then reports
+          # "Server disconnected" with no indication of why.
+          pip install -e "./backend[mcp]"
 
       - name: Build the binary
         run: pyinstaller packaging/sensei.spec --noconfirm --distpath dist-app

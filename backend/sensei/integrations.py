@@ -30,6 +30,7 @@ more careful than one that doesn't:
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -66,6 +67,11 @@ class Endpoints:
     openai: str  # http://127.0.0.1:7000/v1
     mcp_command: str  # "sensei"
     mcp_args: tuple[str, ...] = ("mcp",)
+    # Whether `sensei mcp` can actually start. False means the optional `mcp`
+    # extra is missing, and writing a server entry anyway produces exactly one
+    # symptom in every editor that reads it: "Server disconnected", with no
+    # hint that a Python package is the reason.
+    mcp_ready: bool = True
 
 
 def endpoints(host: str | None = None, port: int | None = None) -> Endpoints:
@@ -96,7 +102,24 @@ def endpoints(host: str | None = None, port: int | None = None) -> Endpoints:
         command, args = "sensei", ("mcp",)
     else:
         command, args = sys.executable, ("-m", "sensei.cli", "mcp")
-    return Endpoints(anthropic=base, openai=f"{base}/v1", mcp_command=command, mcp_args=args)
+    return Endpoints(
+        anthropic=base,
+        openai=f"{base}/v1",
+        mcp_command=command,
+        mcp_args=args,
+        mcp_ready=mcp_available(),
+    )
+
+
+def mcp_available() -> bool:
+    """Can this build actually serve MCP?
+
+    `sensei mcp` needs the optional `mcp` extra. A PyInstaller binary built
+    without it starts, reports its version, wires up base URLs — and then dies
+    with ModuleNotFoundError the moment an editor spawns it. Checked here so a
+    server entry is never written for a command that cannot run.
+    """
+    return importlib.util.find_spec("mcp") is not None
 
 
 # ── Result of touching one tool ─────────────────────────────────────────────
@@ -291,6 +314,10 @@ def _mcp_entry(ep: Endpoints) -> dict[str, Any]:
 
 def _mcp_apply(root: tuple[str, ...]) -> Callable[[dict[str, Any], Endpoints], bool]:
     def apply(doc: dict[str, Any], ep: Endpoints) -> bool:
+        if not ep.mcp_ready:
+            # Better to write nothing than a server the editor will fail to
+            # start on every launch.
+            return False
         return _deep_set(doc, (*root, "sensei"), _mcp_entry(ep))
 
     return apply
@@ -308,6 +335,10 @@ def _claude_code_apply(doc: dict[str, Any], ep: Endpoints) -> bool:
     # file and injects it into every session. The API key is deliberately left
     # alone: Sensei forwards the user's own key, it does not replace it.
     changed = _deep_set(doc, ("env", "ANTHROPIC_BASE_URL"), ep.anthropic)
+    if not ep.mcp_ready:
+        # The routing half is what matters for Claude Code and it works
+        # regardless; the tools are a bonus this build cannot provide.
+        return changed
     return _deep_set(doc, ("mcpServers", "sensei"), _mcp_entry(ep)) or changed
 
 
