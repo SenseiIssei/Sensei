@@ -9,10 +9,10 @@ import { useChat } from "@/hooks/useChat";
 import { api } from "@/lib/api";
 import type { Conversation, SetupStatus } from "@/types";
 
-export default function App() {
+export default function App({ initialView = "savings" }: { initialView?: "savings" | "chat" } = {}) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [showStats, setShowStats] = useState(false);
-  const [showSavings, setShowSavings] = useState(false);
+  const [showSavings, setShowSavings] = useState(initialView === "savings");
   const [showSettings, setShowSettings] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [setup, setSetup] = useState<SetupStatus | null>(null);
@@ -102,10 +102,19 @@ export default function App() {
     return <SetupWizard status={setup} onDone={handleSetupDone} />;
   }
 
-  // A full view rather than a slide-over: this is the page people open on a
-  // second monitor and leave there, and a drawer over the chat cannot be that.
+  // Savings is the landing view, not something you click through the chat to
+  // find. It is the reason the product exists and the only screen that changes
+  // on its own; the chat is a feature of it rather than the other way round.
   if (showSavings) {
-    return <SavingsDashboard onClose={() => setShowSavings(false)} />;
+    return (
+      <SavingsDashboard
+        onOpenChat={() => setShowSavings(false)}
+        onOpenSettings={() => {
+          setShowSavings(false);
+          setShowSettings(true);
+        }}
+      />
+    );
   }
 
   return (

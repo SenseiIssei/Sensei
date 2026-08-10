@@ -62,7 +62,7 @@ describe("SavingsDashboard", () => {
       })
     );
 
-    render(<SavingsDashboard onClose={() => {}} />);
+    render(<SavingsDashboard onOpenChat={() => {}} onOpenSettings={() => {}} />);
 
     expect(await screen.findByText("4.00M")).toBeInTheDocument();
     expect(screen.getByText("$12.00")).toBeInTheDocument();
@@ -73,7 +73,7 @@ describe("SavingsDashboard", () => {
 
   it("tells you what to run when nothing has gone through yet", async () => {
     reply(response());
-    render(<SavingsDashboard onClose={() => {}} />);
+    render(<SavingsDashboard onOpenChat={() => {}} onOpenSettings={() => {}} />);
 
     expect(await screen.findByText(/No requests have gone through yet/)).toBeInTheDocument();
     expect(screen.getByText("sensei setup-tools")).toBeInTheDocument();
@@ -86,14 +86,14 @@ describe("SavingsDashboard", () => {
         lifetime: totals({ requests: 1, tokens_saved: 900, estimated_cost_saved_usd: 0.0027 }),
       })
     );
-    render(<SavingsDashboard onClose={() => {}} />);
+    render(<SavingsDashboard onOpenChat={() => {}} onOpenSettings={() => {}} />);
 
     expect(await screen.findByText("$0.0027")).toBeInTheDocument();
   });
 
   it("says so when history is turned off, instead of silently under-reporting", async () => {
     reply(response({ persisted: false, lifetime: totals({ requests: 5 }) }));
-    render(<SavingsDashboard onClose={() => {}} />);
+    render(<SavingsDashboard onOpenChat={() => {}} onOpenSettings={() => {}} />);
 
     expect(await screen.findByText(/SENSEI_SAVINGS_PERSIST=false/)).toBeInTheDocument();
   });
@@ -101,7 +101,7 @@ describe("SavingsDashboard", () => {
   it("requires a second click before deleting history", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     reply(response({ lifetime: totals({ requests: 9 }) }));
-    render(<SavingsDashboard onClose={() => {}} />);
+    render(<SavingsDashboard onOpenChat={() => {}} onOpenSettings={() => {}} />);
 
     const button = await screen.findByRole("button", { name: /Delete history/ });
     const callsBefore = vi.mocked(fetch).mock.calls.length;
@@ -136,7 +136,7 @@ describe("SavingsDashboard", () => {
         },
       })
     );
-    render(<SavingsDashboard onClose={() => {}} />);
+    render(<SavingsDashboard onOpenChat={() => {}} onOpenSettings={() => {}} />);
 
     expect(await screen.findByText(/22.5%/)).toBeInTheDocument();
     expect(screen.getByText(/37.5%/)).toBeInTheDocument();
@@ -159,7 +159,7 @@ describe("SavingsDashboard", () => {
         },
       })
     );
-    render(<SavingsDashboard onClose={() => {}} />);
+    render(<SavingsDashboard onOpenChat={() => {}} onOpenSettings={() => {}} />);
 
     expect(await screen.findByText("Not enough data yet.")).toBeInTheDocument();
     expect(screen.getByText(/19 more request/)).toBeInTheDocument();
@@ -168,7 +168,7 @@ describe("SavingsDashboard", () => {
 
   it("hides the panel entirely when shaping is off", async () => {
     reply(response({ lifetime: totals({ requests: 9 }) }));
-    render(<SavingsDashboard onClose={() => {}} />);
+    render(<SavingsDashboard onOpenChat={() => {}} onOpenSettings={() => {}} />);
 
     await screen.findByText("Tokens saved");
     expect(screen.queryByText("Output shaping")).not.toBeInTheDocument();
@@ -176,7 +176,7 @@ describe("SavingsDashboard", () => {
 
   it("reports an unreachable backend instead of showing zeroes", async () => {
     vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
-    render(<SavingsDashboard onClose={() => {}} />);
+    render(<SavingsDashboard onOpenChat={() => {}} onOpenSettings={() => {}} />);
 
     expect(await screen.findByText(/Is the server running/)).toBeInTheDocument();
     // Zeroes would be a lie — they would read as "you have saved nothing".

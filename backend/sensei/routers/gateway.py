@@ -120,11 +120,23 @@ def _client_name(request: Request) -> str:
     explicit = request.headers.get("x-sensei-client", "").strip()
     if explicit:
         return explicit[:64]
-    agent = request.headers.get("user-agent", "").lower()
+    raw = request.headers.get("user-agent", "").strip()
+    agent = raw.lower()
     for needle, label in _CLIENT_SIGNATURES:
         if needle in agent:
             return label
-    return ""
+
+    # Fall back to the agent's own name rather than dropping it. An unmatched
+    # client used to be recorded as "" and rendered as "unknown", which is a
+    # dead end: you cannot tell whether it was a tool worth adding to the table
+    # above or a stray curl. `python-httpx/0.28` tells you which, and takes one
+    # line to act on.
+    #
+    # Only the product token — everything before the first space — so a UA
+    # carrying an OS build and a locale does not become a chart label nobody
+    # can read, and so two versions of the same tool group together.
+    product = raw.split(" ", 1)[0].split("/", 1)[0]
+    return product[:64] if product else ""
 
 
 def _completion_tokens(data: dict[str, Any]) -> int:
