@@ -68,9 +68,14 @@ async def test_a_dead_server_says_how_to_start_it(monkeypatch: pytest.MonkeyPatc
 async def test_compression_is_confirmed_even_without_an_upstream(
     monkeypatch: pytest.MonkeyPatch, no_wired_tools
 ) -> None:
-    """The important case. A machine mid-setup has no key, so the model call
-    502s — but the savings headers are attached before forwarding, so this can
-    still prove the half that matters is working."""
+    """A configured provider that is failing. The savings headers are attached
+    before the request is forwarded, so compression can still be confirmed even
+    though the model call did not complete.
+
+    A provider is configured here on purpose: with none, a 502 means
+    pass-through rather than breakage, which is the case above.
+    """
+    monkeypatch.setattr(doctor, "_configured_providers", lambda: ["openrouter"])
     monkeypatch.setattr(
         httpx.AsyncClient,
         "post",
@@ -92,6 +97,57 @@ async def test_compression_is_confirmed_even_without_an_upstream(
     assert status["Compression"] == doctor.OK
     # Not a failure: it is a different problem with a different fix.
     assert status["Upstream"] == doctor.WARN
+
+
+async def test_pass_through_is_not_reported_as_a_broken_upstream(
+    monkeypatch: pytest.MonkeyPatch, no_wired_tools
+) -> None:
+    """The most common real setup: a Claude Code subscription and no API key.
+
+    The gateway forwards whatever credential the client sent, so a subscription
+    works through Sensei with nothing configured here. The probe deliberately
+    carries no credential, so its 502 is the expected answer rather than a
+    fault — and telling that user "the model call did not work" sends them
+    hunting for a key they do not need.
+    """
+    monkeypatch.setattr(doctor, "_configured_providers", list)
+    monkeypatch.setattr(
+        httpx.AsyncClient,
+        "post",
+        _mock_transport(
+            lambda url, kw: _reply(
+                502,
+                {"X-Sensei-Tokens-Saved": "497", "X-Sensei-Compression-Enabled": "true"},
+                '{"error":{"message":"No API key."}}',
+            )
+        ),
+    )
+
+    checks = await doctor.verify()
+    upstream = next(c for c in checks if c.name == "Upstream")
+    assert upstream.status == doctor.OK
+    assert "pass-through" in upstream.detail
+
+
+async def test_a_configured_provider_that_fails_is_still_reported(
+    monkeypatch: pytest.MonkeyPatch, no_wired_tools
+) -> None:
+    """With a key configured, a 502 is a real problem again."""
+    monkeypatch.setattr(doctor, "_configured_providers", lambda: ["openai"])
+    monkeypatch.setattr(
+        httpx.AsyncClient,
+        "post",
+        _mock_transport(
+            lambda url, kw: _reply(
+                502,
+                {"X-Sensei-Tokens-Saved": "497", "X-Sensei-Compression-Enabled": "true"},
+                '{"error":{"message":"upstream exploded"}}',
+            )
+        ),
+    )
+
+    checks = await doctor.verify()
+    assert next(c for c in checks if c.name == "Upstream").status == doctor.WARN
 
 
 async def test_zero_savings_on_the_probe_is_a_failure(
