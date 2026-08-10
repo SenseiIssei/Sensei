@@ -107,26 +107,30 @@ would be dishonest. Four would help, listed in
 
 ## Phase 3 — finish the compression story
 
-The MCP server is done. Four items left, in leverage order.
+The MCP server is done. Three items left, in leverage order.
 
-### Output-token shaping, with a holdout group
+### ~~Output-token shaping, with a holdout group~~ — done 2026-08-10
 
-Output tokens cost roughly 4-5× input tokens, and Sensei currently does nothing
-about them. `SENSEI_OUTPUT_SHAPER` exists as a flag with no real implementation
-behind it.
+Verbosity steering shipped behind `SENSEI_OUTPUT_SHAPER`, with
+`SENSEI_OUTPUT_HOLDOUT` defaulting to 0.1 and the stats endpoint reporting a
+95% interval — or "not enough data yet" below 30 samples per arm.
 
-Two mechanisms: verbosity steering (system-prompt guidance that trims
-boilerplate from responses) and effort routing (send the easy turns to a
-cheaper/faster model).
+One correction to the plan as written above: it said "system-prompt guidance",
+and the system prompt is the one place the instruction must not go. It is the
+cached prefix that `CacheAligner` exists to keep byte-identical; appending to it
+would invalidate the provider cache on every request and cost more latency than
+the shaping saves. The instruction goes on the last user message instead — the
+fresh bytes, which were never part of the cached prefix.
 
-**Do not ship this with a point estimate.** The honest way to measure an
-intervention that changes model behaviour is a holdout: leave a configurable
-fraction of requests unshaped, compare, and report a confidence interval. A
-claimed "31% output saving" with no interval is a number nobody should trust,
-including us. `SENSEI_OUTPUT_HOLDOUT` defaulting to ~0.1 is the shape of it.
+Streaming responses are excluded from the comparison: the usage block arrives in
+a terminal event the proxy passes through untouched, and reconstructing it would
+mean parsing the stream on the hot path. The stats output says so rather than
+quietly measuring a subset.
 
-Acceptance: the stats endpoint reports output savings *with* an interval, and
-says "not enough data yet" until the sample supports one.
+**Effort routing is still open** — sending easy turns to a cheaper model. It was
+left out deliberately rather than half-built: it needs a difficulty classifier
+and a second model configuration, and one measured mechanism is worth more than
+two unmeasured ones.
 
 ### Live-zone compression
 

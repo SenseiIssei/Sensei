@@ -24,6 +24,7 @@ import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from sensei import output_shaping
 from sensei.compression.router import ContentRouter
 from sensei.config import settings
 from sensei.models.api import APIModelProvider
@@ -124,6 +125,26 @@ def _client_name(request: Request) -> str:
         if needle in agent:
             return label
     return ""
+
+
+def _completion_tokens(data: dict[str, Any]) -> int:
+    """How many tokens the model wrote, across both wire formats.
+
+    OpenAI reports `usage.completion_tokens`; Anthropic reports
+    `usage.output_tokens`. Streaming responses are not counted at all — the
+    usage block arrives in a terminal event this proxy passes through
+    untouched, and reconstructing it would mean parsing the stream, which is
+    the one thing a compression proxy should not add to the hot path. The
+    holdout comparison therefore covers non-streaming traffic and says so.
+    """
+    usage = data.get("usage")
+    if not isinstance(usage, dict):
+        return 0
+    for key in ("completion_tokens", "output_tokens"):
+        value = usage.get(key)
+        if isinstance(value, int) and value >= 0:
+            return value
+    return 0
 
 
 def _savings_headers(savings: dict[str, Any]) -> dict[str, str]:
@@ -305,15 +326,22 @@ async def _forward(
     meta: dict[str, Any] | None = None,
     redactions: int = 0,
     tool: str = "",
+    shaped: int = -1,
 ) -> Any:
     headers = _savings_headers(savings)
     if redactions:
         headers["X-Sensei-Redactions"] = str(redactions)
-    get_savings_tracker().record(
+    if shaped >= 0:
+        # Visible to the caller so a holdout assignment can be correlated with
+        # what came back, without having to read the ledger.
+        headers["X-Sensei-Output-Shaped"] = "true" if shaped else "false"
+    tracker = get_savings_tracker()
+    row_id = tracker.record(
         savings,
         tool=tool,
         provider=str((meta or {}).get("provider") or (meta or {}).get("api") or ""),
         model=str((meta or {}).get("model") or ""),
+        shaped=shaped,
     )
     if meta is not None:
         from sensei.audit import get_audit_log
@@ -343,6 +371,8 @@ async def _forward(
         data = resp.json()
         if isinstance(data, dict):
             data["sensei"] = savings
+            if row_id is not None:
+                tracker.ledger.set_output_tokens(row_id, _completion_tokens(data))
         return JSONResponse(status_code=resp.status_code, content=data, headers=headers)
     return JSONResponse(
         status_code=resp.status_code, content={"raw": resp.text, "sensei": savings}, headers=headers
@@ -395,6 +425,15 @@ async def chat_completions(request: Request) -> Any:
             _savings_headers(savings),
         )
 
+    # Shaping runs after compression, so the instruction is not itself
+    # compressed away, and its cost shows up honestly as input tokens.
+    shaped = -1
+    if settings.output_shaper:
+        shaped = int(output_shaping.assign())
+        if shaped:
+            compressed = output_shaping.shape_messages(compressed)
+            savings = output_shaping.account_for_instruction(savings)
+
     payload = dict(body)
     payload["messages"] = compressed
     if not payload.get("model"):
@@ -418,6 +457,7 @@ async def chat_completions(request: Request) -> Any:
         stream=bool(payload.get("stream")),
         redactions=red_total,
         tool=_client_name(request),
+        shaped=shaped,
         meta={
             "api": "openai",
             "provider": provider.provider_name,
@@ -470,6 +510,15 @@ async def messages_anthropic(request: Request) -> Any:
             _savings_headers(savings),
         )
 
+    shaped = -1
+    if settings.output_shaper:
+        shaped = int(output_shaping.assign())
+        if shaped:
+            # `system` stays untouched: it is the cached prefix, which is the
+            # whole reason CacheAligner exists.
+            new_messages = output_shaping.shape_messages(new_messages)
+            savings = output_shaping.account_for_instruction(savings)
+
     payload = dict(body)
     if new_system is not None:
         payload["system"] = new_system
@@ -493,6 +542,7 @@ async def messages_anthropic(request: Request) -> Any:
         stream=bool(payload.get("stream")),
         redactions=red_total,
         tool=_client_name(request),
+        shaped=shaped,
         meta={
             "api": "anthropic",
             "model": payload.get("model"),

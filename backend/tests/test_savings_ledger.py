@@ -72,7 +72,21 @@ def test_nothing_but_counters_is_stored(ledger: SavingsLedger) -> None:
     conn = sqlite3.connect(ledger.path)
     columns = {row[1] for row in conn.execute("PRAGMA table_info(events)")}
     conn.close()
-    assert columns == {"ts", "tool", "provider", "model", "before", "after", "saved", "blocks"}
+    # Every column is a counter, a timestamp, or a short identifier the user
+    # chose to run. Adding one that could hold prompt or response text should
+    # fail here and be argued for in a pull request, not slip in.
+    assert columns == {
+        "ts",
+        "tool",
+        "provider",
+        "model",
+        "before",
+        "after",
+        "saved",
+        "blocks",
+        "output_tokens",
+        "shaped",
+    }
 
 
 def test_daily_fills_the_gaps(ledger: SavingsLedger) -> None:

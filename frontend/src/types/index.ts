@@ -166,6 +166,24 @@ export interface SavingsTotals {
   since: number;
 }
 
+/** The output-shaping holdout comparison.
+ *
+ *  `confidence_interval_95` is absent until both arms have enough samples —
+ *  the backend refuses to report a difference it cannot support, and the UI
+ *  must show that refusal rather than rendering a zero. */
+export interface OutputEffect {
+  enabled: boolean;
+  holdout: number;
+  verdict: string;
+  detail?: string;
+  shaped: { requests: number; mean_output_tokens: number };
+  control: { requests: number; mean_output_tokens: number };
+  difference_tokens?: number;
+  percent?: number;
+  confidence_interval_95?: [number, number];
+  percent_interval_95?: [number, number];
+}
+
 export interface SavingsResponse {
   /** Since this server process started. */
   session: SavingsTotals;
@@ -178,6 +196,7 @@ export interface SavingsResponse {
   /** False when SENSEI_SAVINGS_PERSIST is off — lifetime then equals session. */
   persisted: boolean;
   price_per_million_usd: number;
+  output_effect?: OutputEffect;
 }
 
 export interface WSMeta {

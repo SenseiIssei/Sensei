@@ -119,6 +119,61 @@ describe("SavingsDashboard", () => {
     );
   });
 
+  it("shows the interval, not just the headline percentage", async () => {
+    reply(
+      response({
+        lifetime: totals({ requests: 400 }),
+        output_effect: {
+          enabled: true,
+          holdout: 0.1,
+          verdict: "shorter answers",
+          shaped: { requests: 360, mean_output_tokens: 280 },
+          control: { requests: 40, mean_output_tokens: 400 },
+          difference_tokens: 120,
+          percent: 30,
+          confidence_interval_95: [90, 150],
+          percent_interval_95: [22.5, 37.5],
+        },
+      })
+    );
+    render(<SavingsDashboard onClose={() => {}} />);
+
+    expect(await screen.findByText(/22.5%/)).toBeInTheDocument();
+    expect(screen.getByText(/37.5%/)).toBeInTheDocument();
+    expect(screen.getByText(/shorter answers/)).toBeInTheDocument();
+  });
+
+  it("refuses to show a percentage it cannot support", async () => {
+    // The failure this prevents: a confident-looking number computed from
+    // eleven requests, which is what gets screenshotted and quoted.
+    reply(
+      response({
+        lifetime: totals({ requests: 22 }),
+        output_effect: {
+          enabled: true,
+          holdout: 0.1,
+          verdict: "not enough data yet",
+          detail: "19 more request(s) needed in the smaller arm.",
+          shaped: { requests: 11, mean_output_tokens: 280 },
+          control: { requests: 11, mean_output_tokens: 400 },
+        },
+      })
+    );
+    render(<SavingsDashboard onClose={() => {}} />);
+
+    expect(await screen.findByText("Not enough data yet.")).toBeInTheDocument();
+    expect(screen.getByText(/19 more request/)).toBeInTheDocument();
+    expect(screen.queryByText(/95% confident/)).not.toBeInTheDocument();
+  });
+
+  it("hides the panel entirely when shaping is off", async () => {
+    reply(response({ lifetime: totals({ requests: 9 }) }));
+    render(<SavingsDashboard onClose={() => {}} />);
+
+    await screen.findByText("Tokens saved");
+    expect(screen.queryByText("Output shaping")).not.toBeInTheDocument();
+  });
+
   it("reports an unreachable backend instead of showing zeroes", async () => {
     vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
     render(<SavingsDashboard onClose={() => {}} />);
