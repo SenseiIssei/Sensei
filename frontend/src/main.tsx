@@ -34,8 +34,14 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <HashRouter>
       <Routes>
-        {/* Main app — landing page */}
-        <Route path="/" element={<App />} />
+        {/* Savings is the landing screen. It is the reason the product exists
+            and the only view that changes on its own; the chat is a feature of
+            it rather than the other way round. Both have a URL now, so either
+            can be bookmarked or left open on a second monitor — the dashboard
+            used to be component state reachable only by clicking through. */}
+        <Route path="/" element={<App initialView="savings" />} />
+        <Route path="/savings" element={<App initialView="savings" />} />
+        <Route path="/workspace" element={<App initialView="chat" />} />
 
         {/* Public chat — accessible under Jakobs Stuff */}
         <Route path="/chat" element={

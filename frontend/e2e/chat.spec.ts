@@ -23,7 +23,8 @@ test("streams an assistant reply over a mocked chat WebSocket", async ({ page })
     });
   });
 
-  await page.goto("/");
+  // The chat lives at /workspace now — `/` is the savings dashboard.
+  await page.goto("/#/workspace");
   const input = page.getByPlaceholder("Send a message to Sensei...");
   await input.fill("hi");
   await input.press("Enter");

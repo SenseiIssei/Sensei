@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, RefreshCw, Trash2, TrendingDown, Zap } from "lucide-react";
+import { MessageSquare, RefreshCw, SlidersHorizontal, Trash2, TrendingDown, Zap } from "lucide-react";
 import { api } from "@/lib/api";
 import type { OutputEffect, SavingsDay, SavingsResponse, SavingsSlice } from "@/types";
 
@@ -276,10 +276,17 @@ function OutputShaping({ effect }: { effect: OutputEffect }) {
 
 // ── page ────────────────────────────────────────────────────────────────────
 
-export function SavingsDashboard({ onClose }: { onClose: () => void }) {
+export function SavingsDashboard({
+  onOpenChat,
+  onOpenSettings,
+}: {
+  onOpenChat: () => void;
+  onOpenSettings: () => void;
+}) {
   const [data, setData] = useState<SavingsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [live, setLive] = useState(false);
   const [confirmingForget, setConfirmingForget] = useState(false);
 
   const load = useCallback(async () => {
@@ -294,11 +301,47 @@ export function SavingsDashboard({ onClose }: { onClose: () => void }) {
     }
   }, []);
 
+  // Live, over Server-Sent Events. The page used to poll every fifteen
+  // seconds, so a number whose whole job is to show what is happening could be
+  // a quarter of a minute out of date.
+  //
+  // The one-shot fetch still runs first: EventSource gives no data until the
+  // server sends its first event, and an empty dashboard while the stream
+  // connects looks like a broken one.
   useEffect(() => {
     load();
-    // Cheap enough to poll: one indexed SQLite query per tick.
-    const timer = setInterval(load, 15_000);
-    return () => clearInterval(timer);
+
+    let source: EventSource | null = null;
+    let poll: ReturnType<typeof setInterval> | null = null;
+
+    try {
+      source = new EventSource("/api/stats/savings/stream");
+      source.addEventListener("savings", (event) => {
+        try {
+          setData(JSON.parse((event as MessageEvent).data));
+          setError(null);
+          setLive(true);
+        } catch {
+          // A malformed frame is not worth tearing the stream down for.
+        }
+      });
+      source.addEventListener("open", () => setLive(true));
+      source.addEventListener("error", () => {
+        // EventSource reconnects on its own, so this is "not connected right
+        // now" rather than "give up". Poll while it is down so the page keeps
+        // moving, and stop once it comes back.
+        setLive(false);
+        if (!poll) poll = setInterval(load, 15_000);
+      });
+    } catch {
+      // No EventSource at all — fall back to what the page did before.
+      poll = setInterval(load, 15_000);
+    }
+
+    return () => {
+      source?.close();
+      if (poll) clearInterval(poll);
+    };
   }, [load]);
 
   const handleForget = useCallback(async () => {
@@ -323,29 +366,60 @@ export function SavingsDashboard({ onClose }: { onClose: () => void }) {
   return (
     <div className="grid-bg flex h-dvh w-full flex-col overflow-y-auto bg-cyber-bg">
       <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-cyber-border bg-cyber-bg/85 px-4 py-3 backdrop-blur">
-        <button
-          onClick={onClose}
-          aria-label="Back to chat"
-          className="rounded-lg p-2 text-cyber-dim transition-colors hover:text-[--color-accent]"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
         <div className="flex-1">
           <h1 className="flex items-center gap-2 font-bold tracking-wide text-cyber-text">
             <Zap className="h-4 w-4 text-[--color-accent]" />
             SAVINGS
+            {/* Says whether the stream is actually connected, rather than
+                decorating the page with a "live" badge that is always on. */}
+            <span
+              title={live ? "Streaming live" : "Stream not connected — polling instead"}
+              className={
+                "flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[0.6rem] " +
+                "font-normal tracking-widest " +
+                (live
+                  ? "border-sensei-500/40 text-sensei-400"
+                  : "border-cyber-border text-cyber-faint")
+              }
+            >
+              <span
+                className={
+                  "inline-block h-1.5 w-1.5 rounded-full " +
+                  (live ? "animate-pulse bg-sensei-500" : "bg-cyber-faint")
+                }
+              />
+              {live ? "LIVE" : "POLLING"}
+            </span>
           </h1>
           <p className="text-xs text-cyber-faint">
             Measured on this machine. Nothing here has been sent anywhere.
           </p>
         </div>
-        <button
-          onClick={load}
-          aria-label="Refresh"
-          className="rounded-lg p-2 text-cyber-dim transition-colors hover:text-[--color-accent]"
-        >
-          <RefreshCw className={"h-4 w-4 " + (busy ? "animate-spin" : "")} />
-        </button>
+        {/* Savings is the landing screen, so the other views are reachable
+            from here rather than the other way round. */}
+        <nav className="flex items-center gap-1">
+          <button
+            onClick={onOpenChat}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs text-cyber-dim transition-colors hover:bg-cyber-surface-2 hover:text-cyber-text"
+          >
+            <MessageSquare className="h-4 w-4" />
+            Chat
+          </button>
+          <button
+            onClick={onOpenSettings}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs text-cyber-dim transition-colors hover:bg-cyber-surface-2 hover:text-cyber-text"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Models
+          </button>
+          <button
+            onClick={load}
+            aria-label="Refresh"
+            className="rounded-lg p-2 text-cyber-dim transition-colors hover:text-[--color-accent]"
+          >
+            <RefreshCw className={"h-4 w-4 " + (busy ? "animate-spin" : "")} />
+          </button>
+        </nav>
       </header>
 
       <div className="mx-auto w-full max-w-6xl space-y-4 p-4">
