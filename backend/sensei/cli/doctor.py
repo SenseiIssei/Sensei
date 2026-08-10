@@ -378,6 +378,29 @@ async def verify() -> list[Check]:
     return checks
 
 
+def _names_command(text: str, command: str) -> bool:
+    """Does this config file name our executable?
+
+    A plain substring test is wrong on Windows and silently so. JSON escapes
+    backslashes, so a path like `C:\\Sensei\\Sensei.exe` is written into the
+    file as `C:\\\\Sensei\\\\Sensei.exe` and never matches the path as Python
+    knows it. Every Windows user with MCP-wired tools would have been told
+    their setup was broken — which is what happened on the machine this was
+    first run against, twice, because the first fix only addressed the
+    missing-URL half of the problem.
+
+    Comparing on a slash-normalised form covers the JSON escaping and the
+    mixed separators a hand-edited config tends to acquire.
+    """
+    if not command:
+        return False
+
+    def flatten(s: str) -> str:
+        return s.replace("\\\\", "/").replace("\\", "/").casefold()
+
+    return flatten(command) in flatten(text)
+
+
 def _wired_tool_checks(base: str) -> list[Check]:
     """Do the tools `setup-tools` configured still point at this server?
 
@@ -425,7 +448,7 @@ def _wired_tool_checks(base: str) -> list[Check]:
         #
         # Both still catch real staleness: change the port and the URL-based
         # tools no longer match; move the executable and the MCP ones don't.
-        wired = base in text or f"{base}/v1" in text or command in text
+        wired = base in text or f"{base}/v1" in text or _names_command(text, command)
         if not wired:
             # Distinguish the two reasons, because the fixes differ. A file
             # that names *a* Sensei, just not this one, means two installations
