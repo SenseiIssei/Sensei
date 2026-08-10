@@ -242,6 +242,40 @@ def test_bind_address_maps_to_loopback(monkeypatch: pytest.MonkeyPatch) -> None:
     assert integrations.endpoints().anthropic == "http://127.0.0.1:7000"
 
 
+def test_a_frozen_binary_spawns_itself_not_a_module(monkeypatch: pytest.MonkeyPatch) -> None:
+    """PyInstaller's sys.executable is the bundle, which cannot run `-m`.
+
+    Getting this wrong writes `sensei.exe -m sensei.cli mcp` into the user's
+    editor configuration, and it fails at spawn time with an error that points
+    at their editor rather than at us. Found by running an actual built binary,
+    which is the only way it is visible.
+    """
+    monkeypatch.setattr(integrations.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(integrations.sys, "executable", "/opt/sensei/sensei", raising=False)
+
+    ep = integrations.endpoints()
+    assert ep.mcp_command == "/opt/sensei/sensei"
+    assert ep.mcp_args == ("mcp",)
+
+
+def test_a_source_install_without_the_script_uses_the_module(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delattr(integrations.sys, "frozen", raising=False)
+    monkeypatch.setattr(integrations.shutil, "which", lambda _: None)
+
+    assert integrations.endpoints().mcp_args == ("-m", "sensei.cli", "mcp")
+
+
+def test_the_console_script_is_preferred_when_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delattr(integrations.sys, "frozen", raising=False)
+    monkeypatch.setattr(integrations.shutil, "which", lambda _: "/usr/local/bin/sensei")
+
+    ep = integrations.endpoints()
+    assert ep.mcp_command == "sensei"
+    assert ep.mcp_args == ("mcp",)
+
+
 def test_openai_endpoint_carries_the_v1_suffix(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(integrations.settings, "host", "127.0.0.1")
     monkeypatch.setattr(integrations.settings, "port", 1234)
