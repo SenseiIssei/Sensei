@@ -63,6 +63,13 @@ jobs:
           # dependency with `can't find crate for 'core'`, which reads like a
           # broken toolchain rather than a missing cross-compilation target.
           CIBW_BEFORE_ALL_MACOS: "rustup target add x86_64-apple-darwin aarch64-apple-darwin"
+          # CPython's own x86_64 wheels are tagged macosx_10_9, but rustc has not
+          # targeted anything below 10.12 for years, so delocate rejects the
+          # wheel: the tag promises more compatibility than the binary has.
+          # 10.12 is rustc's floor, not a preference — raising it would drop
+          # machines for nothing, lowering it does not build.
+          # arm64 is unaffected: cibuildwheel pins those to 11.0 regardless.
+          CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=10.12"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: wheels-${{ matrix.os }}
