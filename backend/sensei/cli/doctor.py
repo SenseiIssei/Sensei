@@ -65,7 +65,20 @@ def _configured_providers() -> list[str]:
 
 
 def _web_ui_built() -> bool:
-    return (Path(__file__).resolve().parents[3] / "frontend" / "dist").exists()
+    """Is there a web UI to serve?
+
+    This looked only for `frontend/dist` at the repo root, which is one of the
+    three places a build can live. A PyInstaller binary carries the UI inside
+    the bundle and a wheel carries it as package data, so the downloadable
+    installer reported "the web UI isn't built — cd frontend && npm ci" while
+    it was serving that UI perfectly well on the next port over.
+
+    `cli.serve` already knows how to find it in all three cases; asking it is
+    both correct and impossible to drift from what actually gets mounted.
+    """
+    from sensei.cli.serve import _frontend_dist
+
+    return _frontend_dist() is not None
 
 
 async def _ollama_running() -> bool:
@@ -298,6 +311,13 @@ async def verify() -> list[Check]:
 
     checks.append(Check("Gateway", OK, f"reachable at {base}"))
 
+    # The static section reports the port as "already in use" and suggests
+    # picking another one, which is unhelpful when the thing using it is the
+    # Sensei the user just started. Once the gateway has answered with our own
+    # headers, we know exactly who is on that port.
+    if resp.headers.get("X-Sensei-Tokens-Saved") is not None:
+        checks.append(Check("Port", OK, f"{settings.host}:{settings.port} is this server"))
+
     # The savings headers are attached before the request is forwarded, so they
     # are present even when there is no upstream configured. That is what makes
     # this check useful on a machine that has not finished setup: it separates
@@ -370,6 +390,7 @@ def _wired_tool_checks(base: str) -> list[Check]:
     checks: list[Check] = []
     manifest = integrations._read_manifest()
     entries = manifest.get("entries", [])
+    command = integrations.endpoints().mcp_command
 
     if not entries:
         checks.append(
@@ -392,19 +413,42 @@ def _wired_tool_checks(base: str) -> list[Check]:
             text = path.read_text(encoding="utf-8")
         except OSError:
             continue
-        # A textual check on purpose: the point is "does this file mention the
-        # address we are serving on", which holds across every format without
-        # needing a parser per tool.
-        if base not in text and f"{base}/v1" not in text:
-            stale.append(str(entry.get("tool_id")))
+        # Two kinds of wiring, and checking for only one of them was a bug that
+        # reported every healthy MCP-only tool as broken:
+        #
+        #   base URL   the tool talks HTTP to the gateway (Claude Code, Codex,
+        #              Continue, Aider) — the file names the address
+        #   MCP        the tool spawns `sensei mcp` as a subprocess (Claude
+        #              Desktop, Cursor, Windsurf, Cline, Roo, Kilo, Zed) — the
+        #              file names the *command*, and there is no URL in it at
+        #              all, correctly
+        #
+        # Both still catch real staleness: change the port and the URL-based
+        # tools no longer match; move the executable and the MCP ones don't.
+        wired = base in text or f"{base}/v1" in text or command in text
+        if not wired:
+            # Distinguish the two reasons, because the fixes differ. A file
+            # that names *a* Sensei, just not this one, means two installations
+            # exist and doctor is being run from the wrong one — telling that
+            # user "the server moved, re-run setup-tools" would have them
+            # rewire away from a working setup.
+            other = "sensei" in text.lower()
+            stale.append(f"{entry.get('tool_id')}{' (a different Sensei)' if other else ''}")
 
     if stale:
+        elsewhere = any("different Sensei" in s for s in stale)
         checks.append(
             Check(
                 "Wired tools",
-                FAIL,
-                f"{len(entries)} configured, but these no longer point here: {', '.join(stale)}",
-                f"The server moved to {base}. Re-run: sensei setup-tools",
+                # Pointing at another installation is not broken, it is just
+                # not this one — a warning, not a failure.
+                WARN if elsewhere else FAIL,
+                f"{len(entries)} configured, but these do not point here: {', '.join(stale)}",
+                "Those tools are wired to a different Sensei on this machine. Run "
+                "`doctor --verify` from that one, or re-run `setup-tools` here to "
+                "take them over."
+                if elsewhere
+                else f"The server moved to {base}. Re-run: sensei setup-tools",
             )
         )
     else:
@@ -427,11 +471,19 @@ def render(checks: list[Check], color: bool = True) -> str:
 
 def run(verify_routing: bool = False) -> int:
     checks = asyncio.run(collect())
-    print("\nSensei doctor\n")
-    print(render(checks))
+    live: list[Check] = []
 
     if verify_routing:
         live = asyncio.run(verify())
+        # The static pass can only see that *something* holds the port; the
+        # live pass knows it is us. Drop the guess rather than printing both,
+        # which would leave a warning in the summary count for a healthy setup.
+        if any(c.name == "Port" and c.status == OK for c in live):
+            checks = [c for c in checks if c.name != "Port"]
+
+    print("\nSensei doctor\n")
+    print(render(checks))
+    if live:
         print("\nEnd-to-end\n")
         print(render(live))
         checks = checks + live

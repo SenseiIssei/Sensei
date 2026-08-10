@@ -40,6 +40,18 @@ def _statuses(checks: list[doctor.Check]) -> dict[str, str]:
     return {c.name: c.status for c in checks}
 
 
+def doctor_endpoints(command: str):
+    """An Endpoints whose MCP command is whatever the test needs."""
+    from sensei.integrations import Endpoints
+
+    return Endpoints(
+        anthropic="http://127.0.0.1:7000",
+        openai="http://127.0.0.1:7000/v1",
+        mcp_command=command,
+        mcp_args=("mcp",),
+    )
+
+
 async def test_a_dead_server_says_how_to_start_it(monkeypatch: pytest.MonkeyPatch) -> None:
     async def post(self, url, **kwargs):
         raise httpx.ConnectError("connection refused")
@@ -145,6 +157,68 @@ class TestWiredTools:
         checks = doctor._wired_tool_checks("http://127.0.0.1:9999")
         assert checks[0].status == doctor.FAIL
         assert "claude-code" in checks[0].detail
+        assert "setup-tools" in checks[0].fix
+
+    def test_an_mcp_only_tool_is_not_reported_as_stale(self, tmp_path, monkeypatch) -> None:
+        """Found by running it against a real setup.
+
+        Claude Desktop, Cursor and Windsurf are wired by spawning `sensei mcp`
+        as a subprocess. Their config files contain the *command* and no URL at
+        all — correctly. Checking only for the base URL reported every healthy
+        one of them as broken, and told the user to re-run setup-tools, which
+        would have changed nothing.
+        """
+        config = tmp_path / "claude_desktop_config.json"
+        config.write_text(
+            '{"mcpServers": {"sensei": {"command": "/opt/sensei/sensei", "args": ["mcp"]}}}'
+        )
+        monkeypatch.setattr(
+            "sensei.integrations._read_manifest",
+            lambda: {"entries": [{"tool_id": "claude-desktop", "path": str(config)}]},
+        )
+        monkeypatch.setattr(
+            "sensei.integrations.endpoints",
+            lambda: doctor_endpoints("/opt/sensei/sensei"),
+        )
+
+        checks = doctor._wired_tool_checks("http://127.0.0.1:7000")
+        assert checks[0].status == doctor.OK
+
+    def test_an_mcp_tool_whose_binary_moved_is_caught(self, tmp_path, monkeypatch) -> None:
+        """The staleness this kind of wiring actually suffers from."""
+        config = tmp_path / "mcp.json"
+        config.write_text('{"mcpServers": {"sensei": {"command": "/old/path/sensei"}}}')
+        monkeypatch.setattr(
+            "sensei.integrations._read_manifest",
+            lambda: {"entries": [{"tool_id": "cursor", "path": str(config)}]},
+        )
+        monkeypatch.setattr(
+            "sensei.integrations.endpoints",
+            lambda: doctor_endpoints("/new/path/sensei"),
+        )
+
+        checks = doctor._wired_tool_checks("http://127.0.0.1:7000")
+        # A warning, not a failure: the tool is wired, just to another copy.
+        # Telling this user "the server moved, re-run setup-tools" would have
+        # them rewire away from a working setup.
+        assert checks[0].status == doctor.WARN
+        assert "cursor" in checks[0].detail
+        assert "different Sensei" in checks[0].detail
+
+    def test_a_genuinely_dead_port_is_still_a_failure(self, tmp_path, monkeypatch) -> None:
+        """No Sensei named anywhere — this one really is broken."""
+        config = tmp_path / "settings.json"
+        config.write_text('{"env": {"ANTHROPIC_BASE_URL": "http://127.0.0.1:7000"}}')
+        monkeypatch.setattr(
+            "sensei.integrations._read_manifest",
+            lambda: {"entries": [{"tool_id": "claude-code", "path": str(config)}]},
+        )
+        monkeypatch.setattr(
+            "sensei.integrations.endpoints", lambda: doctor_endpoints("/usr/bin/nothing")
+        )
+
+        checks = doctor._wired_tool_checks("http://127.0.0.1:9999")
+        assert checks[0].status == doctor.FAIL
         assert "setup-tools" in checks[0].fix
 
     def test_a_correctly_wired_tool_passes(self, tmp_path, monkeypatch) -> None:

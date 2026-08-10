@@ -66,6 +66,21 @@ def test_no_build_anywhere_is_reported_as_absent(no_real_ui: Path) -> None:
     assert serve._frontend_dist() is None
 
 
+def test_doctor_agrees_with_what_actually_gets_served(no_real_ui: Path) -> None:
+    """`doctor` used to look only for `frontend/dist` at the repo root.
+
+    So the downloadable binary — which carries the UI inside the bundle and was
+    serving it on the next port over — reported "the web UI isn't built, run
+    npm ci" at someone with no frontend directory. Delegating to the same
+    finder makes the two impossible to disagree.
+    """
+    from sensei.cli import doctor
+
+    assert doctor._web_ui_built() is False
+    _with_index(no_real_ui.parents[1] / "webui")
+    assert doctor._web_ui_built() is True
+
+
 def test_an_empty_directory_does_not_count(no_real_ui: Path) -> None:
     """`rm -rf dist/*` leaves the directory behind. Serving it would mount an
     empty StaticFiles and hand the user a blank page instead of the Swagger
