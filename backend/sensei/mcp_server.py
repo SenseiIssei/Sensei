@@ -65,10 +65,10 @@ def build_server() -> Any:
     # both, the new one is the one being maintained.
     server_class = None
     try:
-        from mcp.server.mcpserver import MCPServer as server_class  # noqa: N813
+        from mcp.server.mcpserver import MCPServer as server_class
     except ImportError:
         try:
-            from mcp.server.fastmcp import FastMCP as server_class  # noqa: N813
+            from mcp.server.fastmcp import FastMCP as server_class
         except ImportError as exc:  # pragma: no cover - depends on the extra
             raise RuntimeError(
                 "The MCP server needs the optional 'mcp' extra:\n    pip install \"sensei[mcp]\""
