@@ -13,11 +13,18 @@
 Worth writing down, because a screenshot is a claim about a product and it
 should be possible to check it.
 
-The traffic is real: 85 requests through the gateway carrying JSON API
+The traffic is real: 232 requests through the gateway carrying JSON API
 responses, build logs and stack traces, sent with the User-Agent strings that
 Claude Code, Cursor, Aider, Codex and Cline actually send — which is why the
 "By tool" breakdown separates them. The compression figures are what the
 pipeline produced on that content.
+
+The output-shaping panel reads "no measurable difference", and that is the
+honest result for this setup rather than a bug: the stub provider returns a
+fixed reply regardless of the instruction, so there is no effect to find. It is
+worth keeping in the screenshot — it shows what the panel does when the answer
+is "nothing", which is the case a reader should see before they trust it in the
+case where it says something.
 
 Two things are not what a user would see in production:
 

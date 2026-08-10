@@ -45,12 +45,28 @@ export function Sidebar({
   const [models, setModels] = useState<{ id: string; name: string; status: string }[]>([]);
   const [search, setSearch] = useState("");
   const [jakobsOpen, setJakobsOpen] = useState(false);
+  const [lifetimeSaved, setLifetimeSaved] = useState<number | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     api.getModels().then((data) => {
       setModels(data.models.map((m) => ({ id: m.id, name: m.name, status: m.status })));
     }).catch(() => {});
+  }, []);
+
+  // The badge used to show only what this browser tab had saved through the
+  // chat websocket, which was nearly always zero — the traffic that matters
+  // comes from the coding agents routed through the gateway. Clicking a "0"
+  // and landing on a dashboard reporting 161k reads as a broken number.
+  useEffect(() => {
+    const read = () =>
+      api
+        .getSavings()
+        .then((s) => setLifetimeSaved(s.lifetime.tokens_saved))
+        .catch(() => {});
+    read();
+    const timer = setInterval(read, 20_000);
+    return () => clearInterval(timer);
   }, []);
 
   const filteredConversations = conversations.filter(c =>
@@ -165,7 +181,9 @@ export function Sidebar({
           <div className="flex-1">
             <p className="text-xs text-gray-500">Tokens Saved</p>
             <p className="text-sm font-semibold text-sensei-400">
-              {tokensSaved.toLocaleString()}
+              {/* Everything routed through Sensei, not just this tab's chat.
+                  Falls back to the session counter while the API is unreachable. */}
+              {(lifetimeSaved ?? tokensSaved).toLocaleString()}
             </p>
           </div>
           <ChevronRight className="w-4 h-4 text-gray-600" />
