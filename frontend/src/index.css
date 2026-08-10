@@ -1,3 +1,5 @@
+/* JetBrains Mono is imported from main.tsx, not here — see the note there.
+   A CSS @import of it survives the build with its font URLs unrewritten. */
 @import "tailwindcss";
 
 /* Tailwind 4 is configured in CSS — this block replaces tailwind.config.cjs.
@@ -16,15 +18,28 @@
   --color-sensei-900: #14532d;
   --color-sensei-950: #052e16;
 
-  /* Native UI font per platform. Inter and JetBrains Mono are still honoured
-     if the user has them installed locally, but nothing is fetched over the
-     network — see the note in index.html. */
+  /* Shared with Odysync, deliberately: the two are the same person's tools and
+     should read as such. Cyan is the chrome, purple the secondary, and green
+     stays exactly where it was — Odysync's `success` is Sensei's accent, so
+     "this number is a saving" keeps its colour and only the frame changes. */
+  --color-cyber-bg: #0a0a0f;
+  --color-cyber-surface: #13131a;
+  --color-cyber-surface-2: #1a1a24;
+  --color-cyber-border: #1e1e2a;
+  --color-cyber-border-bright: #2a2a3e;
+  --color-cyber-text: #e0e0e8;
+  --color-cyber-dim: #8888a0;
+  --color-cyber-faint: #555568;
+  --color-accent: #00f0ff;
+  --color-accent-dim: #00a8b5;
+  --color-neon-purple: #a855f7;
+
+  /* JetBrains Mono throughout, as in Odysync. The stack still degrades to a
+     platform mono if the bundled font fails to load. */
   --font-sans:
-    "Inter", system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
-  --font-mono:
     "JetBrains Mono", "Fira Code", ui-monospace, "SF Mono", "Cascadia Mono", Menlo,
     Consolas, monospace;
+  --font-mono: var(--font-sans);
 }
 
 @layer base {
@@ -86,6 +101,113 @@
 
   .glow-text {
     text-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+  }
+
+  /* ── Odysync's visual language ──────────────────────────────────────────
+     Ported rather than approximated, so the two applications look like they
+     came from the same place. Values match apps/gui/src/App.css there. */
+
+  .cyber-panel {
+    background: var(--color-cyber-surface);
+    border: 1px solid var(--color-cyber-border);
+    border-radius: 10px;
+  }
+
+  /* A 1px gradient edge drawn with a masked pseudo-element, because a real
+     gradient border would paint over the panel's own background. */
+  .gradient-border {
+    position: relative;
+    background: var(--color-cyber-surface);
+    border-radius: 10px;
+  }
+  .gradient-border::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 10px;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(0, 240, 255, 0.35), rgba(168, 85, 247, 0.3));
+    mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .glow-cyan {
+    box-shadow:
+      0 0 12px rgba(0, 240, 255, 0.3),
+      0 0 4px rgba(0, 240, 255, 0.2);
+  }
+  .glow-green {
+    box-shadow:
+      0 0 12px rgba(34, 197, 94, 0.3),
+      0 0 4px rgba(34, 197, 94, 0.2);
+  }
+  .text-glow-cyan {
+    text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+  }
+  .text-glow-green {
+    text-shadow: 0 0 10px rgba(34, 197, 94, 0.45);
+  }
+  .text-glow-purple {
+    text-shadow: 0 0 8px rgba(168, 85, 247, 0.5);
+  }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(30, 30, 42, 0.55) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(30, 30, 42, 0.55) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .scan-overlay {
+    position: relative;
+    overflow: hidden;
+  }
+  .scan-overlay::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--color-accent), transparent);
+    animation: scanLine 1.5s ease-in-out infinite;
+  }
+
+  @keyframes scanLine {
+    0%,
+    100% {
+      transform: translateX(-100%);
+    }
+    50% {
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-in-up {
+    animation: fadeInUp 0.32s ease-out both;
+  }
+
+  /* Anything that moves here is decoration. Someone who has asked their
+     system not to animate should not have to watch a scan line forever. */
+  @media (prefers-reduced-motion: reduce) {
+    .scan-overlay::after,
+    .animate-in-up,
+    .orb {
+      animation: none;
+    }
   }
 
   .surreal-gradient {

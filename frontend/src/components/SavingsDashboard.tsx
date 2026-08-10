@@ -1,29 +1,36 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, RefreshCw, Trash2, TrendingDown } from "lucide-react";
+import { ArrowLeft, RefreshCw, Trash2, TrendingDown, Zap } from "lucide-react";
 import { api } from "@/lib/api";
 import type { OutputEffect, SavingsDay, SavingsResponse, SavingsSlice } from "@/types";
 
 /**
  * "How much have I actually saved?"
  *
- * The chart is hand-drawn SVG rather than a charting library on purpose: the
- * frontend has a 450 kB JavaScript budget enforced in CI, and every library
- * worth using costs more than that budget has to spare for one bar chart.
+ * Styled to match Odysync — same palette, same JetBrains Mono, same glow and
+ * gradient-edge vocabulary — because they are the same person's tools and
+ * should read as one family. Green keeps its meaning throughout: it is the
+ * colour of a saving, never decoration. Cyan is chrome.
+ *
+ * The charts are hand-drawn SVG rather than a charting library: the frontend
+ * has a 450 kB JavaScript budget enforced in CI, and every library worth using
+ * costs more than that budget has to spare for two charts.
  */
 
 // ── formatting ──────────────────────────────────────────────────────────────
 
 function formatTokens(n: number): string {
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}B`;
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
+  const sign = n < 0 ? "-" : "";
+  const v = Math.abs(n);
+  if (v >= 1_000_000_000) return `${sign}${(v / 1_000_000_000).toFixed(2)}B`;
+  if (v >= 1_000_000) return `${sign}${(v / 1_000_000).toFixed(2)}M`;
+  if (v >= 1_000) return `${sign}${(v / 1_000).toFixed(1)}k`;
+  return `${sign}${v}`;
 }
 
 function formatMoney(usd: number): string {
   // Below a cent, a rounded "$0.00" reads as "this does nothing". Show the
   // real number instead and let it be small.
-  if (usd > 0 && usd < 0.01) return `$${usd.toFixed(4)}`;
+  if (Math.abs(usd) > 0 && Math.abs(usd) < 0.01) return `$${usd.toFixed(4)}`;
   return `$${usd.toFixed(2)}`;
 }
 
@@ -38,72 +45,122 @@ function Stat({
   label,
   value,
   sub,
-  accent,
+  tone = "plain",
+  delay = 0,
 }: {
   label: string;
   value: string;
   sub?: string;
-  accent?: boolean;
+  tone?: "plain" | "saving" | "cyan";
+  delay?: number;
 }) {
+  const valueClass =
+    tone === "saving"
+      ? "text-sensei-400 text-glow-green"
+      : tone === "cyan"
+        ? "text-[--color-accent] text-glow-cyan"
+        : "text-cyber-text";
+
   return (
-    <div className="glass rounded-xl border border-gray-800/50 p-4">
-      <p className="text-xs uppercase tracking-wide text-gray-500">{label}</p>
-      <p
-        className={
-          "mt-1 text-2xl font-bold tabular-nums " +
-          (accent ? "text-sensei-400" : "text-white")
-        }
-      >
+    <div
+      className="gradient-border animate-in-up p-4"
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <p className="text-[0.65rem] uppercase tracking-[0.14em] text-cyber-faint">{label}</p>
+      <p className={`mt-1.5 text-3xl font-bold tabular-nums leading-none ${valueClass}`}>
         {value}
       </p>
-      {sub && <p className="mt-1 text-xs text-gray-500">{sub}</p>}
+      {sub && <p className="mt-2 text-xs text-cyber-dim">{sub}</p>}
     </div>
+  );
+}
+
+function Panel({
+  title,
+  aside,
+  children,
+  className = "",
+}: {
+  title: string;
+  aside?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`cyber-panel animate-in-up p-4 ${className}`}>
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h2 className="text-sm font-medium tracking-wide text-cyber-text">{title}</h2>
+        {aside && <span className="text-xs text-cyber-faint">{aside}</span>}
+      </div>
+      {children}
+    </section>
   );
 }
 
 function DailyChart({ days }: { days: SavingsDay[] }) {
   const peak = Math.max(...days.map((d) => d.tokens_saved), 1);
-  const width = 720;
-  const height = 160;
-  const gap = 2;
+  const width = 760;
+  const height = 170;
+  const gap = 3;
   const barWidth = Math.max(1, width / days.length - gap);
 
   return (
     <div className="overflow-x-auto">
       <svg
-        viewBox={`0 0 ${width} ${height + 22}`}
-        className="h-48 w-full min-w-[560px]"
+        viewBox={`0 0 ${width} ${height + 24}`}
+        className="h-52 w-full min-w-[560px]"
         role="img"
         aria-label={`Tokens saved per day over the last ${days.length} days`}
       >
+        <defs>
+          <linearGradient id="barFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#22c55e" stopOpacity="0.95" />
+            <stop offset="100%" stopColor="#00f0ff" stopOpacity="0.35" />
+          </linearGradient>
+        </defs>
+
+        {/* Four gridlines, matching the 24px grid of the page background. */}
+        {[0.25, 0.5, 0.75, 1].map((f) => (
+          <line
+            key={f}
+            x1={0}
+            x2={width}
+            y1={height - height * f}
+            y2={height - height * f}
+            stroke="#1e1e2a"
+            strokeWidth="1"
+          />
+        ))}
+
         {days.map((day, i) => {
           const barHeight = (day.tokens_saved / peak) * height;
           const x = i * (barWidth + gap);
+          const active = day.tokens_saved > 0;
+          // A zero day still gets a hairline, so idle days read as "nothing
+          // happened" rather than as missing data.
+          const h = active ? Math.max(barHeight, 3) : 1;
           return (
             <g key={day.date}>
-              {/* A zero day still gets a hairline, so idle days read as
-                  "nothing happened" rather than as missing data. */}
               <rect
                 x={x}
-                y={height - Math.max(barHeight, day.tokens_saved > 0 ? 2 : 1)}
+                y={height - h}
                 width={barWidth}
-                height={Math.max(barHeight, day.tokens_saved > 0 ? 2 : 1)}
-                rx={1}
-                className={day.tokens_saved > 0 ? "fill-sensei-500" : "fill-gray-800"}
+                height={h}
+                rx={2}
+                fill={active ? "url(#barFill)" : "#1e1e2a"}
               >
                 <title>
-                  {day.date}: {formatTokens(day.tokens_saved)} tokens saved over{" "}
-                  {day.requests} request{day.requests === 1 ? "" : "s"} (
-                  {formatMoney(day.estimated_cost_saved_usd)})
+                  {day.date}: {formatTokens(day.tokens_saved)} tokens saved over {day.requests}{" "}
+                  request{day.requests === 1 ? "" : "s"} ({formatMoney(day.estimated_cost_saved_usd)}
+                  )
                 </title>
               </rect>
-              {/* Label every seventh day; more than that overlaps at this width. */}
               {i % 7 === 0 && (
                 <text
                   x={x + barWidth / 2}
-                  y={height + 16}
+                  y={height + 17}
                   textAnchor="middle"
-                  className="fill-gray-600 text-[10px]"
+                  className="fill-cyber-faint text-[10px]"
                 >
                   {formatDay(day.date)}
                 </text>
@@ -119,23 +176,22 @@ function DailyChart({ days }: { days: SavingsDay[] }) {
 function Breakdown({ title, rows }: { title: string; rows: SavingsSlice[] }) {
   const peak = Math.max(...rows.map((r) => r.tokens_saved), 1);
   return (
-    <div className="glass rounded-xl border border-gray-800/50 p-4">
-      <h3 className="text-sm font-semibold text-gray-300">{title}</h3>
+    <Panel title={title}>
       {rows.length === 0 ? (
-        <p className="mt-3 text-xs text-gray-600">Nothing recorded yet.</p>
+        <p className="text-xs text-cyber-faint">Nothing recorded yet.</p>
       ) : (
-        <ul className="mt-3 space-y-2">
+        <ul className="space-y-2.5">
           {rows.map((row) => (
             <li key={row.key}>
               <div className="flex items-baseline justify-between gap-2 text-xs">
-                <span className="truncate text-gray-300">{row.key}</span>
-                <span className="shrink-0 tabular-nums text-gray-500">
+                <span className="truncate text-cyber-text">{row.key}</span>
+                <span className="shrink-0 tabular-nums text-cyber-dim">
                   {formatTokens(row.tokens_saved)} · {row.percent_saved}%
                 </span>
               </div>
-              <div className="mt-1 h-1.5 w-full rounded-full bg-gray-800">
+              <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-cyber-border">
                 <div
-                  className="h-1.5 rounded-full bg-sensei-500"
+                  className="h-1 rounded-full bg-gradient-to-r from-sensei-500 to-[--color-accent]"
                   style={{ width: `${(row.tokens_saved / peak) * 100}%` }}
                 />
               </div>
@@ -143,7 +199,7 @@ function Breakdown({ title, rows }: { title: string; rows: SavingsSlice[] }) {
           ))}
         </ul>
       )}
-    </div>
+    </Panel>
   );
 }
 
@@ -160,26 +216,24 @@ function OutputShaping({ effect }: { effect: OutputEffect }) {
   const inconclusive = !interval;
 
   return (
-    <div className="glass rounded-xl border border-gray-800/50 p-4">
-      <div className="mb-3 flex items-baseline justify-between gap-2">
-        <h2 className="text-sm font-semibold text-gray-300">Output shaping</h2>
-        <span className="text-xs text-gray-600">
-          {Math.round(effect.holdout * 100)}% held back as a control
-        </span>
-      </div>
-
+    <Panel
+      title="Output shaping"
+      aside={`${Math.round(effect.holdout * 100)}% held back as a control`}
+    >
       {inconclusive ? (
         <>
-          <p className="text-sm text-gray-400">Not enough data yet.</p>
-          <p className="mt-1 text-xs text-gray-600">{effect.detail}</p>
+          <p className="text-sm text-cyber-text">Not enough data yet.</p>
+          <p className="mt-1 text-xs text-cyber-faint">{effect.detail}</p>
         </>
       ) : (
         <>
-          <p className="text-xs text-gray-500">95% confident the change is between</p>
-          <p className="mt-0.5 text-2xl font-bold tabular-nums text-white">
-            {interval[0]}% <span className="text-gray-600">and</span> {interval[1]}%
+          <p className="text-xs text-cyber-faint">95% confident the change is between</p>
+          <p className="mt-1 font-bold tabular-nums leading-none">
+            <span className="text-2xl text-[--color-accent] text-glow-cyan">{interval[0]}%</span>
+            <span className="mx-2 text-sm font-normal text-cyber-faint">and</span>
+            <span className="text-2xl text-[--color-accent] text-glow-cyan">{interval[1]}%</span>
           </p>
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-2 text-xs text-cyber-dim">
             Best estimate {effect.percent}% ({effect.difference_tokens} tokens per answer) ·{" "}
             <span
               className={
@@ -187,7 +241,7 @@ function OutputShaping({ effect }: { effect: OutputEffect }) {
                   ? "text-sensei-400"
                   : effect.verdict === "longer answers"
                     ? "text-red-400"
-                    : "text-gray-500"
+                    : "text-cyber-faint"
               }
             >
               {effect.verdict}
@@ -196,27 +250,27 @@ function OutputShaping({ effect }: { effect: OutputEffect }) {
         </>
       )}
 
-      <dl className="mt-3 grid grid-cols-2 gap-2 border-t border-gray-800/50 pt-3 text-xs">
+      <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-cyber-border pt-3 text-xs">
         <div>
-          <dt className="text-gray-600">Shaped</dt>
-          <dd className="tabular-nums text-gray-300">
+          <dt className="text-cyber-faint">Shaped</dt>
+          <dd className="tabular-nums text-cyber-text">
             {effect.shaped.requests.toLocaleString()} · {effect.shaped.mean_output_tokens} tok/answer
           </dd>
         </div>
         <div>
-          <dt className="text-gray-600">Control</dt>
-          <dd className="tabular-nums text-gray-300">
+          <dt className="text-cyber-faint">Control</dt>
+          <dd className="tabular-nums text-cyber-text">
             {effect.control.requests.toLocaleString()} · {effect.control.mean_output_tokens}{" "}
             tok/answer
           </dd>
         </div>
       </dl>
 
-      <p className="mt-3 text-xs text-gray-600">
+      <p className="mt-3 text-xs text-cyber-faint">
         Non-streaming responses only — a streamed reply reports no usage block, so it cannot be
         counted without parsing the stream.
       </p>
-    </div>
+    </Panel>
   );
 }
 
@@ -267,33 +321,36 @@ export function SavingsDashboard({ onClose }: { onClose: () => void }) {
   }, [data]);
 
   return (
-    <div className="flex h-dvh w-full flex-col overflow-y-auto bg-gray-950">
-      <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-gray-800/50 glass px-4 py-3">
+    <div className="grid-bg flex h-dvh w-full flex-col overflow-y-auto bg-cyber-bg">
+      <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-cyber-border bg-cyber-bg/85 px-4 py-3 backdrop-blur">
         <button
           onClick={onClose}
           aria-label="Back to chat"
-          className="rounded-lg p-2 text-gray-400 transition-colors hover:text-white"
+          className="rounded-lg p-2 text-cyber-dim transition-colors hover:text-[--color-accent]"
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div className="flex-1">
-          <h1 className="font-bold text-white">Savings</h1>
-          <p className="text-xs text-gray-500">
+          <h1 className="flex items-center gap-2 font-bold tracking-wide text-cyber-text">
+            <Zap className="h-4 w-4 text-[--color-accent]" />
+            SAVINGS
+          </h1>
+          <p className="text-xs text-cyber-faint">
             Measured on this machine. Nothing here has been sent anywhere.
           </p>
         </div>
         <button
           onClick={load}
           aria-label="Refresh"
-          className="rounded-lg p-2 text-gray-400 transition-colors hover:text-white"
+          className="rounded-lg p-2 text-cyber-dim transition-colors hover:text-[--color-accent]"
         >
           <RefreshCw className={"h-4 w-4 " + (busy ? "animate-spin" : "")} />
         </button>
       </header>
 
-      <div className="mx-auto w-full max-w-5xl space-y-4 p-4">
+      <div className="mx-auto w-full max-w-6xl space-y-4 p-4">
         {error && (
-          <div className="rounded-xl border border-red-900/50 bg-red-950/30 p-4 text-sm text-red-300">
+          <div className="rounded-lg border border-red-900/60 bg-red-950/30 p-4 text-sm text-red-300">
             {error}
           </div>
         )}
@@ -305,33 +362,38 @@ export function SavingsDashboard({ onClose }: { onClose: () => void }) {
                 label="Tokens saved"
                 value={formatTokens(lifetime.tokens_saved)}
                 sub={`of ${formatTokens(lifetime.tokens_before)} sent`}
-                accent
+                tone="saving"
+                delay={0}
               />
               <Stat
                 label="Estimated cost saved"
                 value={formatMoney(lifetime.estimated_cost_saved_usd)}
                 sub={`at $${lifetime.price_per_million_usd}/M input tokens`}
-                accent
+                tone="saving"
+                delay={40}
               />
               <Stat
                 label="Compression"
                 value={`${lifetime.percent_saved}%`}
                 sub={`${lifetime.requests.toLocaleString()} requests`}
+                tone="cyan"
+                delay={80}
               />
               <Stat
                 label="This session"
                 value={formatTokens(session.tokens_saved)}
                 sub={`${session.requests.toLocaleString()} requests since start`}
+                delay={120}
               />
             </div>
 
             {/* The cost figure is an estimate built on one assumed price. Saying
                 so on the page is cheaper than being disbelieved later. */}
-            <p className="flex items-start gap-2 text-xs text-gray-600">
+            <p className="flex items-start gap-2 text-xs leading-relaxed text-cyber-faint">
               <TrendingDown className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>
                 Cost is an estimate: tokens saved × your configured input price (
-                <code className="text-gray-500">SENSEI_USD_PER_MILLION_TOKENS</code>). It counts
+                <code className="text-cyber-dim">SENSEI_USD_PER_MILLION_TOKENS</code>). It counts
                 input tokens only, so it is a floor rather than a guess upward.
                 {perDay > 0 && ` About ${formatMoney(perDay)} on a day you actually work.`}
                 {!data?.persisted &&
@@ -339,13 +401,9 @@ export function SavingsDashboard({ onClose }: { onClose: () => void }) {
               </span>
             </p>
 
-            <div className="glass rounded-xl border border-gray-800/50 p-4">
-              <div className="mb-3 flex items-baseline justify-between">
-                <h2 className="text-sm font-semibold text-gray-300">Last 30 days</h2>
-                <span className="text-xs text-gray-600">tokens saved per day</span>
-              </div>
+            <Panel title="Last 30 days" aside="tokens saved per day">
               <DailyChart days={data.daily} />
-            </div>
+            </Panel>
 
             {data.output_effect?.enabled && <OutputShaping effect={data.output_effect} />}
 
@@ -356,13 +414,13 @@ export function SavingsDashboard({ onClose }: { onClose: () => void }) {
             </div>
 
             {lifetime.requests === 0 && (
-              <div className="glass rounded-xl border border-gray-800/50 p-6 text-center">
-                <p className="text-sm text-gray-400">No requests have gone through yet.</p>
-                <p className="mt-2 text-xs text-gray-600">
+              <div className="gradient-border scan-overlay p-6 text-center">
+                <p className="text-sm text-cyber-text">No requests have gone through yet.</p>
+                <p className="mt-2 text-xs text-cyber-dim">
                   Point a tool at Sensei with{" "}
-                  <code className="text-gray-400">sensei setup-tools</code>, or run{" "}
-                  <code className="text-gray-400">sensei wrap claude</code>, and this page fills
-                  up.
+                  <code className="text-[--color-accent]">sensei setup-tools</code>, or run{" "}
+                  <code className="text-[--color-accent]">sensei wrap claude</code>, and this page
+                  fills up.
                 </p>
               </div>
             )}
@@ -373,8 +431,8 @@ export function SavingsDashboard({ onClose }: { onClose: () => void }) {
                 className={
                   "flex items-center gap-2 rounded-lg px-3 py-2 text-xs transition-colors " +
                   (confirmingForget
-                    ? "bg-red-900/40 text-red-300"
-                    : "text-gray-600 hover:text-gray-400")
+                    ? "border border-red-900/60 bg-red-950/40 text-red-300"
+                    : "text-cyber-faint hover:text-cyber-dim")
                 }
               >
                 <Trash2 className="h-3.5 w-3.5" />
