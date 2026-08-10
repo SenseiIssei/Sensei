@@ -58,14 +58,23 @@ def _pipeline() -> tuple[ContentRouter, CCRStore]:
 
 def build_server() -> Any:
     """Construct the MCP server. Imported lazily so `mcp` stays optional."""
+    # The MCP Python SDK renamed FastMCP to MCPServer and moved it from
+    # `mcp.server.fastmcp` to `mcp.server.mcpserver` in 2.0. The constructor and
+    # the `.tool()` decorator are unchanged, so supporting both is two imports
+    # rather than two code paths. Try the current name first: on an SDK that has
+    # both, the new one is the one being maintained.
+    server_class = None
     try:
-        from mcp.server.fastmcp import FastMCP
-    except ImportError as exc:  # pragma: no cover - depends on the extra
-        raise RuntimeError(
-            "The MCP server needs the optional 'mcp' extra:\n    pip install \"sensei[mcp]\""
-        ) from exc
+        from mcp.server.mcpserver import MCPServer as server_class  # noqa: N813
+    except ImportError:
+        try:
+            from mcp.server.fastmcp import FastMCP as server_class  # noqa: N813
+        except ImportError as exc:  # pragma: no cover - depends on the extra
+            raise RuntimeError(
+                "The MCP server needs the optional 'mcp' extra:\n    pip install \"sensei[mcp]\""
+            ) from exc
 
-    mcp = FastMCP(name="sensei", instructions=INSTRUCTIONS)
+    mcp = server_class(name="sensei", instructions=INSTRUCTIONS)
 
     @mcp.tool(
         name="sensei_compress",
