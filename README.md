@@ -73,13 +73,32 @@ model sees the same facts.
 
 ## Get started
 
-You need Python 3.11 or newer. That's it.
-
 **1. Install**
 
 ```bash
-pip install -e ./backend
+pipx install sensei-gateway
 ```
+
+<details>
+<summary>Other ways in</summary>
+
+```bash
+brew install senseiissei/tap/sensei      # macOS and Linux
+winget install SenseiIssei.Sensei        # Windows
+scoop bucket add senseiissei https://github.com/SenseiIssei/scoop-bucket
+scoop install sensei                     # Windows, portable
+pip install sensei-gateway               # any platform with Python 3.11+
+```
+
+Or download a single file from [the latest
+release](https://github.com/SenseiIssei/Sensei/releases/latest) — `.exe` for
+Windows, `.dmg` for macOS, `.AppImage`/`.deb`/`.rpm` for Linux — which needs no
+Python at all.
+
+The distribution is called `sensei-gateway` because `sensei` on PyPI is an
+unrelated HTTP library from 2023. The command you type is `sensei`.
+
+</details>
 
 **2. Start it**
 
@@ -137,7 +156,7 @@ directly — no base URL to change:
 
 The agent gets three tools: compress a blob before putting it in context, get
 the exact original back if it turns out it needed it, and check what's been
-saved. Needs `pip install "sensei[mcp]"`.
+saved. Needs `pip install "sensei-gateway[mcp]"`.
 
 <details>
 <summary><b>Prefer Docker?</b></summary>
@@ -380,7 +399,7 @@ Verified end to end against a real MCP client — 582 → 287 tokens on a 40-rec
 JSON array, original recovered byte-identical.
 
 ```bash
-pip install "sensei[mcp]"
+pip install "sensei-gateway[mcp]"
 sensei mcp            # stdio; normally your client spawns this, not you
 ```
 
@@ -422,6 +441,42 @@ stack traces, source and prose. `--json` gives machine-readable output and
 `--min-aggregate 75` exits non-zero below a floor — which is what nightly CI
 runs, so a regression in compression quality fails the build rather than being
 noticed months later.
+
+Every run is published: **[the nightly trend](https://senseiissei.github.io/Sensei/)**
+keeps one row per night, so 79% is a line you can look at rather than a number
+in a README.
+
+</details>
+
+<details>
+<summary><b>Does it keep what the model needs?</b></summary>
+
+A different question from "does it get smaller", and until recently only the
+second one was checked anywhere here.
+
+```bash
+python backend/benchmarks/quality_eval.py
+```
+
+Each corpus entry is paired with the facts an agent would have to extract from
+it — the error location in a build log, the failing frame in a stack trace,
+specific ids and values in JSON, a function signature in source. All of them
+must still be literally present after compression. Nightly runs it with a floor
+of **100%**, because unlike a savings percentage a lost fact is never jitter.
+
+Be clear about the claim: this is a **necessary condition, not a sufficient
+one.** If a fact is gone the model provably cannot answer; if every fact
+survives the model *can* answer, but this does not prove it *will*. The
+sufficient version needs a model in the loop — `--model gpt-4o --base-url ...`
+does that, and it is deliberately not part of the nightly gate, because a gate
+that needs a funded API key is a gate somebody eventually switches off.
+
+Writing this eval immediately found two real defects: `LogCompressor.FRAME`
+contained `File ", "` where `File "` was meant, so no Python traceback frame
+ever matched and the innermost frames — the ones that say what actually broke —
+were being elided. And build output with no timestamps and no log levels was
+being classified as prose, which both compressed it 3% instead of 91% and threw
+away the compiler's `file:line:col`.
 
 </details>
 
@@ -486,8 +541,10 @@ Every action is pinned to a commit SHA. On each pull request:
 - Docker image built and `/health` smoke-tested
 - pip-audit, npm audit, cargo audit, CodeQL, gitleaks, Trivy, SBOM, Scorecard
 
-Nightly: the compression benchmark with a regression floor, Rust/Python output
-diffed for parity, and the suite against eagerly-upgraded dependencies.
+Nightly: the compression benchmark with a regression floor, **fact retention at
+a floor of 100%**, Rust/Python output diffed for parity, the suite against
+eagerly-upgraded dependencies, and the results appended to the
+[public trend](https://senseiissei.github.io/Sensei/).
 
 </details>
 

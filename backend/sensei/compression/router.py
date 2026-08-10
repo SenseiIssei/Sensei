@@ -67,7 +67,16 @@ _LOG_LEVEL_RE = re.compile(r"\b(INFO|DEBUG|WARN(?:ING)?|ERROR|TRACE|FATAL|CRITIC
 _LOG_LINE_START = re.compile(
     r"^\s*(\[?\d{4}-\d{2}-\d{2}|\d{2}:\d{2}:\d{2}|"
     r"\[(?:INFO|DEBUG|WARN|ERROR|TRACE|FATAL)\]|"
-    r'(?:INFO|DEBUG|WARN|ERROR|TRACE|FATAL):|at |File "|Traceback)'
+    r'(?:INFO|DEBUG|WARN|ERROR|TRACE|FATAL):|at |File "|Traceback|'
+    # Build output frequently carries no timestamp and no level — a compiler
+    # emits `[0042] compiling foo.cpp`, `src/x.cpp:412:19: error:` and
+    # `make: *** [Makefile:88]`. None of those matched, so a build log was
+    # classified as prose and run through the wrong compressor, which both
+    # compressed it barely and dropped the error location.
+    r"\[\d+\]|"  # bracketed step counters
+    r"\S+:\d+:\d+:|"  # gcc/clang/tsc file:line:col diagnostics
+    r"(?:make|ninja|cmake|gradle|mvn|cargo|go|npm ERR!|yarn|pnpm|tsc|eslint)[\s:]"
+    r")"
 )
 
 

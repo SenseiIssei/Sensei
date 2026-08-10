@@ -37,8 +37,25 @@ class LogCompressor:
         r"\bbuild (?:succeeded|failed|success|complete)\b|\bdone\b|\bsummary\b)",
         re.IGNORECASE,
     )
-    # Stack-frame continuation lines worth keeping right after an error.
-    FRAME = re.compile(r'^\s*(at |File ", "|in |\| |#\d+ |\.\.\. )')
+    # Stack-frame continuation lines worth keeping next to an error.
+    #
+    # This read `File ", "` until 2026-08-10 — a stray `, ` inside what was
+    # meant to be the alternative `File "`, so no Python traceback frame ever
+    # matched. Same shape as the `"java": ("import ")` bug: a regex that is
+    # valid, matches nothing, and fails silently.
+    FRAME = re.compile(r'^\s*(at |File "|in |\| |#\d+ |\.\.\. )')
+
+    # A traceback is a *block*: frame lines interleaved with the source line
+    # each frame points at, and those source lines match nothing above. Treating
+    # any indented non-empty line as part of the block keeps Python, Java and
+    # JavaScript traces intact without needing a parser per language.
+    _BLOCK = re.compile(r"^\s+\S")
+
+    # Bound on how far a block extends from its error line. A 900-frame Java
+    # trace is mostly framework noise; the frames nearest the exception are the
+    # ones that say what actually happened, and those are the ones this reaches
+    # first in both directions.
+    MAX_BLOCK = 40
 
     # Normalize volatile tokens so otherwise-identical lines dedupe together.
     _NORM: ClassVar[list[tuple[re.Pattern[str], str]]] = [
@@ -75,6 +92,21 @@ class LogCompressor:
                 for j in range(i + 1, min(n, i + 1 + self.context_after)):
                     if self.FRAME.match(lines[j]) or lines[j].strip():
                         keep[j] = True
+                # Then follow the stack-frame block in both directions.
+                #
+                # Direction matters and differs by language: Python puts the
+                # exception last and the frames above it, Java puts it first
+                # with the frames below. Walking both ways keeps whichever it
+                # is, and stops at the first line that is not part of the block,
+                # so ordinary log noise is untouched.
+                for j in range(i - 1, max(-1, i - 1 - self.MAX_BLOCK), -1):
+                    if not self._in_block(lines[j]):
+                        break
+                    keep[j] = True
+                for j in range(i + 1, min(n, i + 1 + self.MAX_BLOCK)):
+                    if not self._in_block(lines[j]):
+                        break
+                    keep[j] = True
 
         # Emit kept lines; replace dropped runs with an omission marker.
         out: list[str] = []
@@ -91,6 +123,10 @@ class LogCompressor:
                 i = j
 
         return self._collapse_repeats(out)
+
+    def _in_block(self, line: str) -> bool:
+        """Is this line part of a stack-frame block?"""
+        return bool(self.FRAME.match(line) or self._BLOCK.match(line))
 
     def _collapse_repeats(self, lines: list[str]) -> str:
         """Collapse consecutive lines that are identical after normalization."""

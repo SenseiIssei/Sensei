@@ -65,6 +65,37 @@ jobs:
           path: benchmark-*.json
           retention-days: 90
 
+  # Shrinking text and preserving meaning are different claims, and until this
+  # job existed only the first one was checked anywhere. This is the checkable
+  # half of the second: every fact an agent would need out of a payload must
+  # still be literally present after compression.
+  #
+  # The floor is 100 and that is deliberate. Unlike the savings percentage,
+  # which moves with the tokenizer and the corpus, a lost fact is never jitter —
+  # it is always a defect. The first run of this eval found two: a regex that
+  # meant `File "` but said `File ", "`, so no traceback frame was ever kept,
+  # and build output being classified as prose.
+  quality:
+    name: fact retention
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: pip install -e ./backend
+      - name: Check that compression preserves the facts
+        working-directory: backend
+        run: |
+          python benchmarks/quality_eval.py \
+            --json ../quality.json \
+            --min-retention 100
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: quality
+          path: quality.json
+          retention-days: 90
+
   # Rust and Python must agree exactly, or the "optional accelerator" claim is
   # a lie. Compare the two benchmark payloads token-for-token.
   parity:
@@ -92,6 +123,96 @@ jobs:
               sys.exit(1)
           print(f"Byte-parity confirmed. Aggregate: {py['aggregate']['saved_pct']}%")
           PY
+
+  # Publish the numbers instead of asserting them.
+  #
+  # A benchmark that only ever runs in CI and fails a build is a private
+  # guarantee; the README makes a public claim. Appending each run to a file on
+  # `gh-pages` turns "79%" into something a reader can check, and turns a slow
+  # regression — the kind that stays above the floor for months — into a visible
+  # slope rather than a number nobody compares to last quarter's.
+  publish-trend:
+    name: publish the benchmark trend
+    needs: [benchmark, quality]
+    # Not on pull requests: a PR must not be able to write to the published
+    # history, and a fork could not authenticate for it anyway.
+    if: github.event_name != 'pull_request' && github.repository == 'SenseiIssei/Sensei'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: results
+          merge-multiple: true
+
+      - name: Append this run to the history
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, pathlib, subprocess
+
+          def load(name):
+              path = pathlib.Path("results") / name
+              return json.loads(path.read_text()) if path.exists() else None
+
+          py = load("benchmark-python.json")
+          rs = load("benchmark-rust.json")
+          quality = load("quality.json")
+          if py is None:
+              raise SystemExit("benchmark-python.json missing — nothing to publish")
+
+          date = subprocess.run(
+              ["git", "log", "-1", "--format=%cs"], capture_output=True, text=True, check=True
+          ).stdout.strip()
+
+          row = {
+              "date": date,
+              "commit": os.environ["GITHUB_SHA"],
+              "run": os.environ["GITHUB_RUN_ID"],
+              "saved_pct": py["aggregate"]["saved_pct"],
+              "rust_saved_pct": rs["aggregate"]["saved_pct"] if rs else None,
+              "retention_pct": quality["aggregate"]["retention_pct"] if quality else None,
+              "metric": py.get("metric"),
+          }
+          pathlib.Path("row.json").write_text(json.dumps(row))
+          print(json.dumps(row, indent=2))
+          PY
+
+      - name: Commit it to gh-pages
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Orphan branch on first run; the history is data, not source, and
+          # sharing main's history would double the clone size for no reason.
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch origin gh-pages
+            git worktree add pages origin/gh-pages
+          else
+            git worktree add --detach pages
+            (cd pages && git checkout --orphan gh-pages && git rm -rfq --cached . || true)
+            find pages -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          fi
+
+          cp docs/benchmark-page/index.html pages/index.html
+          cat row.json >> pages/history.jsonl
+          echo "" >> pages/history.jsonl
+          # Blank lines would accumulate on re-runs; the page skips them, but a
+          # data file that grows empty lines is a data file nobody trusts.
+          grep -v '^$' pages/history.jsonl > pages/history.tmp
+          mv pages/history.tmp pages/history.jsonl
+
+          cd pages
+          git add index.html history.jsonl
+          if git diff --cached --quiet; then
+            echo "nothing changed"
+            exit 0
+          fi
+          git commit -m "benchmark: $(date -u +%Y-%m-%d)"
+          git push origin gh-pages
 
   # Dependencies move even when we don't. Catch breakage from upstream releases
   # here, at 3am, instead of in someone's PR.

@@ -86,7 +86,7 @@ class LocalModelProvider(ModelProvider):
                 )
             except ImportError as exc:
                 raise RuntimeError(
-                    "vLLM not installed. Install with: pip install sensei[local]"
+                    "vLLM not installed. Install with: pip install sensei-gateway[local]"
                 ) from exc
         else:
             try:
@@ -100,7 +100,7 @@ class LocalModelProvider(ModelProvider):
                 )
             except ImportError as exc:
                 raise RuntimeError(
-                    "llama-cpp-python not installed. Install with: pip install sensei[local]"
+                    "llama-cpp-python not installed. Install with: pip install sensei-gateway[local]"
                 ) from exc
 
         self._loaded = True

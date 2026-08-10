@@ -163,9 +163,30 @@ fn summary_re() -> &'static Regex {
     })
 }
 
+// Kept byte-identical with LogCompressor.FRAME in logcomp.py, including the
+// comment about why it changed: this read `File ", "` until 2026-08-10, a stray
+// `, ` inside what was meant to be the alternative `File "`, so no Python
+// traceback frame ever matched. The Rust port reproduced the bug faithfully,
+// which is the parity test working exactly as intended and also the reason
+// nobody spotted it.
 fn frame_re() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
-    R.get_or_init(|| Regex::new(r#"^\s*(at |File ", "|in |\| |#\d+ |\.\.\. )"#).unwrap())
+    R.get_or_init(|| Regex::new(r#"^\s*(at |File "|in |\| |#\d+ |\.\.\. )"#).unwrap())
+}
+
+// Any indented non-empty line. A traceback is a block of frame lines
+// interleaved with the source line each frame points at, and those source lines
+// match nothing else.
+fn block_re() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| Regex::new(r"^\s+\S").unwrap())
+}
+
+/// Mirrors LogCompressor.MAX_BLOCK.
+const MAX_BLOCK: usize = 40;
+
+fn in_block(line: &str) -> bool {
+    frame_re().is_match(line) || block_re().is_match(line)
 }
 
 fn ts_re() -> &'static Regex {
@@ -232,6 +253,20 @@ fn do_compress_logs(text: &str, context_after: usize, head: usize, tail: usize) 
                 if frame_re().is_match(lines[j]) || !lines[j].trim().is_empty() {
                     keep[j] = true;
                 }
+            }
+            // Follow the stack-frame block both ways: Python puts the exception
+            // last with frames above it, Java puts it first with frames below.
+            for j in (i.saturating_sub(MAX_BLOCK)..i).rev() {
+                if !in_block(lines[j]) {
+                    break;
+                }
+                keep[j] = true;
+            }
+            for j in (i + 1)..(i + 1 + MAX_BLOCK).min(n) {
+                if !in_block(lines[j]) {
+                    break;
+                }
+                keep[j] = true;
             }
         }
     }

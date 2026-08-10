@@ -123,15 +123,22 @@ jobs:
       - name: Build the binary
         run: pyinstaller packaging/sensei.spec --noconfirm --distpath dist-app
 
-      # ── Windows: ship the bare .exe ──
+      # ── Windows: the bare .exe, plus a .zip for Scoop ──
+      # Scoop wants an archive it can extract and a sha256 it can pin. Handing
+      # it a bare .exe works but gives up the checksum verification, which is
+      # the only integrity story an unsigned build has.
       - name: Stage Windows artifact
         if: runner.os == 'Windows'
         shell: bash
         run: |
           mkdir -p out
           cp dist-app/sensei.exe "out/sensei-${{ matrix.label }}.exe"
+          (cd dist-app && 7z a -tzip "../out/sensei-${{ matrix.label }}.zip" sensei.exe)
 
-      # ── macOS: wrap the binary in a .dmg ──
+      # ── macOS: a .dmg to double-click, plus a .tar.gz for Homebrew ──
+      # `brew` cannot install from a .dmg. A formula pointing at a tarball of
+      # the same binary is the difference between "download and drag" and
+      # "brew install", and the second is how macOS users actually install.
       - name: Stage macOS artifact
         if: runner.os == 'macOS'
         run: |
@@ -140,6 +147,7 @@ jobs:
           chmod +x staging/sensei
           hdiutil create -volname Sensei -srcfolder staging -ov -format ULFO \
             "out/sensei-${{ matrix.label }}.dmg"
+          tar -czf "out/sensei-${{ matrix.label }}.tar.gz" -C staging sensei
 
       # ── Linux: AppImage plus .deb and .rpm ──
       - name: Stage Linux artifacts
@@ -168,6 +176,13 @@ jobs:
           chmod +x appimagetool
           ./appimagetool --appimage-extract-and-run AppDir \
             "out/sensei-${{ matrix.label }}.AppImage"
+
+          # Plain tarball as well: Homebrew on Linux, and anyone who wants the
+          # binary without AppImage's FUSE requirement.
+          mkdir -p staging
+          cp dist-app/sensei staging/sensei
+          chmod +x staging/sensei
+          tar -czf "out/sensei-${{ matrix.label }}.tar.gz" -C staging sensei
 
           # .deb / .rpm via fpm
           sudo gem install --no-document fpm
@@ -286,6 +301,21 @@ jobs:
           cd release
           sha256sum * > SHA256SUMS
           cat SHA256SUMS
+      # Rendered from SHA256SUMS, so the digests in a formula are by
+      # construction the digests of the files that were just uploaded.
+      - name: Render package-manager manifests
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          version="${version:-0.0.0}"
+          python scripts/render_manifests.py \
+            --version "$version" \
+            --sums release/SHA256SUMS \
+            --out manifests
+          # Attached as one archive rather than loose files: three package
+          # managers want three directory layouts, and flattening them into the
+          # release would lose the layout each one needs.
+          tar -czf "release/package-manager-manifests.tar.gz" -C manifests .
+
       - name: Sign every artifact with Sigstore
         uses: sigstore/gh-action-sigstore-python@790bc6befb9d733738f18d8f895854b453640ec9 # v3.5.0
         with:
@@ -296,14 +326,30 @@ jobs:
           cat > release-notes.md <<'EOF'
           ## Install
 
+          ```bash
+          pipx install sensei-gateway              # any platform, needs Python 3.11+
+          brew install senseiissei/tap/sensei      # macOS, Linux
+          winget install SenseiIssei.Sensei        # Windows
+          scoop install sensei                     # Windows, portable
+          ```
+
+          Or take a single file that needs no Python at all:
+
           | Platform | File |
           |---|---|
-          | Windows 10/11 x64 | `sensei-windows-x64.exe` |
-          | macOS (Apple silicon) | `sensei-macos-arm64.dmg` |
-          | macOS (Intel) | `sensei-macos-x86_64.dmg` |
-          | Linux x86_64 | `sensei-linux-x86_64.AppImage`, `.deb`, `.rpm` |
+          | Windows 10/11 x64 | `sensei-windows-x64.exe` (or `.zip`) |
+          | macOS (Apple silicon) | `sensei-macos-arm64.dmg` (or `.tar.gz`) |
+          | macOS (Intel) | `sensei-macos-x86_64.dmg` (or `.tar.gz`) |
+          | Linux x86_64 | `sensei-linux-x86_64.AppImage`, `.deb`, `.rpm`, `.tar.gz` |
           | Docker | `ghcr.io/senseiissei/sensei-backend:latest` |
           | VS Code | `sensei.vsix` |
+
+          Then:
+
+          ```bash
+          sensei up            # start the server, open the web UI
+          sensei setup-tools   # point the AI tools on this machine at it
+          ```
 
           ### These builds are not code-signed
 
@@ -338,6 +384,69 @@ jobs:
           body_path: release-notes.md
           generate_release_notes: true
           draft: false
+
+  # ── Homebrew tap and Scoop bucket: push the rendered manifest to its repo ──
+  #
+  # Gated on the token existing, like the marketplace jobs above, so a release
+  # in a repo without a tap skips this instead of failing on it. Both target
+  # repositories have to exist first — see docs/packaging.md.
+  package-managers:
+    name: ${{ matrix.manager }}
+    needs: [release]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - manager: homebrew
+            repo: homebrew-tap
+            dir: Formula
+            file: sensei.rb
+            token_name: TAP_TOKEN
+          - manager: scoop
+            repo: scoop-bucket
+            dir: bucket
+            file: sensei.json
+            token_name: BUCKET_TOKEN
+    env:
+      TOKEN: ${{ secrets[matrix.token_name] }}
+    steps:
+      - name: Fetch the rendered manifests from the release
+        if: env.TOKEN != ''
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          curl -fsSL -o manifests.tar.gz \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/package-manager-manifests.tar.gz"
+          mkdir -p manifests && tar -xzf manifests.tar.gz -C manifests
+
+      - name: Check out the target repository
+        if: env.TOKEN != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/${{ matrix.repo }}
+          token: ${{ env.TOKEN }}
+          path: target
+
+      - name: Commit the updated manifest
+        if: env.TOKEN != ''
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p "target/${{ matrix.dir }}"
+          cp "manifests/${{ matrix.manager }}/${{ matrix.file }}" \
+             "target/${{ matrix.dir }}/${{ matrix.file }}"
+          cd target
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Nothing to do when a re-run produces a byte-identical manifest.
+          if git diff --quiet; then
+            echo "manifest already current"
+            exit 0
+          fi
+          git add "${{ matrix.dir }}/${{ matrix.file }}"
+          git commit -m "sensei ${version}"
+          git push
 
   # ── PyPI: only runs once the project exists and Trusted Publishing is set up ──
   pypi:

@@ -32,6 +32,28 @@ The strategic picture is in [MEGAPLAN.md](MEGAPLAN.md). This is the queue.
   false positives — the redaction test corpus and a placeholder in a docstring —
   allowlisted with reasons in `.gitleaks.toml`.
 
+### Distribution and trust (2026-08-10, second pass)
+
+- **`sensei-gateway` on PyPI.** The plain name is taken by an unrelated 2023
+  HTTP library and `sensei-ai` is taken too; the roadmap said to check, and this
+  is the answer. The import package and the command stay `sensei`.
+- **Homebrew, Scoop and winget.** `scripts/render_manifests.py` builds all three
+  from the release's own `SHA256SUMS`, so a formula cannot pin last version's
+  digest. The release now also emits `.tar.gz` and `.zip` next to the `.dmg` and
+  `.exe`, because `brew` cannot install from a disk image. The tap and bucket
+  jobs are gated on their tokens existing, like the marketplace ones.
+  See [packaging.md](packaging.md).
+- **A public benchmark trend** on `gh-pages`, appended nightly. The README's 79%
+  is now a line rather than an assertion.
+- **Fact-retention evals.** See `benchmarks/quality_eval.py`. Two real defects
+  fell out of writing it, both in the highest-value content type:
+  `LogCompressor.FRAME` said `File ", "` where `File "` was meant — so no Python
+  traceback frame ever matched and the innermost frames were elided — and build
+  output was being detected as prose (3% compression instead of 91%, with the
+  compiler's `file:line:col` discarded). The Rust accelerator had faithfully
+  reproduced the regex bug, which is the parity test working correctly and also
+  why nobody caught it.
+
 ### Where Headroom is now ahead
 
 Worth checking before planning Phase 3, because it is the same problem being

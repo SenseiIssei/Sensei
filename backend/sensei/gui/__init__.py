@@ -10,7 +10,7 @@ Features:
 - Conversation history
 - Dark theme
 
-Requires: pip install sensei[gui]
+Requires: pip install sensei-gateway[gui]
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ def _import_qt():
     except ImportError:
         print(
             "PySide6 is not installed.\n"
-            "Install with: pip install sensei[gui]\n"
+            "Install with: pip install sensei-gateway[gui]\n"
             "Or: pip install PySide6",
             file=sys.stderr,
         )

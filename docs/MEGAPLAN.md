@@ -414,7 +414,7 @@ takes `--json` and `--min-aggregate`, which is what the nightly guard uses.
 **Phase 3 — the Headroom catch-up.** In order of leverage:
 
 1. ~~**MCP server** (`sensei_compress`, `sensei_retrieve`, `sensei_stats`).~~
-   **Done.** `sensei mcp` over stdio, behind the optional `sensei[mcp]` extra.
+   **Done.** `sensei mcp` over stdio, behind the optional `sensei-gateway[mcp]` extra.
    Verified against a real MCP client: 582 → 287 tokens on a 40-record JSON
    array, original recovered byte-identical. `sensei_retrieve` is what makes it
    safe rather than lossy-by-default, and the server's instructions tell the
