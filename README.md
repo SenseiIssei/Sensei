@@ -75,6 +75,14 @@ model sees the same facts.
 
 **1. Install**
 
+On Windows, take [the installer](https://github.com/SenseiIssei/Sensei/releases/latest)
+(`sensei-setup-*.exe`). It installs per-user — no administrator prompt, because
+Sensei listens on loopback and only touches files in your own home directory —
+adds a Start-menu entry, and offers to connect the AI tools you already have and
+to start with Windows. Uninstalling puts those tools back.
+
+Everywhere else:
+
 ```bash
 pipx install sensei-gateway
 ```
@@ -103,8 +111,13 @@ unrelated HTTP library from 2023. The command you type is `sensei`.
 **2. Start it**
 
 ```bash
-sensei up
+sensei up      # in a terminal
+sensei tray    # in the background, with a system-tray icon
 ```
+
+`tray` serves exactly what `up` serves, without a window you have to leave open.
+Right-click the icon to open the dashboard, connect your tools, or quit. Needs
+`pip install "sensei-gateway[tray]"`; the Windows installer includes it.
 
 Your browser opens and asks you one question: do you want to run a model on your
 own computer (free), or use a service like OpenAI (paste a key). Pick one, click

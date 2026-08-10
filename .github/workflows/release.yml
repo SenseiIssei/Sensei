@@ -168,7 +168,10 @@ jobs:
           # dies with ModuleNotFoundError — and `setup-tools` writes that
           # command into seven editors, every one of which then reports
           # "Server disconnected" with no indication of why.
-          pip install -e "./backend[mcp]"
+          pip install -e "./backend[mcp,tray]"
+
+      - name: Draw the icon
+        run: python packaging/make_icon.py
 
       - name: Build the binary
         run: pyinstaller packaging/sensei.spec --noconfirm --distpath dist-app
@@ -184,6 +187,39 @@ jobs:
           mkdir -p out
           cp dist-app/sensei.exe "out/sensei-${{ matrix.label }}.exe"
           (cd dist-app && 7z a -tzip "../out/sensei-${{ matrix.label }}.zip" sensei.exe)
+
+      # A real installer, because "download an .exe and put it somewhere" is not
+      # what most people mean by installing something. Per-user, no elevation:
+      # Sensei listens on loopback and edits files in the user's own home, so
+      # asking for administrator rights would be asking for a privilege in
+      # order not to use it.
+      - name: Build the Windows installer
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          version="${version:-0.0.0}"
+
+          # Inno Setup ships with the runner image but is not on PATH there.
+          iscc="iscc"
+          if ! command -v iscc >/dev/null 2>&1; then
+            for candidate in \
+              "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" \
+              "/c/Program Files/Inno Setup 6/ISCC.exe"; do
+              [ -x "$candidate" ] && iscc="$candidate" && break
+            done
+          fi
+          if ! command -v "$iscc" >/dev/null 2>&1 && [ ! -x "$iscc" ]; then
+            choco install innosetup --no-progress -y
+            iscc="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+          fi
+
+          "$iscc" //Qp \
+            "//DAppVersion=${version}" \
+            "//DSourceExe=..\\dist-app\\sensei.exe" \
+            packaging/sensei.iss
+          cp packaging/Output/sensei-setup-*.exe out/
 
       # ── macOS: a .dmg to double-click, plus a .tar.gz for Homebrew ──
       # `brew` cannot install from a .dmg. A formula pointing at a tarball of

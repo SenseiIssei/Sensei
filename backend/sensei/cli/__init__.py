@@ -61,6 +61,15 @@ def _build_parser() -> argparse.ArgumentParser:
     p_up.add_argument("--no-browser", action="store_true", help="don't open a browser")
     p_up.add_argument("--reload", action="store_true", help="reload on code changes (development)")
 
+    p_tray = sub.add_parser(
+        "tray",
+        help="run in the background with a system-tray icon",
+        description="Serves exactly what `up` serves, but without a terminal window to keep "
+        "open. The tray icon opens the dashboard, connects your tools and quits.",
+    )
+    p_tray.add_argument("--port", type=int, help="port to listen on")
+    p_tray.add_argument("--no-browser", action="store_true", help="don't open a browser")
+
     p_wrap = sub.add_parser(
         "wrap",
         help="run a coding agent with its traffic routed through Sensei",
@@ -165,6 +174,11 @@ def main(argv: list[str] | None = None) -> int:
             # argparse.REMAINDER keeps a leading "--" separator; drop it.
             passthrough = args.args[1:] if args.args[:1] == ["--"] else args.args
             return wrap.run(args.tool, passthrough)
+
+        if args.command == "tray":
+            from sensei.cli import tray
+
+            return tray.run(port=args.port, open_browser=not args.no_browser)
 
         if args.command == "setup-tools":
             from sensei.cli import setup_tools

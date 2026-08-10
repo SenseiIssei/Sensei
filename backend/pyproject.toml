@@ -62,6 +62,12 @@ cli = [
 mcp = [
     "mcp>=2.0.0",
 ]
+# A system-tray icon, so the gateway can run without a terminal window open.
+# pystray + Pillow rather than PySide6: ~5 MB against ~150 MB for one icon.
+tray = [
+    "pystray>=0.19.5",
+    "pillow>=11.0.0",
+]
 dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
@@ -69,7 +75,7 @@ dev = [
     "httpx>=0.28.1",
     "ruff>=0.16.1",
 ]
-all = ["sensei-gateway[local,ml,gui,cli,mcp,dev]"]
+all = ["sensei-gateway[local,ml,gui,cli,mcp,tray,dev]"]
 
 [project.scripts]
 sensei = "sensei.cli:main"
