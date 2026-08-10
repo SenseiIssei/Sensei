@@ -28,9 +28,20 @@ dist = repo / "frontend" / "dist"
 if dist.exists():
     datas.append((str(dist), "frontend/dist"))
 
+# `mcp` is imported lazily inside build_server(), so PyInstaller's static
+# analysis never sees it — the binary built fine and then `sensei mcp` died with
+# ModuleNotFoundError. It has to be collected explicitly. Optional at build
+# time: a contributor without the extra installed still gets a working binary,
+# minus the MCP server.
+try:
+    _mcp = collect_submodules("mcp")
+except Exception:  # pragma: no cover - the extra simply isn't installed
+    _mcp = []
+
 hiddenimports = (
     collect_submodules("sensei")
     + collect_submodules("uvicorn")
+    + _mcp
     + ["fastapi", "pydantic", "pydantic_settings", "httpx", "tiktoken", "anyio", "starlette"]
 )
 

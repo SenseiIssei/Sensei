@@ -111,6 +111,15 @@ def run(
     ep = integrations.endpoints()
     print()
     print(f"  Pointing tools at {ep.anthropic}")
+    if not ep.mcp_ready:
+        # Said before anything is written, because the consequence is that
+        # several tools will be reported as "unchanged" for a reason that has
+        # nothing to do with them.
+        print()
+        print("  This build cannot serve MCP — the optional 'mcp' extra is missing.")
+        print("  Tools wired only through MCP are skipped rather than given a server")
+        print("  entry that fails to start. Install it with:")
+        print('      pip install "sensei-gateway[mcp]"')
     if project_root:
         print(f"  Scoped to {project_root}")
         print("  Only tools that read per-repository config are touched.")

@@ -19,11 +19,20 @@ from sensei.integrations import Endpoints, Integration
 
 @pytest.fixture
 def sandbox(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Point Sensei's bookkeeping at a temporary directory."""
+    """Point Sensei's bookkeeping at a temporary directory.
+
+    `mcp_available` is pinned true because most of these assert that an MCP
+    server entry gets written, and whether it does depends on the optional
+    `mcp` extra being installed. Left to the environment, the suite passes on a
+    developer machine with the extra and fails in CI without it — which is
+    exactly what happened. The one place that behaviour is under test pins it
+    explicitly instead.
+    """
     home = tmp_path / "sensei-home"
     monkeypatch.setattr(integrations, "SENSEI_HOME", home)
     monkeypatch.setattr(integrations, "MANIFEST_PATH", home / "integrations.json")
     monkeypatch.setattr(integrations, "BACKUP_ROOT", home / "backups")
+    monkeypatch.setattr(integrations, "mcp_available", lambda: True)
     return tmp_path
 
 
@@ -274,6 +283,52 @@ def test_the_console_script_is_preferred_when_present(monkeypatch: pytest.Monkey
     ep = integrations.endpoints()
     assert ep.mcp_command == "sensei"
     assert ep.mcp_args == ("mcp",)
+
+
+class TestMcpAvailability:
+    """A server entry for a command that cannot start is worse than none.
+
+    A PyInstaller binary built without the optional `mcp` extra starts, reports
+    its version and wires base URLs happily — then dies with ModuleNotFoundError
+    the moment an editor spawns `sensei mcp`. Claude Desktop shows "Server
+    disconnected" with no indication that a missing Python package is the
+    reason, and it does so on every launch, forever.
+    """
+
+    @staticmethod
+    def _endpoints(ready: bool) -> Endpoints:
+        return Endpoints(
+            anthropic="http://127.0.0.1:7000",
+            openai="http://127.0.0.1:7000/v1",
+            mcp_command="sensei",
+            mcp_args=("mcp",),
+            mcp_ready=ready,
+        )
+
+    def test_no_server_entry_is_written_without_the_extra(self) -> None:
+        doc: dict = {}
+        changed = integrations._mcp_apply(("mcpServers",))(doc, self._endpoints(False))
+        assert changed is False
+        assert doc == {}
+
+    def test_the_entry_is_written_when_it_can_run(self) -> None:
+        doc: dict = {}
+        assert integrations._mcp_apply(("mcpServers",))(doc, self._endpoints(True))
+        assert doc["mcpServers"]["sensei"]["args"] == ["mcp"]
+
+    def test_claude_code_still_gets_its_routing(self) -> None:
+        """The gateway half is what matters there and works regardless; only
+        the tools are unavailable."""
+        doc: dict = {}
+        assert integrations._claude_code_apply(doc, self._endpoints(False))
+        assert doc["env"]["ANTHROPIC_BASE_URL"] == "http://127.0.0.1:7000"
+        assert "mcpServers" not in doc
+
+    def test_availability_follows_the_import(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(integrations.importlib.util, "find_spec", lambda _: None)
+        assert integrations.mcp_available() is False
+        monkeypatch.setattr(integrations.importlib.util, "find_spec", lambda _: object())
+        assert integrations.mcp_available() is True
 
 
 def test_openai_endpoint_carries_the_v1_suffix(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -98,8 +98,21 @@ export default function App({ initialView = "savings" }: { initialView?: "saving
     [conversationId, clearMessages, refreshConversations]
   );
 
-  if (setup?.needs_setup && !setupDismissed) {
-    return <SetupWizard status={setup} onDone={handleSetupDone} />;
+  // The wizard belongs in front of the chat, not in front of the dashboard.
+  //
+  // It used to preempt everything as soon as the setup probe came back, which
+  // on this machine took 2.7 seconds: you landed on your savings, read them,
+  // and then the wizard dropped on top. Two separate faults in one behaviour.
+  //
+  // The flash is the smaller one. The real error is the premise — `needs_setup`
+  // means "no provider of Sensei's own", and the gateway does not need one. It
+  // forwards whatever credential the calling tool sent, so a Claude Code or
+  // Copilot subscription routes through it with nothing configured here. The
+  // parts that originate a request rather than relay one — the chat, RAG, the
+  // agent — are the ones that need a key, so that is where the wizard goes.
+  const needsSetup = Boolean(setup?.needs_setup) && !setupDismissed;
+  if (needsSetup && !showSavings) {
+    return <SetupWizard status={setup!} onDone={handleSetupDone} />;
   }
 
   // Savings is the landing view, not something you click through the chat to
@@ -108,6 +121,7 @@ export default function App({ initialView = "savings" }: { initialView?: "saving
   if (showSavings) {
     return (
       <SavingsDashboard
+        needsSetup={needsSetup}
         onOpenChat={() => setShowSavings(false)}
         onOpenSettings={() => {
           setShowSavings(false);

@@ -4,12 +4,15 @@ import userEvent from "@testing-library/user-event";
 import { SavingsDashboard } from "./SavingsDashboard";
 import type { SavingsResponse } from "@/types";
 
+// Real timers on purpose. These used to run on fake ones, which the component
+// no longer needs — it subscribes to an EventSource and only falls back to an
+// interval — and which made the suite time out on the Windows runner while
+// passing everywhere else. Faking time to test a component that does not depend
+// on time buys nothing and costs a flake nobody can reproduce locally.
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn());
-  vi.useFakeTimers({ shouldAdvanceTime: true });
 });
 afterEach(() => {
-  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -99,7 +102,7 @@ describe("SavingsDashboard", () => {
   });
 
   it("requires a second click before deleting history", async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const user = userEvent.setup();
     reply(response({ lifetime: totals({ requests: 9 }) }));
     render(<SavingsDashboard onOpenChat={() => {}} onOpenSettings={() => {}} />);
 
