@@ -189,10 +189,21 @@ Then open <http://localhost:7000/app/>.
 
 ## What it looks like
 
-> **Screenshots wanted.** These aren't in the repo yet. If you run Sensei, a
-> screenshot of the setup screen and the chat window would be a genuinely
-> useful contribution — drop them in `docs/screenshots/` and open a PR.
-> See [`docs/screenshots/README.md`](docs/screenshots/README.md).
+<img src="docs/screenshots/savings.png" alt="The savings dashboard: 40.2k tokens saved across 85 requests, broken down by tool, provider and model" width="820">
+
+<sub>**Tokens Saved**, after routing five different coding agents through the
+gateway. Real traffic against a local stub provider — the compression numbers
+are measured, the money is an estimate at your configured input price, and the
+history is one day because the machine was set up that morning.</sub>
+
+<details>
+<summary><b>The chat window, and the phone layout</b></summary>
+
+<img src="docs/screenshots/chat.png" alt="The Sensei chat window" width="820">
+
+<img src="docs/screenshots/mobile.png" alt="Sensei at phone width with the sidebar drawer open" width="300">
+
+</details>
 
 Here is what the command line shows, which is real output:
 

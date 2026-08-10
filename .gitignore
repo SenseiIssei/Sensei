@@ -34,6 +34,10 @@ logs/
 .sensei_watch.json
 # The savings ledger, plus the -wal/-shm files SQLite keeps beside it in WAL mode.
 .sensei_savings.db*
+
+# The built web UI, copied into the package by the release workflow so the
+# wheel carries a dashboard. Generated from frontend/ — never edited here.
+backend/sensei/webui/
 /models/
 *.gguf
 *.safetensors

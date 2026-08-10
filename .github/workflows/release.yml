@@ -83,10 +83,43 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # The wheel has to carry the web UI. `pip install sensei-gateway` used to
+      # ship the API only, so `sensei up` served the Swagger page and printed
+      # "the web UI isn't built — cd frontend && npm ci && npm run build" at
+      # someone who had installed from PyPI and had no frontend directory. That
+      # is the headline install path in the README.
+      - name: Build the web UI into the package
+        run: |
+          cd frontend && npm ci && npm run build && cd ..
+          rm -rf backend/sensei/webui
+          cp -r frontend/dist backend/sensei/webui
+
       - run: pip install build
       - name: Build the sensei package
         working-directory: backend
         run: python -m build --sdist --wheel --outdir ../dist-python
+
+      - name: Fail if the wheel does not contain the web UI
+        run: |
+          set -euo pipefail
+          wheel=$(ls dist-python/sensei_gateway-*.whl)
+          # A wheel that silently lost its UI is the exact bug this job was
+          # changed to fix, and it would look like a successful build.
+          if ! python -c "
+          import sys, zipfile
+          names = zipfile.ZipFile(sys.argv[1]).namelist()
+          sys.exit(0 if any(n.startswith('sensei/webui/') and n.endswith('.html') for n in names) else 1)
+          " "$wheel"; then
+            echo "::error::$wheel contains no sensei/webui — pip users would get no dashboard"
+            exit 1
+          fi
+          echo "web UI present in $wheel"
       - name: Build the sensei_core sdist
         run: |
           pip install "maturin>=1.9,<2"

@@ -193,10 +193,14 @@ class SavingsLedger:
         """Totals grouped by tool, provider or model."""
         if dimension not in ("tool", "provider", "model"):
             raise ValueError(f"not a groupable dimension: {dimension}")
+        # `HAVING SUM(saved) > 0` drops rows that would render as a labelled bar
+        # of zero length. A request that saved nothing is real, but "unknown ·
+        # 0 · 0%" sitting under the tools that did save something reads as a
+        # failure rather than as an absence.
         rows = self._query(
             f"SELECT CASE WHEN {dimension} = '' THEN 'unknown' ELSE {dimension} END AS k,"  # noqa: S608
             " COALESCE(SUM(before),0), COALESCE(SUM(after),0), COALESCE(SUM(saved),0), COUNT(*)"
-            " FROM events GROUP BY k ORDER BY SUM(saved) DESC LIMIT ?",
+            " FROM events GROUP BY k HAVING SUM(saved) > 0 ORDER BY SUM(saved) DESC LIMIT ?",
             (limit,),
         )
         return [
