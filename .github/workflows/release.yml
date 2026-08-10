@@ -316,7 +316,12 @@ jobs:
       - name: Flatten and checksum
         run: |
           mkdir -p release
-          find artifacts -type f -exec cp {} release/ \;
+          # `docker/build-push-action` uploads a `.dockerbuild` build record as
+          # an artifact of its own. It is a debugging aid for the build, not
+          # something a user should be offered next to the installers, and the
+          # v0.1.0 release shipped four of them because this swept up everything
+          # it found.
+          find artifacts -type f ! -name '*.dockerbuild' -exec cp {} release/ \;
           cd release
           sha256sum * > SHA256SUMS
           cat SHA256SUMS
