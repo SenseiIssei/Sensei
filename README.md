@@ -475,6 +475,49 @@ in a README.
 </details>
 
 <details>
+<summary><b>Shorter answers, and how we know</b></summary>
+
+Compression only touches what goes *up*. Output tokens cost roughly 4-5× input
+tokens, so the other half of the bill was untouched until now.
+
+```bash
+SENSEI_OUTPUT_SHAPER=true sensei up
+```
+
+This appends a short instruction asking for answers without preamble, restated
+questions or closing offers of further help. It goes on the **last user
+message**, never the system prompt — the system prompt is the cached prefix, and
+appending to it would invalidate the provider's cache on every request and cost
+more in latency than the shaping saves.
+
+**It ships with a holdout, and that is the point.** An intervention that changes
+model behaviour cannot be measured by switching it on and reading the number:
+the number moves for a dozen other reasons. So `SENSEI_OUTPUT_HOLDOUT` (default
+10%) leaves a fraction of requests unshaped, and `sensei stats` compares the two
+groups:
+
+```console
+Output shaping
+
+  Shaped        360 requests,   281.4 tokens/answer on average
+  Control        40 requests,   402.7 tokens/answer on average
+
+  95% confident the change is between 22.5% and 37.5%
+  Best estimate: 30.1% (121.3 tokens/answer)
+  Verdict: shorter answers
+```
+
+Until both groups have enough samples it says **"not enough data yet"** and
+reports no percentage at all. A confident-looking figure computed from eleven
+requests is worse than no figure, because that is the one that gets quoted.
+
+Off by default: it changes what the model writes, which is your call. Streaming
+replies are excluded — they carry no usage block, and reconstructing one would
+mean parsing the stream on the hot path.
+
+</details>
+
+<details>
 <summary><b>Does it keep what the model needs?</b></summary>
 
 A different question from "does it get smaller", and until recently only the

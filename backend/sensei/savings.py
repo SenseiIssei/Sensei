@@ -45,6 +45,19 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS events_ts ON events (ts);
 """
 
+# Columns added after the first release. Applied with ALTER TABLE on open,
+# because a user's ledger is their own history and dropping it to change the
+# schema would be an odd way to thank them for keeping it.
+#
+# `shaped` is -1 for every row written before output shaping existed, which is
+# distinct from 0 (control) and 1 (shaped) on purpose: "not part of the
+# experiment" and "in the control arm" are different facts, and merging them
+# would quietly bias the comparison with historical data.
+_MIGRATIONS: tuple[tuple[str, str], ...] = (
+    ("output_tokens", "ALTER TABLE events ADD COLUMN output_tokens INTEGER NOT NULL DEFAULT 0"),
+    ("shaped", "ALTER TABLE events ADD COLUMN shaped INTEGER NOT NULL DEFAULT -1"),
+)
+
 DAY = 86_400.0
 
 
@@ -84,6 +97,10 @@ class SavingsLedger:
             # (the gateway on the hot path).
             conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript(_SCHEMA)
+            existing = {row[1] for row in conn.execute("PRAGMA table_info(events)")}
+            for column, ddl in _MIGRATIONS:
+                if column not in existing:
+                    conn.execute(ddl)
             conn.commit()
         except sqlite3.Error as exc:
             logger.warning("Savings ledger unavailable (%s) — history disabled", exc)
@@ -99,17 +116,24 @@ class SavingsLedger:
         tool: str = "",
         provider: str = "",
         model: str = "",
-    ) -> None:
+        output_tokens: int = 0,
+        shaped: int = -1,
+    ) -> int | None:
+        """Record one request. Returns the row id so a later response can fill
+        in the output-token count, which is not known when the request starts.
+        """
         if not settings.savings_persist:
-            return
+            return None
         with self._lock:
             conn = self._connect()
             if conn is None:
-                return
+                return None
             try:
-                conn.execute(
-                    "INSERT INTO events (ts, tool, provider, model, before, after, saved, blocks)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                cursor = conn.execute(
+                    "INSERT INTO events"
+                    " (ts, tool, provider, model, before, after, saved, blocks,"
+                    "  output_tokens, shaped)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         time.time(),
                         tool[:64],
@@ -119,11 +143,56 @@ class SavingsLedger:
                         _int(savings.get("prompt_tokens_after")),
                         _int(savings.get("tokens_saved")),
                         _int(savings.get("blocks_compressed")),
+                        _int(output_tokens),
+                        int(shaped),
                     ),
                 )
                 conn.commit()
+                return cursor.lastrowid
             except sqlite3.Error as exc:
                 logger.warning("Could not append to the savings ledger: %s", exc)
+                return None
+
+    def set_output_tokens(self, row_id: int, output_tokens: int) -> None:
+        """Fill in what the model actually wrote, once the response is in."""
+        if row_id is None or not settings.savings_persist:
+            return
+        with self._lock:
+            conn = self._connect()
+            if conn is None:
+                return
+            try:
+                conn.execute(
+                    "UPDATE events SET output_tokens = ? WHERE rowid = ?",
+                    (_int(output_tokens), row_id),
+                )
+                conn.commit()
+            except sqlite3.Error as exc:
+                logger.warning("Could not record output tokens: %s", exc)
+
+    def output_arms(self, model: str | None = None) -> tuple[list[int], list[int]]:
+        """Output-token counts for (shaped, control).
+
+        Rows with `shaped = -1` predate the experiment and rows with zero output
+        tokens never reported a usage block — streaming responses, or an
+        upstream that omits it. Both are excluded rather than counted as zero,
+        which would drag both arms toward zero and shrink an effect that is
+        there.
+        """
+        clause = "WHERE shaped = ? AND output_tokens > 0"
+        params: list[Any] = []
+        if model:
+            clause += " AND model = ?"
+            params.append(model)
+
+        def arm(flag: int) -> list[int]:
+            rows = self._query(
+                f"SELECT output_tokens FROM events {clause}",  # noqa: S608 — fixed clause
+                (flag, *params),
+            )
+            return [_int(r[0]) for r in rows]
+
+        return arm(1), arm(0)
 
     def _query(self, sql: str, params: tuple[Any, ...] = ()) -> list[tuple[Any, ...]]:
         with self._lock:
@@ -302,15 +371,27 @@ class SavingsTracker:
         tool: str = "",
         provider: str = "",
         model: str = "",
-    ) -> None:
-        """Fold one request's savings dict (from the gateway) into the totals."""
+        shaped: int = -1,
+    ) -> int | None:
+        """Fold one request's savings dict (from the gateway) into the totals.
+
+        Returns the ledger row id, so the gateway can fill in the output-token
+        count once the response arrives.
+        """
         with self._lock:
             self.requests += 1
             self.tokens_before += _int(savings.get("prompt_tokens_before"))
             self.tokens_after += _int(savings.get("prompt_tokens_after"))
             self.tokens_saved += _int(savings.get("tokens_saved"))
             self.blocks_compressed += _int(savings.get("blocks_compressed"))
-        self.ledger.append(savings, tool=tool, provider=provider, model=model)
+        return self.ledger.append(savings, tool=tool, provider=provider, model=model, shaped=shaped)
+
+    def output_effect(self) -> dict[str, Any]:
+        """Did shaping actually shorten the answers? With an interval."""
+        from sensei.output_shaping import effect
+
+        shaped, control = self.ledger.output_arms()
+        return effect(shaped, control)
 
     def snapshot(self) -> dict[str, Any]:
         """Totals for this process only — what the headers have always shown."""

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, RefreshCw, Trash2, TrendingDown } from "lucide-react";
 import { api } from "@/lib/api";
-import type { SavingsDay, SavingsResponse, SavingsSlice } from "@/types";
+import type { OutputEffect, SavingsDay, SavingsResponse, SavingsSlice } from "@/types";
 
 /**
  * "How much have I actually saved?"
@@ -147,6 +147,79 @@ function Breakdown({ title, rows }: { title: string; rows: SavingsSlice[] }) {
   );
 }
 
+/**
+ * The output-shaping experiment.
+ *
+ * Renders the interval before the number, and renders "not enough data yet" as
+ * the whole panel rather than showing a zero next to it. A dashboard that puts
+ * a confident-looking percentage on eleven samples is worse than one that
+ * shows nothing, because the percentage gets screenshotted.
+ */
+function OutputShaping({ effect }: { effect: OutputEffect }) {
+  const interval = effect.percent_interval_95;
+  const inconclusive = !interval;
+
+  return (
+    <div className="glass rounded-xl border border-gray-800/50 p-4">
+      <div className="mb-3 flex items-baseline justify-between gap-2">
+        <h2 className="text-sm font-semibold text-gray-300">Output shaping</h2>
+        <span className="text-xs text-gray-600">
+          {Math.round(effect.holdout * 100)}% held back as a control
+        </span>
+      </div>
+
+      {inconclusive ? (
+        <>
+          <p className="text-sm text-gray-400">Not enough data yet.</p>
+          <p className="mt-1 text-xs text-gray-600">{effect.detail}</p>
+        </>
+      ) : (
+        <>
+          <p className="text-xs text-gray-500">95% confident the change is between</p>
+          <p className="mt-0.5 text-2xl font-bold tabular-nums text-white">
+            {interval[0]}% <span className="text-gray-600">and</span> {interval[1]}%
+          </p>
+          <p className="mt-1 text-xs text-gray-500">
+            Best estimate {effect.percent}% ({effect.difference_tokens} tokens per answer) ·{" "}
+            <span
+              className={
+                effect.verdict === "shorter answers"
+                  ? "text-sensei-400"
+                  : effect.verdict === "longer answers"
+                    ? "text-red-400"
+                    : "text-gray-500"
+              }
+            >
+              {effect.verdict}
+            </span>
+          </p>
+        </>
+      )}
+
+      <dl className="mt-3 grid grid-cols-2 gap-2 border-t border-gray-800/50 pt-3 text-xs">
+        <div>
+          <dt className="text-gray-600">Shaped</dt>
+          <dd className="tabular-nums text-gray-300">
+            {effect.shaped.requests.toLocaleString()} · {effect.shaped.mean_output_tokens} tok/answer
+          </dd>
+        </div>
+        <div>
+          <dt className="text-gray-600">Control</dt>
+          <dd className="tabular-nums text-gray-300">
+            {effect.control.requests.toLocaleString()} · {effect.control.mean_output_tokens}{" "}
+            tok/answer
+          </dd>
+        </div>
+      </dl>
+
+      <p className="mt-3 text-xs text-gray-600">
+        Non-streaming responses only — a streamed reply reports no usage block, so it cannot be
+        counted without parsing the stream.
+      </p>
+    </div>
+  );
+}
+
 // ── page ────────────────────────────────────────────────────────────────────
 
 export function SavingsDashboard({ onClose }: { onClose: () => void }) {
@@ -273,6 +346,8 @@ export function SavingsDashboard({ onClose }: { onClose: () => void }) {
               </div>
               <DailyChart days={data.daily} />
             </div>
+
+            {data.output_effect?.enabled && <OutputShaping effect={data.output_effect} />}
 
             <div className="grid gap-3 md:grid-cols-3">
               <Breakdown title="By tool" rows={data.by_tool} />

@@ -61,6 +61,10 @@ async def get_savings() -> dict[str, Any]:
         "by_model": ledger.breakdown("model"),
         "persisted": settings.savings_persist,
         "price_per_million_usd": settings.usd_per_million_tokens,
+        # Output shaping reports a difference against its own control arm, or
+        # says it does not have enough data. It never reports a point estimate
+        # on its own.
+        "output_effect": tracker.output_effect(),
     }
 
 

@@ -124,7 +124,17 @@ class Settings(BaseSettings):
     compression_enabled: bool = True
     ccr_ttl_hours: int = 24
     ccr_cache_dir: str = ".sensei_cache"
+    # Ask the model for terser answers. Output tokens cost roughly 4-5x input
+    # tokens. Off by default: this changes what the model writes, which is the
+    # user's call, not ours.
     output_shaper: bool = False
+    # Fraction of requests deliberately left unshaped, so the effect can be
+    # measured against a control instead of asserted. Setting this to 0 turns
+    # the measurement off, not the shaping.
+    output_holdout: float = 0.1
+    # Override the instruction appended to the last user message. Empty means
+    # the built-in one — see sensei/output_shaping.py.
+    output_shaper_instruction: str = ""
     # Price assumption for the "money saved" dashboard (USD per 1M input tokens).
     usd_per_million_tokens: float = 3.0
     # Keep a local ledger of savings so the dashboard survives a restart.

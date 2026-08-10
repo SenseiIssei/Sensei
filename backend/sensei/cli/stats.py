@@ -39,6 +39,39 @@ def _table(title: str, rows: list[dict[str, Any]]) -> None:
         )
 
 
+def _output_effect(effect: dict[str, Any]) -> None:
+    """Report the shaping experiment, or why there is nothing to report.
+
+    Deliberately prints the interval before the point estimate. A reader who
+    stops after one line should have seen the uncertainty, not the headline.
+    """
+    if not effect or not effect.get("enabled"):
+        return
+
+    shaped = effect.get("shaped", {})
+    control = effect.get("control", {})
+    print("\nOutput shaping\n")
+    print(
+        f"  Shaped     {shaped.get('requests', 0):>6,} requests, "
+        f"{shaped.get('mean_output_tokens', 0):>7} tokens/answer on average"
+    )
+    print(
+        f"  Control    {control.get('requests', 0):>6,} requests, "
+        f"{control.get('mean_output_tokens', 0):>7} tokens/answer on average"
+    )
+
+    verdict = effect.get("verdict", "")
+    if "confidence_interval_95" not in effect:
+        print(f"\n  {verdict.capitalize()}. {effect.get('detail', '')}")
+        return
+
+    low, high = effect["percent_interval_95"]
+    print(f"\n  95% confident the change is between {low}% and {high}%")
+    print(f"  Best estimate: {effect['percent']}% ({effect['difference_tokens']} tokens/answer)")
+    print(f"  Verdict: {verdict}")
+    print("\n  Non-streaming responses only — streaming replies report no usage block.")
+
+
 def run() -> int:
     import asyncio
 
@@ -77,6 +110,7 @@ def run() -> int:
 
     _table("By tool", data.get("by_tool", []))
     _table("By provider", data.get("by_provider", []))
+    _output_effect(data.get("output_effect") or {})
 
     price = lifetime.get("price_per_million_usd", 0.0)
     print(

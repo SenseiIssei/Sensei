@@ -105,6 +105,7 @@ The pipeline that saves the tokens.
 | `SENSEI_LEARNED_KEEP_THRESHOLD` | `0.5` |
 | `SENSEI_LEARNED_MAX_LENGTH` | `256` |
 | `SENSEI_OUTPUT_SHAPER` | `false` |
+| `SENSEI_OUTPUT_SHAPER_INSTRUCTION` | _(empty)_ |
 | `SENSEI_USD_PER_MILLION_TOKENS` | `3.0` |
 
 ## Server
@@ -192,6 +193,7 @@ Webhooks and external channels.
 | `SENSEI_API_BASE_URL` | _(empty)_ |
 | `SENSEI_API_KEY` | _(empty)_ |
 | `SENSEI_API_MODEL` | _(empty)_ |
+| `SENSEI_OUTPUT_HOLDOUT` | `0.1` |
 | `SENSEI_SAVINGS_DB` | `.sensei_savings.db` |
 | `SENSEI_SAVINGS_PERSIST` | `true` |
 | `SENSEI_SAVINGS_RETENTION_DAYS` | `400` |
