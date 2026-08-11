@@ -956,9 +956,19 @@ def _is_wired(integration: Integration | BlockIntegration, ep: Endpoints) -> boo
     Implemented by asking the integration's own `apply` whether it would change
     anything, on a copy. That is the same code path that does the wiring, so the
     two cannot drift apart.
+
+    The empty-document probe is not redundant. `apply` is allowed to be inert —
+    the MCP writers decline to act when the `mcp` extra is missing, so a server
+    entry is never written for a command that cannot run. In that state every
+    config looks like "nothing to change", and reading that as "already wired"
+    reported all five tools as connected on a build that had wired none of them.
+    So an integration that would not touch an empty document cannot tell us
+    anything about a full one.
     """
     try:
         if isinstance(integration, Integration):
+            if not integration.apply({}, ep):
+                return False
             for target in integration.targets():
                 doc = _load_json(target)
                 if doc is not None and not integration.apply(copy.deepcopy(doc), ep):
