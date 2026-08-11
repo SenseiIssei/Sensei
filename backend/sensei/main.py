@@ -113,6 +113,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         _watch_task = asyncio.create_task(_watch_loop())
 
+    # Notice AI tools that get installed, or first configured, after Sensei was
+    # set up. `setup-tools` runs once at install time, which is before the user
+    # has installed half of what they will end up using.
+    from sensei import autowire
+
+    autowire.start()
+
     logger.info(
         "Sensei initialized — compression: %s, memory: %s, auth: %s, rate_limit: %s",
         settings.compression_enabled,
@@ -130,6 +137,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     for task in (_purge_task, _watch_task):
         if task:
             task.cancel()
+    await autowire.stop()
     from sensei.routers.gateway import close_clients
 
     await close_clients()

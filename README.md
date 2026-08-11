@@ -488,6 +488,51 @@ in a README.
 </details>
 
 <details>
+<summary><b>Characters you pay for and cannot see</b></summary>
+
+A zero-width space is one token. So is a byte-order mark, a word joiner, a soft
+hyphen. They arrive by the hundred when code is pasted out of a rendered web
+page, a wiki or a chat window, and no line-oriented compressor notices them.
+
+```console
+$ python backend/benchmarks/invisible_benchmark.py
+
+sample                                      pasted   clean   waste  removed  seen
+-------------------------------------------------------------------------------
+code pasted from a rendered page               550     400     38%       75     0
+code with a stray BOM per block                425     400      6%       25     0
+markdown out of a wiki                         336     336      0%        0    60
+source carrying a Trojan Source override       600     500     20%       50     0
+-------------------------------------------------------------------------------
+AGGREGATE                                     1911    1636     17%
+```
+
+Sensei removes them before counting, so the saving is already in the headline
+number. Nightly enforces a floor, because a stripper that stops stripping shows
+up as a quietly larger bill rather than as a failure.
+
+**It also removes bidi overrides and isolates** — the
+[Trojan Source](https://trojansource.codes) vector (CVE-2021-42574), where
+source renders in one order and compiles in another, so a reviewer reads
+`if (isAdmin)` where the compiler reads the opposite. A gateway every prompt
+already passes through is the right place to catch that.
+
+**Restraint is the part worth reading.** The three-line version of this feature
+corrupts real text:
+
+| | |
+|---|---|
+| **Zero-width joiners** | Structural in Devanagari, Persian and Arabic, and what holds 👨‍👩‍👧 together as one family. Removed only from content detected as *code*, where they cannot mean anything. |
+| **Directional marks** (LRM, RLM) | Ordinary punctuation in Hebrew and Arabic prose. Kept. Only the *overrides* go. |
+| **Non-breaking spaces** | Deliberate in typeset prose. Counted, never rewritten, unless you set `SENSEI_STRIP_NBSP=true` — and then to a space, not to nothing. |
+| **Homoglyphs** | `раssword` with a Cyrillic `а` is a different identifier than it looks. Logged, never silently corrected: "almost always an attack" is not a licence to edit your text. |
+
+The untouched original stays in the CCR store, byte-identical, retrievable by
+id — `SENSEI_STRIP_INVISIBLE=false` turns the whole thing off.
+
+</details>
+
+<details>
 <summary><b>Shorter answers, and how we know</b></summary>
 
 Compression only touches what goes *up*. Output tokens cost roughly 4-5× input

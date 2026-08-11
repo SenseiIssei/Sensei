@@ -122,6 +122,16 @@ class Settings(BaseSettings):
 
     # Compression
     compression_enabled: bool = True
+    # Strip characters that cost a token each and render as nothing: zero-width
+    # spaces, byte-order marks, word joiners. Measured at 40% overhead on source
+    # carrying one per line, which is what pasting out of a web interface does.
+    #
+    # Also removes bidi overrides and isolates — the Trojan Source vector
+    # (CVE-2021-42574), where code renders in one order and compiles in another.
+    strip_invisible: bool = True
+    # Replace no-break spaces with ordinary ones. Off by default: an NBSP is
+    # deliberate in typeset prose, and it is reported either way.
+    strip_nbsp: bool = False
     ccr_ttl_hours: int = 24
     ccr_cache_dir: str = ".sensei_cache"
     # Ask the model for terser answers. Output tokens cost roughly 4-5x input
@@ -166,6 +176,13 @@ class Settings(BaseSettings):
     watch_file: str = ".sensei_watch.json"
     watch_check_interval_minutes: int = 30
     watch_notify_url: str = ""
+
+    # Keep looking for AI tools while the server runs, and point any newly
+    # installed one at the gateway. On by default: a tool that is installed but
+    # not routed produces no error, just a smaller number on the dashboard.
+    # Only ever adds, and never touches a tool disconnected by hand.
+    auto_connect: bool = True
+    auto_connect_interval_seconds: int = 30
 
     # Agent: read-only tools sandboxed to agent_root; bounded ReAct loop.
     agent_root: str = "."

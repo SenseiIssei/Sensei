@@ -90,6 +90,14 @@ jobs:
           python benchmarks/quality_eval.py \
             --json ../quality.json \
             --min-retention 100
+      # A regression here means the stripper stopped stripping, which shows up
+      # as a quietly larger bill rather than as a failure — the payload still
+      # works, it just costs more. The floor is well under the measured 17% so
+      # it catches that without failing on corpus jitter.
+      - name: Check that invisible characters are still being removed
+        working-directory: backend
+        run: python benchmarks/invisible_benchmark.py --min-overhead 10
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: quality

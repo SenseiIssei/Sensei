@@ -285,6 +285,70 @@ def test_the_console_script_is_preferred_when_present(monkeypatch: pytest.Monkey
     assert ep.mcp_args == ("mcp",)
 
 
+class TestToolsThatMovedTheirConfig:
+    """Editors relocate their configuration and read the new place on their own
+    schedule. Devin moved Windsurf's out of `~/.codeium/windsurf/` into
+    `%APPDATA%/devin/` and now shows a dialog offering to copy it across —
+    which means at any moment a user is on one side of that or the other, and
+    nothing on this side can tell which.
+    """
+
+    @staticmethod
+    def _two_location_tool(new: Path, old: Path) -> Integration:
+        return Integration(
+            id="fake",
+            name="Fake Tool",
+            path=lambda: new,
+            legacy_paths=(lambda: old,),
+            apply=integrations._mcp_apply(("mcpServers",)),
+            revert=integrations._mcp_revert(("mcpServers",)),
+        )
+
+    def test_both_locations_are_written(
+        self, sandbox: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Writing only the current one leaves an un-migrated install unwired;
+        writing only the old one wires a directory the tool has stopped
+        reading. Both costs a few hundred bytes."""
+        new, old = sandbox / "new" / "mcp.json", sandbox / "old" / "mcp.json"
+        new.parent.mkdir(parents=True)
+        old.parent.mkdir(parents=True)
+        _install(monkeypatch, self._two_location_tool(new, old))
+
+        outcomes = integrations.apply_all()
+
+        assert [o.status for o in outcomes] == ["applied", "applied"]
+        for path in (new, old):
+            assert "sensei" in json.loads(path.read_text(encoding="utf-8"))["mcpServers"]
+
+    def test_undo_reaches_both(self, sandbox: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The failure this prevents: `--undo` cleans the current location and
+        leaves a stale entry behind in the old one, pointing at a gateway that
+        may no longer exist."""
+        new, old = sandbox / "new" / "mcp.json", sandbox / "old" / "mcp.json"
+        new.parent.mkdir(parents=True)
+        old.parent.mkdir(parents=True)
+        _install(monkeypatch, self._two_location_tool(new, old))
+
+        integrations.apply_all()
+        integrations.undo_all()
+
+        assert not new.exists()
+        assert not old.exists()
+
+    def test_detection_accepts_either(self, sandbox: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A user who has not migrated still has the tool installed."""
+        new, old = sandbox / "new" / "mcp.json", sandbox / "old" / "mcp.json"
+        old.parent.mkdir(parents=True)  # only the legacy directory exists
+        assert self._two_location_tool(new, old).detect() is True
+
+    def test_the_same_path_twice_is_written_once(self, sandbox: Path) -> None:
+        """A tool that never moved would otherwise be reported twice."""
+        same = sandbox / "cfg.json"
+        entry = self._two_location_tool(same, same)
+        assert entry.targets() == [same]
+
+
 class TestMcpAvailability:
     """A server entry for a command that cannot start is worse than none.
 

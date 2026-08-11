@@ -75,3 +75,28 @@ exe = EXE(
     upx=True,
     icon=str(_icon) if _icon.exists() else None,
 )
+
+# A second binary from the same code, built without a console.
+#
+# One executable cannot do both jobs. A console build always allocates a window
+# when launched from a shortcut — so "runs quietly in the tray" flashes, or
+# leaves, a black rectangle on the desktop. A windowed build has nowhere to
+# print, so `sensei doctor` would produce nothing at all.
+#
+# Windows has solved this the same way since forever — `python.exe` and
+# `pythonw.exe` — and copying that costs one extra EXE() from an Analysis that
+# has already been done. `senseiw` defaults to the tray rather than to `up`,
+# because a server with no console and no icon is a process you can only stop
+# in Task Manager.
+exew = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    [],
+    name="senseiw",
+    console=False,
+    disable_windowed_traceback=False,
+    upx=True,
+    icon=str(_icon) if _icon.exists() else None,
+)

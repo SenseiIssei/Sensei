@@ -193,10 +193,14 @@ Webhooks and external channels.
 | `SENSEI_API_BASE_URL` | _(empty)_ |
 | `SENSEI_API_KEY` | _(empty)_ |
 | `SENSEI_API_MODEL` | _(empty)_ |
+| `SENSEI_AUTO_CONNECT` | `true` |
+| `SENSEI_AUTO_CONNECT_INTERVAL_SECONDS` | `30` |
 | `SENSEI_OUTPUT_HOLDOUT` | `0.1` |
 | `SENSEI_SAVINGS_DB` | `.sensei_savings.db` |
 | `SENSEI_SAVINGS_PERSIST` | `true` |
 | `SENSEI_SAVINGS_RETENTION_DAYS` | `400` |
+| `SENSEI_STRIP_INVISIBLE` | `true` |
+| `SENSEI_STRIP_NBSP` | `false` |
 
 ## Notes on a few that matter
 

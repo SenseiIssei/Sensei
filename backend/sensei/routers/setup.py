@@ -18,6 +18,7 @@ persists to ``.env`` and puts API keys in the encrypted vault.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -91,6 +92,41 @@ async def setup_status() -> dict[str, Any]:
         "recommended_local_model": pick,
         "catalog": [{"id": pid, **info} for pid, info in PROVIDER_CATALOG.items()],
         "compression_enabled": settings.compression_enabled,
+    }
+
+
+@router.get("/tools")
+async def connected_tools() -> dict[str, Any]:
+    """Which AI tools are on this machine, and which are routed through Sensei.
+
+    Separate from ``/status``, which answers "can Sensei originate a request of
+    its own" — a different question with a different answer, and conflating the
+    two is what made a working gateway look unconfigured.
+    """
+    from sensei import autowire, integrations
+
+    watcher = autowire.current()
+    opted_out = integrations.declined()
+    rows = await asyncio.to_thread(integrations.status)
+    return {
+        "tools": [
+            {
+                "id": i.id,
+                "name": i.name,
+                "installed": installed,
+                "connected": wired,
+                "declined": i.id in opted_out,
+            }
+            for i, installed, wired in rows
+        ],
+        "auto_connect": {
+            "enabled": settings.auto_connect,
+            "running": watcher is not None,
+            "interval_seconds": settings.auto_connect_interval_seconds,
+            "scans": watcher.scans if watcher else 0,
+            "connected_since_start": watcher.connected if watcher else [],
+            "last_error": watcher.last_error if watcher else None,
+        },
     }
 
 

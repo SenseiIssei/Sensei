@@ -433,13 +433,21 @@ export function SavingsDashboard({
 
         {/* A note, not an interstitial. No provider configured is a normal
             state for someone routing a subscription through the gateway — it
-            only limits the parts of Sensei that originate a request. */}
+            only limits the parts of Sensei that originate a request.
+
+            It used to lead with "No model provider configured.", and reading
+            that while Claude Code was working perfectly through the gateway is
+            alarming for no reason: it looks like the thing in front of you is
+            broken. The sentence that is true of the whole system goes first,
+            and the one about the optional part goes second. */}
         {needsSetup && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-cyber-border bg-cyber-surface px-4 py-3 text-xs">
-            <span className="text-cyber-text">No model provider configured.</span>
+            <span className="text-cyber-text">
+              Your tools are connected and being compressed.
+            </span>
             <span className="text-cyber-faint">
-              The gateway works regardless — your tools send their own credentials. A provider is
-              only needed for the built-in chat, RAG and the agent.
+              They sign in with their own credentials, so Sensei needs no key of its own. One is
+              only needed for Sensei&rsquo;s built-in chat, RAG and agent.
             </span>
             <button
               onClick={onOpenSettings}
