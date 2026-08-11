@@ -34,6 +34,16 @@ def sandbox(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(integrations, "MANIFEST_PATH", home / "integrations.json")
     monkeypatch.setattr(integrations, "BACKUP_ROOT", home / "backups")
     monkeypatch.setattr(integrations, "mcp_available", lambda: True)
+
+    # Every entry in the real registry builds its path from `Path.home()`, so a
+    # test that touches one edits the config of the person running the suite.
+    # That is not hypothetical: a test written against the real Codex entry
+    # overwrote this machine's `~/.codex/config.toml` and lost the settings that
+    # were not Sensei's — recovered from the backup, and fenced off here so the
+    # next one cannot repeat it.
+    fake_home = tmp_path / "user-home"
+    fake_home.mkdir(exist_ok=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda _cls: fake_home))
     return tmp_path
 
 
@@ -225,6 +235,48 @@ def test_block_is_not_appended_twice(sandbox: Path, monkeypatch: pytest.MonkeyPa
     once = cfg.read_text(encoding="utf-8")
     assert integrations.apply_all()[0].status == "unchanged"
     assert cfg.read_text(encoding="utf-8") == once
+
+
+def test_an_existing_block_is_brought_up_to_date(
+    sandbox: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A block used to be written once and never touched again.
+
+    Seeing its own marker was treated as "already done", so Codex kept a block
+    from an older version through the upgrade that added an MCP server to it,
+    and a machine whose gateway port moved kept pointing at the old port
+    forever. Found by installing the upgrade and reading the file.
+    """
+    codex = next(i for i in integrations.BLOCK_REGISTRY if i.id == "codex")
+    path = codex.path()  # inside the sandbox's fake home, not the real one
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        f'[windows]\nsandbox = "elevated"\n\n{integrations.BLOCK_BEGIN}\n'
+        f'[model_providers.sensei]\nbase_url = "http://127.0.0.1:9999/v1"\n'
+        f"{integrations.BLOCK_END}\n",
+        encoding="utf-8",
+    )
+
+    outcomes = integrations.apply_all(only={"codex"}, include_undetected=True)
+
+    text = path.read_text(encoding="utf-8")
+    assert [o.status for o in outcomes] == ["applied"]
+    assert "9999" not in text, "the stale block survived the update"
+    assert text.startswith('[windows]\nsandbox = "elevated"'), "content outside the markers moved"
+    assert text.count(integrations.BLOCK_BEGIN) == 1, "the block was duplicated"
+
+
+def test_an_up_to_date_block_is_left_alone(sandbox: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Rewriting an identical block on every scan would churn the file's mtime
+    sixty times an hour, which is what the auto-connect watcher does."""
+    codex = next(i for i in integrations.BLOCK_REGISTRY if i.id == "codex")
+    integrations.apply_all(only={"codex"}, include_undetected=True)
+    before = codex.path().read_text(encoding="utf-8")
+
+    outcomes = integrations.apply_all(only={"codex"}, include_undetected=True)
+
+    assert [o.status for o in outcomes] == ["unchanged"]
+    assert codex.path().read_text(encoding="utf-8") == before
 
 
 def test_conflicting_key_becomes_a_manual_step(
