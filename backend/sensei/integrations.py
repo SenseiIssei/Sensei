@@ -75,6 +75,33 @@ class Endpoints:
     mcp_ready: bool = True
 
 
+def _console_binary(executable: str) -> str:
+    """The binary an MCP client should spawn, given the one we are running as.
+
+    MCP speaks JSON-RPC over stdin and stdout, and `senseiw.exe` is built
+    without a console precisely so it has neither. When the tray writes a config
+    it writes `sys.executable`, which is itself — so every tool got pointed at
+    the one binary whose whole purpose is having nowhere to write.
+
+    It happens to work when the client hands over real pipes, because Python
+    then has valid handles. That is the dangerous kind of works: a client that
+    spawns it without them sends the handshake into `sensei.log` and waits for
+    an answer that is never coming, with no error anywhere.
+
+    Returns the original string untouched unless a sibling actually exists —
+    both so an unexpected name is not turned into a path to nothing, and so the
+    path is not silently rewritten by a round trip through Path, which
+    normalises separators.
+    """
+    path = Path(executable)
+    stem = path.stem
+    if stem.lower().endswith("w"):
+        console = path.with_name(stem[:-1] + path.suffix)
+        if console.exists():
+            return str(console)
+    return executable
+
+
 def endpoints(host: str | None = None, port: int | None = None) -> Endpoints:
     """Build the endpoint set for the running configuration.
 
@@ -98,7 +125,7 @@ def endpoints(host: str | None = None, port: int | None = None) -> Endpoints:
     #   on PATH        the console script, which is stable across venv changes
     #   otherwise      this interpreter plus the module, which always resolves
     if getattr(sys, "frozen", False):
-        command, args = sys.executable, ("mcp",)
+        command, args = _console_binary(sys.executable), ("mcp",)
     elif shutil.which("sensei"):
         command, args = "sensei", ("mcp",)
     else:

@@ -268,6 +268,42 @@ def test_a_frozen_binary_spawns_itself_not_a_module(monkeypatch: pytest.MonkeyPa
     assert ep.mcp_args == ("mcp",)
 
 
+def test_the_tray_points_tools_at_the_console_binary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MCP is JSON-RPC over stdio, and `senseiw.exe` is built without a console
+    precisely so it has none.
+
+    The tray runs *as* senseiw.exe, so writing `sys.executable` pointed every
+    tool at the one binary whose purpose is having nowhere to write. Caught by
+    installing the real thing and reading the config it produced: Zed was auto-
+    connected to `senseiw.exe mcp`.
+
+    It survives a client that hands over real pipes, which is what makes it
+    worth a test — the failure only shows up on the client that does not.
+    """
+    (tmp_path / "sensei.exe").write_text("", encoding="utf-8")
+    windowed = tmp_path / "senseiw.exe"
+    windowed.write_text("", encoding="utf-8")
+    monkeypatch.setattr(integrations.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(integrations.sys, "executable", str(windowed), raising=False)
+
+    assert integrations.endpoints().mcp_command == str(tmp_path / "sensei.exe")
+
+
+def test_a_console_only_bundle_is_left_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No sibling to fall back to means the name stays as it is, rather than
+    becoming a path to a file that does not exist."""
+    lone = tmp_path / "somethingw.exe"
+    lone.write_text("", encoding="utf-8")
+    monkeypatch.setattr(integrations.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(integrations.sys, "executable", str(lone), raising=False)
+
+    assert integrations.endpoints().mcp_command == str(lone)
+
+
 def test_a_source_install_without_the_script_uses_the_module(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
