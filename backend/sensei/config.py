@@ -9,6 +9,45 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # the settings API and the server agree on one file.
 ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 
+# Where per-user data lives, for every Sensei process on the machine. Already
+# the home of the integrations manifest and its backups; the savings ledger and
+# the CCR store join it so the tray server and an editor-spawned `sensei mcp`
+# are looking at the same numbers.
+SENSEI_HOME = Path.home() / ".sensei"
+
+# The defaults these settings ship with. Compared against, rather than assumed:
+# a value that differs is one the user chose, and it is used verbatim.
+_CCR_CACHE_DEFAULT = ".sensei_cache"
+_SAVINGS_DB_DEFAULT = ".sensei_savings.db"
+
+
+def _adopt_legacy_ledger(target: Path) -> None:
+    """Carry an existing ledger over to the shared location, once.
+
+    Before this move the ledger sat next to whichever process wrote it, so an
+    upgrade would silently reset the dashboard to zero — the one number the user
+    installed Sensei to watch. If the new path is empty and an old one is right
+    here in the working directory, it moves rather than starts over.
+
+    Copied, not renamed, and only when the destination does not exist, so this
+    can never overwrite a ledger that already has data in it.
+    """
+    if target.exists():
+        return
+    legacy = Path(_SAVINGS_DB_DEFAULT)
+    if not legacy.is_file():
+        return
+    try:
+        import shutil
+
+        shutil.copy2(legacy, target)
+        for suffix in ("-wal", "-shm"):
+            side = legacy.with_name(legacy.name + suffix)
+            if side.is_file():
+                shutil.copy2(side, target.with_name(target.name + suffix))
+    except OSError:  # pragma: no cover — a read-only or vanished source
+        pass
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -275,9 +314,29 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
+    @staticmethod
+    def _shared(value: str, default: str, name: str) -> Path:
+        """Resolve a path that every Sensei process on the machine must agree on.
+
+        Left at its default it lands in ``~/.sensei``. It used to be relative,
+        and so resolved against whatever directory the process happened to start
+        in. That is fine while there is one process, and Sensei is not one
+        process: the tray server runs from its install directory, while an
+        editor spawns `sensei mcp` in whatever project the user has open.
+
+        The result was a savings ledger per project, none of which the dashboard
+        could see — for a product whose whole promise is showing what you saved.
+
+        An explicit setting is honoured exactly as written, relative or not:
+        someone who configures a path means that path.
+        """
+        if value != default:
+            return Path(value).expanduser()
+        return SENSEI_HOME / name
+
     @property
     def ccr_cache_path(self) -> Path:
-        p = Path(self.ccr_cache_dir)
+        p = self._shared(self.ccr_cache_dir, _CCR_CACHE_DEFAULT, "cache")
         p.mkdir(parents=True, exist_ok=True)
         return p
 
@@ -295,8 +354,16 @@ class Settings(BaseSettings):
 
     @property
     def savings_db_path(self) -> Path:
-        p = Path(self.savings_db)
+        explicit = self.savings_db != _SAVINGS_DB_DEFAULT
+        p = self._shared(self.savings_db, _SAVINGS_DB_DEFAULT, "savings.db")
         p.parent.mkdir(parents=True, exist_ok=True)
+        if not explicit:
+            # Only ever into the shared location. Doing it for a configured path
+            # meant a caller who asked for an empty database at a specific place
+            # got whatever happened to be lying in the working directory instead
+            # — which is how this broke eight ledger tests that each expected to
+            # start from nothing.
+            _adopt_legacy_ledger(p)
         return p
 
 

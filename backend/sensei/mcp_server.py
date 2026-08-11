@@ -109,6 +109,27 @@ def build_server() -> Any:
                 )
 
         result = router.compress(text, force_type=forced)
+
+        # Record it, exactly as the gateway does for a proxied request.
+        #
+        # This did not happen, and the omission was invisible in the worst way:
+        # compression worked, the caller got its shorter text, and the dashboard
+        # kept showing the number from before. For a tool the user cannot route
+        # through the gateway — Claude Code's desktop app pins its own endpoint,
+        # so MCP is the only path there is — that meant every token saved went
+        # unreported, in the one product whose promise is showing you the total.
+        from sensei.savings import get_savings_tracker
+
+        get_savings_tracker().record(
+            {
+                "prompt_tokens_before": result.original_tokens,
+                "prompt_tokens_after": result.compressed_tokens,
+                "tokens_saved": result.tokens_saved,
+                "blocks_compressed": 1,
+            },
+            tool="MCP",
+        )
+
         return json.dumps(
             {
                 "compressed": result.compressed,
