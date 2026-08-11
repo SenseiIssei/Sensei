@@ -243,6 +243,43 @@ def _compress_anthropic_content(content: Any) -> tuple[Any, int, int, int, int]:
     return content, 0, 0, 0, 0
 
 
+def _marks_cache(value: Any) -> bool:
+    """Does this system value or message carry a ``cache_control`` marker?"""
+    if isinstance(value, dict):
+        if "cache_control" in value:
+            return True
+        return _marks_cache(value.get("content"))
+    if isinstance(value, list):
+        return any(_marks_cache(v) for v in value)
+    return False
+
+
+def _cached_prefix_end(system: Any, messages: list[dict[str, Any]]) -> int:
+    """Index of the last message inside the provider's cached prefix, or -1.
+
+    A ``cache_control`` marker caches everything *up to and including* the block
+    it sits on, so one marker on the last tool definition protects the whole
+    system prompt as well. Rewriting any of that changes the cache key, and the
+    next request pays full price for a prefix that would otherwise have been
+    billed at a fraction — which can cost several times what the rewrite saved.
+
+    Measured on real traffic from Claude Code: 33 markers across 22 requests.
+    So this is the normal case for an agent, not an exotic one.
+
+    Returns -1 when nothing is cached, in which case there is nothing to protect
+    and everything is fair game.
+    """
+    if not _marks_cache(system) and not any(_marks_cache(m) for m in messages):
+        return -1
+    last = -1
+    for idx, msg in enumerate(messages):
+        if _marks_cache(msg):
+            last = idx
+    # System with no marked message still means the system itself is cached, and
+    # `last` stays -1: no message is protected, the system is.
+    return last
+
+
 def compress_anthropic_request(
     system: Any, messages: list[dict[str, Any]]
 ) -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
@@ -250,7 +287,13 @@ def compress_anthropic_request(
     if not settings.compression_enabled:
         return system, messages, _no_savings()
 
-    preserve = settings.gateway_preserve_cache
+    # Two ways to end up preserving the prefix: the user asked for it, or the
+    # request says it is cached. The second needs no configuration and is exact
+    # — it protects what the provider actually caches and nothing more, so a
+    # request without caching still gets compressed in full.
+    cached_until = _cached_prefix_end(system, messages)
+    anything_cached = cached_until >= 0 or _marks_cache(system)
+    preserve = settings.gateway_preserve_cache or anything_cached
     before = after = saved = blocks = 0
     new_system = system
     # In cache-preserving mode the system prompt is part of the cached prefix —
@@ -262,7 +305,12 @@ def compress_anthropic_request(
     new_messages = []
     last_idx = len(messages) - 1
     for idx, msg in enumerate(messages):
-        if preserve and idx != last_idx:
+        # With markers the cached prefix has a known end, so everything after it
+        # can be compressed — not just the final message. On an agent transcript
+        # that is several turns of tool output, which is where the tokens are.
+        # Without them, all that is safe is the last message.
+        keep = idx <= cached_until if anything_cached else (preserve and idx != last_idx)
+        if keep:
             new_messages.append(msg)  # keep the cached prefix byte-exact
             continue
         nc, b, a, s, bl = _compress_anthropic_content(msg.get("content"))
