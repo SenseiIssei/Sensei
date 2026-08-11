@@ -8,6 +8,7 @@ later when a tool stops working. Most of what follows is about that.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
 
@@ -274,6 +275,22 @@ def test_a_source_install_without_the_script_uses_the_module(
     monkeypatch.setattr(integrations.shutil, "which", lambda _: None)
 
     assert integrations.endpoints().mcp_args == ("-m", "sensei.cli", "mcp")
+
+
+def test_the_module_form_it_writes_can_actually_be_run() -> None:
+    """`-m sensei.cli` needs a `__main__.py`, and there was none.
+
+    The test above only checks which string gets written. That string was
+    `python -m sensei.cli mcp`, and running it produced "'sensei.cli' is a
+    package and cannot be directly executed" — so every source install wired
+    its editors to a command that could not start, and the editor reported
+    only that it could not attach to the server.
+
+    Asserting on the import machinery rather than spawning a subprocess: the
+    question is whether the entry point exists, and a subprocess would make
+    this a slow test of the whole CLI.
+    """
+    assert importlib.util.find_spec("sensei.cli.__main__") is not None
 
 
 def test_the_console_script_is_preferred_when_present(monkeypatch: pytest.MonkeyPatch) -> None:

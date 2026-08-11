@@ -29,6 +29,7 @@ more careful than one that doesn't:
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import importlib.util
 import json
@@ -942,11 +943,42 @@ def undo_all(*, only: set[str] | None = None, dry_run: bool = False) -> list[Out
     return results
 
 
-def status() -> list[tuple[Integration | BlockIntegration, bool, bool]]:
+def _is_wired(integration: Integration | BlockIntegration, ep: Endpoints) -> bool:
+    """Does this tool's configuration already point at the gateway?
+
+    Asked of the file, not of the manifest. The manifest records what Sensei
+    wrote, which is a different question and gives the wrong answer twice: a
+    config the user wired by hand reads as disconnected forever, and so does one
+    Sensei wrote before the manifest was reset. The visible symptom was a tool
+    working perfectly while the dashboard listed it as not connected — and the
+    background watcher retrying it on every single scan.
+
+    Implemented by asking the integration's own `apply` whether it would change
+    anything, on a copy. That is the same code path that does the wiring, so the
+    two cannot drift apart.
+    """
+    try:
+        if isinstance(integration, Integration):
+            for target in integration.targets():
+                doc = _load_json(target)
+                if doc is not None and not integration.apply(copy.deepcopy(doc), ep):
+                    return True
+            return False
+        target = integration.path()
+        return target.exists() and BLOCK_BEGIN in target.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+
+
+def status(
+    host: str | None = None, port: int | None = None
+) -> list[tuple[Integration | BlockIntegration, bool, bool]]:
     """(integration, installed, wired) for everything in both registries."""
+    ep = endpoints(host, port)
     manifest = _read_manifest()
-    wired = {str(e.get("tool_id")) for e in manifest["entries"]}
+    recorded = {str(e.get("tool_id")) for e in manifest["entries"]}
     out: list[tuple[Integration | BlockIntegration, bool, bool]] = []
     for integration in (*REGISTRY, *BLOCK_REGISTRY):
-        out.append((integration, integration.detect(), integration.id in wired))
+        wired = integration.id in recorded or _is_wired(integration, ep)
+        out.append((integration, integration.detect(), wired))
     return out
