@@ -7,7 +7,9 @@ an API key it does not have.
 
 from __future__ import annotations
 
+import json
 from typing import Any
+from urllib.parse import urlparse
 
 import pytest
 from fastapi.testclient import TestClient
@@ -31,7 +33,7 @@ class TestNotPinningModelNames:
         rather than about the default."""
         for provider in ("moonshot", "dashscope", "xai", "cerebras", "deepinfra"):
             assert getattr(settings, f"{provider}_api_model") == ""
-            assert getattr(settings, f"{provider}_api_base_url").startswith("https://")
+            assert urlparse(getattr(settings, f"{provider}_api_base_url")).scheme == "https"
 
     def test_they_are_all_listed_live(self) -> None:
         """Which is the other half: no pinned default is only workable if the
@@ -75,15 +77,57 @@ class TestLocalServers:
 
         assert body["source"] == "live"
         assert body["models"] == ["some-local-model"]
+        assert body["detail"] == ""
         # An empty bearer is worse than none: some servers reject the malformed
         # header, which reads as the server being down.
         assert "Authorization" not in seen["headers"]
 
+    def test_a_local_server_that_is_not_running_says_so(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """These have no curated list to fall back on, by design. So the generic
+        "showing a static list that may be out of date" appeared next to no list
+        at all, and said nothing about the one thing that was wrong.
+        """
+
+        class FakeClient:
+            async def __aenter__(self) -> FakeClient:
+                return self
+
+            async def __aexit__(self, *_: object) -> None:
+                return None
+
+            async def get(self, *_: object, **__: object):
+                raise setup_mod.httpx.ConnectError("nothing listening")
+
+        monkeypatch.setattr(setup_mod.httpx, "AsyncClient", lambda **_: FakeClient())
+
+        body = client.get("/api/setup/provider-models/lmstudio").json()
+
+        # The whole sentence, not a substring of it. Two reasons: a `in` check
+        # against a URL has the shape of an incomplete-sanitization bug even
+        # when it is only an assertion, and the point here is that the message
+        # is actionable — which is a property of the sentence, not of a
+        # fragment appearing somewhere inside it.
+        assert body["models"] == []
+        assert body["detail"] == (
+            f"Nothing answering at {settings.lmstudio_api_base_url} — "
+            "start LM Studio, then reload this list."
+        )
+
     def test_the_local_endpoints_stay_on_the_machine(self) -> None:
-        """These must never point somewhere that could receive a prompt."""
+        """These must never point somewhere that could receive a prompt.
+
+        Parsed rather than prefix-matched. `startswith("http://127.0.0.1:")`
+        accepts `http://127.0.0.1:1234@elsewhere.example/v1`, which resolves to
+        elsewhere.example — so the check that was supposed to prove "local"
+        would have passed for a URL that is the opposite. CodeQL flagged it, and
+        it was right to.
+        """
         for provider in ("lmstudio", "llamacpp", "vllm"):
-            base = getattr(settings, f"{provider}_api_base_url")
-            assert base.startswith(("http://localhost:", "http://127.0.0.1:"))
+            parsed = urlparse(getattr(settings, f"{provider}_api_base_url"))
+            assert parsed.scheme == "http"
+            assert parsed.hostname in ("localhost", "127.0.0.1")
 
 
 class TestPullingAModel:
@@ -130,11 +174,18 @@ class TestPullingAModel:
         assert '"completed": 50' in r.text
         assert "success" in r.text
 
-    def test_a_failure_is_reported_into_the_stream(
+    def test_ollama_being_absent_says_what_to_do_about_it(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """The response has already started by then, so raising would truncate
-        it and the browser would see a download that simply stopped."""
+        """This is the likeliest failure by far, and it used to surface as
+        "ConnectError: All connection attempts failed" — true, and of no use to
+        someone who does not know Ollama is a separate program. Seen exactly
+        that way on a machine without it installed.
+
+        Reported into the stream rather than raised, because the response has
+        already started and raising would truncate it into a download that
+        simply stopped.
+        """
 
         class FakeClient:
             async def __aenter__(self) -> FakeClient:
@@ -144,11 +195,43 @@ class TestPullingAModel:
                 return None
 
             def stream(self, *_: object, **__: object):
-                raise setup_mod.httpx.ConnectError("ollama is not running")
+                raise setup_mod.httpx.ConnectError("All connection attempts failed")
 
         monkeypatch.setattr(setup_mod.httpx, "AsyncClient", lambda **_: FakeClient())
 
         r = client.post("/api/setup/ollama/pull", json={"model": "qwen3:8b"})
 
         assert r.status_code == 200
-        assert "ollama is not running" in r.text
+        # The whole message. `"ollama.com" in r.text` reads as a domain check on
+        # a URL, which is the shape of a real bug elsewhere in this file — and
+        # the property under test is that the sentence is actionable, which the
+        # sentence has to carry, not a fragment of it.
+        assert json.loads(r.text.split("data: ", 1)[1]) == {
+            "error": f"Nothing answering at {settings.ollama_host}. "
+            "Ollama is a separate program — install it from https://ollama.com "
+            "and start it, then try again."
+        }
+        assert "ConnectError" not in r.text
+
+    def test_other_failures_still_reach_the_caller(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Only the connect case gets a hand-written message. Everything else
+        keeps its own text, rather than being flattened into a friendly
+        sentence that hides what went wrong."""
+
+        class FakeClient:
+            async def __aenter__(self) -> FakeClient:
+                return self
+
+            async def __aexit__(self, *_: object) -> None:
+                return None
+
+            def stream(self, *_: object, **__: object):
+                raise setup_mod.httpx.ReadTimeout("the disk gave up")
+
+        monkeypatch.setattr(setup_mod.httpx, "AsyncClient", lambda **_: FakeClient())
+
+        r = client.post("/api/setup/ollama/pull", json={"model": "qwen3:8b"})
+
+        assert "the disk gave up" in r.text

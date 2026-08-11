@@ -2,6 +2,9 @@ export interface ProviderCatalogEntry {
   id: string;
   name: string;
   free: boolean;
+  /** Runs on the user's own machine: no account, no key, nothing leaves it.
+   *  Distinct from `free`, which is a price on someone else's service. */
+  local?: boolean;
   models: string[];
 }
 
