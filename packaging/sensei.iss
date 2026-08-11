@@ -21,11 +21,16 @@
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
+; Relative to this file, i.e. to packaging/ — so the defaults have to climb out
+; of it. They read `dist-app\...` and resolved to `packaging\dist-app\...`,
+; which exists nowhere. The release workflow passed an explicit `..\` path for
+; SourceExe and nothing at all for SourceExeW, so the broken default was what
+; got used and the Windows installer job failed on a missing file.
 #ifndef SourceExe
-  #define SourceExe "dist-app\sensei.exe"
+  #define SourceExe "..\dist-app\sensei.exe"
 #endif
 #ifndef SourceExeW
-  #define SourceExeW "dist-app\senseiw.exe"
+  #define SourceExeW "..\dist-app\senseiw.exe"
 #endif
 
 #define AppName "Sensei"

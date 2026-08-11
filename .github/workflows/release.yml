@@ -186,7 +186,11 @@ jobs:
         run: |
           mkdir -p out
           cp dist-app/sensei.exe "out/sensei-${{ matrix.label }}.exe"
-          (cd dist-app && 7z a -tzip "../out/sensei-${{ matrix.label }}.zip" sensei.exe)
+          # Both binaries go in the archive. The console one is what you type
+          # commands into; `senseiw.exe` has no console and is what belongs in a
+          # shortcut or a startup entry. Shipping only the first means a portable
+          # install has no way to run in the background without a window.
+          (cd dist-app && 7z a -tzip "../out/sensei-${{ matrix.label }}.zip" sensei.exe senseiw.exe)
 
       # A real installer, because "download an .exe and put it somewhere" is not
       # what most people mean by installing something. Per-user, no elevation:
@@ -218,6 +222,7 @@ jobs:
           "$iscc" //Qp \
             "//DAppVersion=${version}" \
             "//DSourceExe=..\\dist-app\\sensei.exe" \
+            "//DSourceExeW=..\\dist-app\\senseiw.exe" \
             packaging/sensei.iss
           cp packaging/Output/sensei-setup-*.exe out/
 

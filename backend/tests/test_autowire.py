@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -143,6 +144,59 @@ class TestDisconnectingMeansSomething:
         outcomes = integrations.apply_all(only={"cursor"}, include_undetected=True)
         assert all(o.status != "unchanged" or "by hand" not in o.detail for o in outcomes)
         assert "cursor" not in integrations.declined()
+
+    @pytest.mark.skipif(
+        not integrations.mcp_available(),
+        reason="the wiring this checks for is only written when the mcp extra is present",
+    )
+    def test_a_config_wired_by_hand_counts_as_connected(
+        self, home: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`status()` used to answer from the manifest alone, so a config the
+        user wired themselves — or one Sensei wrote before the manifest was
+        reset — read as disconnected forever. On this machine that showed up as
+        Cursor working perfectly while the dashboard called it not connected,
+        and the watcher retrying it on every scan."""
+        cfg = home / "mcp.json"
+        ep = integrations.endpoints()
+        doc: dict[str, object] = {}
+        real = next(i for i in integrations.REGISTRY if i.id == "cursor")
+        real.apply(doc, ep)
+        cfg.write_text(json.dumps(doc), encoding="utf-8")
+        # `Integration` is frozen, so this is a copy pointed at the sandbox
+        # rather than a patched attribute.
+        cursor = replace(real, path=lambda: cfg, legacy_paths=())
+
+        assert integrations._is_wired(cursor, ep) is True
+
+    def test_an_unwired_config_is_not_mistaken_for_a_wired_one(
+        self, home: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        cfg = home / "mcp.json"
+        cfg.write_text(json.dumps({"mcpServers": {"something-else": {}}}), encoding="utf-8")
+        real = next(i for i in integrations.REGISTRY if i.id == "cursor")
+        cursor = replace(real, path=lambda: cfg, legacy_paths=())
+
+        assert integrations._is_wired(cursor, integrations.endpoints()) is False
+
+    def test_an_integration_that_cannot_write_reports_nothing_as_wired(
+        self, home: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`apply` is allowed to be inert: the MCP writers decline to act when
+        the `mcp` extra is missing, so no entry is written for a command that
+        could not run.
+
+        In that state every config looks like "nothing to change". Reading that
+        as "already wired" reported all five tools connected on a build that had
+        wired none of them — which CI caught and the dev machine could not,
+        because the extra was installed there.
+        """
+        cfg = home / "mcp.json"
+        cfg.write_text(json.dumps({"mcpServers": {}}), encoding="utf-8")
+        real = next(i for i in integrations.REGISTRY if i.id == "cursor")
+        inert = replace(real, path=lambda: cfg, legacy_paths=(), apply=lambda doc, ep: False)
+
+        assert integrations._is_wired(inert, integrations.endpoints()) is False
 
     def test_a_manifest_without_the_key_is_not_an_error(self, home: Path) -> None:
         """Manifests written by older versions have no `declined` list at all."""
