@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from sensei.compression import learned
+from sensei.compression import invisible, learned
 from sensei.compression.cachealign import CacheAligner
 from sensei.compression.ccr import CCRStore
 from sensei.compression.codecomp import CodeCompressor
 from sensei.compression.logcomp import LogCompressor
 from sensei.compression.smartcrusher import SmartCrusher
 from sensei.compression.textcomp import TextCompressor
+from sensei.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class ContentType(str, Enum):
@@ -175,8 +179,29 @@ class ContentRouter:
         Returns:
             CompressionResult with original, compressed, and metadata.
         """
+        # Held before anything touches it. The CCR store's whole promise is that
+        # `sensei_retrieve` hands back what the caller actually sent, byte for
+        # byte — stripping first and storing the result would quietly make the
+        # "original" a thing that never existed.
+        untouched = content
+
         content_type = force_type or self.detect_type(content)
         original_tokens = _estimate_tokens(content)
+
+        # Before compressing, not after: every compressor below is line- and
+        # word-oriented and none of them looks at individual characters, so a
+        # zero-width space survives all of them and is billed. Detection runs
+        # first because how aggressive this can safely be depends on whether
+        # the payload is source code — the joiners are structural in Devanagari
+        # and Persian and hold emoji sequences together, and mean nothing in
+        # source.
+        findings = invisible.Findings()
+        if settings.strip_invisible:
+            content, findings = invisible.clean(
+                content,
+                is_code=content_type is ContentType.code,
+                strip_nbsp=settings.strip_nbsp,
+            )
 
         match content_type:
             case ContentType.json:
@@ -201,16 +226,40 @@ class ContentRouter:
         # Store original in CCR for retrieval
         ccr_id = None
         if self.enable_caching and self.ccr_store and original_tokens > compressed_tokens:
-            ccr_id = self.ccr_store.store(content, compressed, content_type.value)
+            ccr_id = self.ccr_store.store(untouched, compressed, content_type.value)
+
+        metadata: dict[str, Any] = {"compressor": compressor}
+        if findings.anything:
+            metadata.update(findings.as_dict())
+
+        # The token saving needs no announcement — stripping happens before the
+        # count, so it is already in the headline number. These two do: a bidi
+        # override is a Trojan Source vector and a mixed-script identifier is
+        # either an attack or a paste accident, and removing one silently is
+        # not the same as telling somebody it was there.
+        if findings.bidi:
+            logger.warning(
+                "Removed %d bidirectional control character(s) from a %s payload — "
+                "these can make source render differently from how it compiles "
+                "(CVE-2021-42574).",
+                findings.bidi,
+                content_type.value,
+            )
+        if findings.mixed_script_words:
+            logger.warning(
+                "Payload contains identifier(s) mixing Latin with another alphabet, "
+                "which read as ordinary words but are not: %s. Left unchanged.",
+                ", ".join(findings.mixed_script_words[:5]),
+            )
 
         return CompressionResult(
-            original=content,
+            original=untouched,
             compressed=compressed,
             content_type=content_type,
             original_tokens=original_tokens,
             compressed_tokens=compressed_tokens,
             ccr_id=ccr_id,
-            metadata={"compressor": compressor},
+            metadata=metadata,
         )
 
     def compress_messages(
