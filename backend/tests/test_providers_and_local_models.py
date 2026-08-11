@@ -8,6 +8,7 @@ an API key it does not have.
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlparse
 
 import pytest
 from fastapi.testclient import TestClient
@@ -31,7 +32,7 @@ class TestNotPinningModelNames:
         rather than about the default."""
         for provider in ("moonshot", "dashscope", "xai", "cerebras", "deepinfra"):
             assert getattr(settings, f"{provider}_api_model") == ""
-            assert getattr(settings, f"{provider}_api_base_url").startswith("https://")
+            assert urlparse(getattr(settings, f"{provider}_api_base_url")).scheme == "https"
 
     def test_they_are_all_listed_live(self) -> None:
         """Which is the other half: no pinned default is only workable if the
@@ -114,10 +115,18 @@ class TestLocalServers:
         )
 
     def test_the_local_endpoints_stay_on_the_machine(self) -> None:
-        """These must never point somewhere that could receive a prompt."""
+        """These must never point somewhere that could receive a prompt.
+
+        Parsed rather than prefix-matched. `startswith("http://127.0.0.1:")`
+        accepts `http://127.0.0.1:1234@elsewhere.example/v1`, which resolves to
+        elsewhere.example — so the check that was supposed to prove "local"
+        would have passed for a URL that is the opposite. CodeQL flagged it, and
+        it was right to.
+        """
         for provider in ("lmstudio", "llamacpp", "vllm"):
-            base = getattr(settings, f"{provider}_api_base_url")
-            assert base.startswith(("http://localhost:", "http://127.0.0.1:"))
+            parsed = urlparse(getattr(settings, f"{provider}_api_base_url"))
+            assert parsed.scheme == "http"
+            assert parsed.hostname in ("localhost", "127.0.0.1")
 
 
 class TestPullingAModel:
