@@ -776,8 +776,36 @@ def _apply_block(
     path = integration.path()
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
 
+    desired = integration.body(ep)
+
     if BLOCK_BEGIN in existing:
-        return Outcome(integration.id, integration.name, "unchanged", path=path)
+        # Sensei's own region, delimited by its own markers, so rewriting it is
+        # safe — and necessary. This used to return "unchanged" on sight of the
+        # marker, which meant a block never changed again once written: Codex
+        # kept a 0.1.10 block with no MCP server through the upgrade that added
+        # one, and a machine whose gateway port moved kept pointing at the old
+        # one forever. Anything outside the markers is left exactly as it is.
+        current = re.search(
+            rf"{re.escape(BLOCK_BEGIN)}\n(.*?){re.escape(BLOCK_END)}",
+            existing,
+            flags=re.DOTALL,
+        )
+        if current is not None and current.group(1) == desired:
+            return Outcome(integration.id, integration.name, "unchanged", path=path)
+        if dry_run:
+            return Outcome(
+                integration.id, integration.name, "applied", detail="dry run — update", path=path
+            )
+        backup = _backup(path, stamp)
+        updated = re.sub(
+            rf"{re.escape(BLOCK_BEGIN)}\n.*?{re.escape(BLOCK_END)}",
+            lambda _: f"{BLOCK_BEGIN}\n{desired}{BLOCK_END}",
+            existing,
+            flags=re.DOTALL,
+        )
+        _atomic_write(path, updated)
+        _record(manifest, tool_id=integration.id, path=path, backup=backup, kind="block")
+        return Outcome(integration.id, integration.name, "applied", detail="updated", path=path)
 
     for pattern in integration.conflicts:
         if re.search(pattern, existing, re.MULTILINE):
@@ -795,7 +823,7 @@ def _apply_block(
 
     backup = _backup(path, stamp)
     prefix = "" if not existing or existing.endswith("\n") else "\n"
-    block = f"{prefix}\n{BLOCK_BEGIN}\n{integration.body(ep)}{BLOCK_END}\n"
+    block = f"{prefix}\n{BLOCK_BEGIN}\n{desired}{BLOCK_END}\n"
     _atomic_write(path, existing + block)
     _record(manifest, tool_id=integration.id, path=path, backup=backup, kind="block")
     return Outcome(integration.id, integration.name, "applied", path=path)
