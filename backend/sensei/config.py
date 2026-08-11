@@ -252,10 +252,21 @@ class Settings(BaseSettings):
     # Compress system prompts at the gateway too (where IDE tools hide most of
     # their tokens). Lossy — disable for byte-exact system prompts.
     gateway_compress_system: bool = True
-    # Cache-preserving mode: only compress the newest message (the fresh tool
-    # output), leaving earlier turns byte-exact so provider prompt caches still
-    # hit. Big latency win for agents like Claude Code; slightly less total
-    # compression. Recommended ON when routing a cache-heavy agent.
+    # Compress only the newest message, leaving earlier turns untouched.
+    #
+    # Do not turn this on to protect a prompt cache. It does the opposite, and
+    # the old comment here recommending it for cache-heavy agents was wrong.
+    #
+    # Compression is deterministic, so the transformed prefix is byte-identical
+    # from one turn to the next and the provider's cache hits either way. This
+    # setting makes the decision depend on *position*: a message compressed
+    # while it was newest arrives uncompressed on the following turn, the bytes
+    # change, and the cache misses — every turn, on exactly the agents the
+    # comment recommended it for. Measured: prefix hash stable with this off,
+    # different with it on.
+    #
+    # Left in place for the case it is actually good for — keeping older turns
+    # verbatim because you want them verbatim, accepting the cache cost.
     gateway_preserve_cache: bool = False
 
     # Memory
