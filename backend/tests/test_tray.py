@@ -109,6 +109,26 @@ class TestInstallerScript:
         for line in shortcuts:
             assert "senseiw.exe" in line, f"shortcut opens a console: {line.strip()}"
 
+    def test_both_binaries_are_shipped(self, script: str) -> None:
+        """Shortcuts naming `senseiw.exe` are worth nothing if the installer
+        never puts it there."""
+        files = script.split("[Files]", 1)[1].split("[Icons]", 1)[0]
+        assert "senseiw.exe" in files
+        assert "sensei.exe" in files
+
+    def test_the_source_paths_climb_out_of_packaging(self, script: str) -> None:
+        """The defaults are relative to this file, which lives in packaging/.
+
+        They read `dist-app\\...` and so resolved to `packaging\\dist-app\\...`,
+        a directory that exists nowhere. The release workflow happened to pass
+        an explicit `..\\` path for SourceExe and nothing for SourceExeW, so the
+        broken default was the one that got used and the Windows installer job
+        died on a missing file — after the tag had been pushed.
+        """
+        for line in script.splitlines():
+            if line.startswith("  #define SourceExe"):
+                assert "..\\dist-app" in line, line.strip()
+
     def test_wiring_the_tools_is_a_choice(self, script: str) -> None:
         """Editing other programs' configuration is not something an installer
         should do without being asked."""
