@@ -7,6 +7,7 @@ an API key it does not have.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from urllib.parse import urlparse
 
@@ -201,7 +202,15 @@ class TestPullingAModel:
         r = client.post("/api/setup/ollama/pull", json={"model": "qwen3:8b"})
 
         assert r.status_code == 200
-        assert "ollama.com" in r.text
+        # The whole message. `"ollama.com" in r.text` reads as a domain check on
+        # a URL, which is the shape of a real bug elsewhere in this file — and
+        # the property under test is that the sentence is actionable, which the
+        # sentence has to carry, not a fragment of it.
+        assert json.loads(r.text.split("data: ", 1)[1]) == {
+            "error": f"Nothing answering at {settings.ollama_host}. "
+            "Ollama is a separate program — install it from https://ollama.com "
+            "and start it, then try again."
+        }
         assert "ConnectError" not in r.text
 
     def test_other_failures_still_reach_the_caller(
