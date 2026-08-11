@@ -272,10 +272,15 @@ class SavingsLedger:
         # absence as if it were a gap in the data — the same reading that made
         # "by tool → unknown" look like a bug when it was one. Naming the tool
         # instead says which it is and why there is nothing to show.
+        # Applies to model and provider alike. It was scoped to model first, and
+        # the provider column went on reading "unknown" next to a model column
+        # that now said "n/a (MCP)" — two labels for one fact, in adjacent
+        # panels. `tool` keeps "unknown", where it really does mean the tool
+        # could not be identified.
         label = (
             f"CASE WHEN {dimension} = '' AND tool != '' THEN 'n/a (' || tool || ')'"
             f" WHEN {dimension} = '' THEN 'unknown' ELSE {dimension} END"
-            if dimension == "model"
+            if dimension in ("model", "provider")
             else f"CASE WHEN {dimension} = '' THEN 'unknown' ELSE {dimension} END"
         )
         rows = self._query(

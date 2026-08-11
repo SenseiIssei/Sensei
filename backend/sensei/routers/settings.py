@@ -78,9 +78,15 @@ PROVIDER_CATALOG: dict[str, dict[str, Any]] = {
     "xai": {"name": "xAI (Grok)", "free": False, "models": []},
     "cerebras": {"name": "Cerebras", "free": False, "models": []},
     "deepinfra": {"name": "DeepInfra", "free": False, "models": []},
-    "lmstudio": {"name": "LM Studio (local)", "free": True, "models": []},
-    "llamacpp": {"name": "llama.cpp (local)", "free": True, "models": []},
-    "vllm": {"name": "vLLM (local)", "free": True, "models": []},
+    # `local`, not `free`. These were marked free, and the wizard rendered that
+    # as "has a free tier" under a heading reading "Use a hosted provider" —
+    # three claims about a server running on the user's own machine, all wrong.
+    # A free tier is something a company offers and can withdraw; this is not
+    # that. The flag also tells the wizard to stop asking for an API key that
+    # cannot exist.
+    "lmstudio": {"name": "LM Studio", "free": False, "local": True, "models": []},
+    "llamacpp": {"name": "llama.cpp", "free": False, "local": True, "models": []},
+    "vllm": {"name": "vLLM", "free": False, "local": True, "models": []},
 }
 
 

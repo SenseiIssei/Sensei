@@ -134,6 +134,23 @@ def test_a_missing_model_with_no_tool_either_is_still_unknown(ledger: SavingsLed
     assert ledger.breakdown("model")[0]["key"] == "unknown"
 
 
+def test_the_provider_column_says_the_same_thing(ledger: SavingsLedger) -> None:
+    """Scoping this to `model` first left the provider panel reading "unknown"
+    beside a model panel reading "n/a (MCP)" — two labels for one fact, in
+    adjacent panels on the same screen."""
+    ledger.append(_event(1000, 100), tool="MCP")
+
+    assert ledger.breakdown("provider")[0]["key"] == "n/a (MCP)"
+
+
+def test_the_tool_column_still_says_unknown(ledger: SavingsLedger) -> None:
+    """There it really does mean "could not identify", which is a different
+    statement from "there was none"."""
+    ledger.append(_event(1000, 100), model="claude-opus-5")
+
+    assert ledger.breakdown("tool")[0]["key"] == "unknown"
+
+
 def test_a_real_model_is_untouched(ledger: SavingsLedger) -> None:
     ledger.append(_event(1000, 100), tool="Claude Code", model="claude-opus-5")
 

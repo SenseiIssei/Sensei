@@ -281,36 +281,50 @@ function ApiPath({ status, onDone }: { status: SetupStatus; onDone: () => void }
         {providers.map((p) => (
           <option key={p.id} value={p.id}>
             {p.name}
-            {p.free ? " — has a free tier" : ""}
+            {p.local ? " — on this machine" : p.free ? " — has a free tier" : ""}
           </option>
         ))}
       </select>
 
-      <label htmlFor="api-key" className="mt-5 block text-sm text-white">
-        API key
-      </label>
-      <div className="relative mt-2">
-        <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-        <input
-          id="api-key"
-          type="password"
-          autoComplete="off"
-          spellCheck={false}
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          onBlur={() => apiKey && void loadModels(provider)}
-          placeholder={
-            status.configured_providers.includes(provider)
-              ? "already set — leave blank to keep it"
-              : "paste it here"
-          }
-          className="w-full rounded-lg border border-gray-700/50 bg-gray-900 py-2 pl-9 pr-3 text-sm text-white focus:border-sensei-600/50 focus:outline-hidden"
-        />
-      </div>
-      <p className="mt-2 text-xs text-gray-500">
-        Stored encrypted on this machine, never in plain text. Sensei forwards it to{" "}
-        {selected?.name ?? "the provider"} and nowhere else.
-      </p>
+      {/* A server on this machine has no account, so it has no key. Asking for
+          one anyway suggests the user is missing something they need to go and
+          find, and the reassurance underneath — "forwards it to LM Studio and
+          nowhere else" — is about a credential that will never exist. */}
+      {selected?.local ? (
+        <p className="mt-5 text-xs text-gray-500">
+          No API key: {selected.name} runs on this machine, so nothing is sent anywhere and there is
+          no account to sign in to. Sensei will reach it at its usual address — start it, then pick
+          a model below.
+        </p>
+      ) : (
+        <>
+          <label htmlFor="api-key" className="mt-5 block text-sm text-white">
+            API key
+          </label>
+          <div className="relative mt-2">
+            <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+            <input
+              id="api-key"
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              onBlur={() => apiKey && void loadModels(provider)}
+              placeholder={
+                status.configured_providers.includes(provider)
+                  ? "already set — leave blank to keep it"
+                  : "paste it here"
+              }
+              className="w-full rounded-lg border border-gray-700/50 bg-gray-900 py-2 pl-9 pr-3 text-sm text-white focus:border-sensei-600/50 focus:outline-hidden"
+            />
+          </div>
+          <p className="mt-2 text-xs text-gray-500">
+            Stored encrypted on this machine, never in plain text. Sensei forwards it to{" "}
+            {selected?.name ?? "the provider"} and nowhere else.
+          </p>
+        </>
+      )}
 
       <label htmlFor="model" className="mt-5 block text-sm text-white">
         Model

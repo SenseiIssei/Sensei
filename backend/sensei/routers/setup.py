@@ -154,6 +154,17 @@ async def ollama_pull(req: PullRequest) -> StreamingResponse:
                 async for line in r.aiter_lines():
                     if line.strip():
                         yield _sse(json.loads(line))
+        except httpx.ConnectError:
+            # By far the most likely failure, and "ConnectError: All connection
+            # attempts failed" tells the user nothing they can act on. Ollama is
+            # a separate program; if it is not there, say so and where to get it.
+            yield _sse(
+                {
+                    "error": f"Nothing answering at {settings.ollama_host}. "
+                    "Ollama is a separate program — install it from https://ollama.com "
+                    "and start it, then try again."
+                }
+            )
         except (httpx.HTTPError, json.JSONDecodeError) as exc:
             # Reported into the stream rather than raised: the response has
             # already started, so an exception here would truncate it and the
@@ -202,6 +213,22 @@ async def connected_tools() -> dict[str, Any]:
     }
 
 
+async def _openai_style_models(base: str, key: str) -> tuple[int, list[str]]:
+    """`GET {base}/models`, returning (status, ids). Raises on transport errors.
+
+    Shared by the hosted and the local paths so the two cannot answer the same
+    question differently.
+    """
+    # No empty bearer for a local server: some reject a malformed header
+    # outright, which would look like the server being down.
+    headers = {"Authorization": f"Bearer {key}"} if key else {}
+    async with httpx.AsyncClient(timeout=8.0) as c:
+        r = await c.get(f"{base.rstrip('/')}/models", headers=headers)
+    if r.status_code != 200:
+        return r.status_code, []
+    return 200, sorted({m["id"] for m in r.json().get("data", []) if m.get("id")})
+
+
 @router.get("/provider-models/{provider}")
 async def provider_models(provider: str) -> dict[str, Any]:
     """Ask the provider which models it actually serves.
@@ -226,6 +253,27 @@ async def provider_models(provider: str) -> dict[str, Any]:
             return {"provider": provider, "models": models, "source": "live", "detail": ""}
         return {**fallback, "detail": "Ollama isn't running. Start it with: ollama serve"}
 
+    if provider in _LOCAL_PROVIDERS:
+        # These have no curated list to fall back on, by design — what a local
+        # server offers is whatever the user has loaded. So the generic "showing
+        # a static list that may be out of date" was shown next to no list at
+        # all, and said nothing about the only thing wrong: it is not running.
+        base = getattr(settings, f"{provider}_api_base_url", "")
+        try:
+            status, models = await _openai_style_models(base, "")
+        except Exception as exc:
+            logger.debug("local model listing failed for %s: %s", provider, exc)
+            status, models = 0, []
+        if status == 200 and models:
+            return {"provider": provider, "models": models, "source": "live", "detail": ""}
+        name = PROVIDER_CATALOG.get(provider, {}).get("name", provider)
+        return {
+            **fallback,
+            "models": [],
+            "detail": f"Nothing answering at {base or 'its usual address'} — start {name}, "
+            "then reload this list.",
+        }
+
     if provider not in _LIVE_MODEL_PROVIDERS:
         return {
             **fallback,
@@ -241,19 +289,14 @@ async def provider_models(provider: str) -> dict[str, Any]:
         return fallback
 
     try:
-        # No empty bearer for a local server: some reject a malformed header
-        # outright, which would look like the server being down.
-        headers = {"Authorization": f"Bearer {key}"} if key else {}
-        async with httpx.AsyncClient(timeout=8.0) as c:
-            r = await c.get(f"{base.rstrip('/')}/models", headers=headers)
-        if r.status_code == 401:
-            return {**fallback, "detail": "That API key was rejected by the provider."}
-        if r.status_code != 200:
-            return {**fallback, "detail": f"Provider returned HTTP {r.status_code}."}
-        ids = sorted({m["id"] for m in r.json().get("data", []) if m.get("id")})
-        if not ids:
-            return fallback
-        return {"provider": provider, "models": ids, "source": "live", "detail": ""}
+        status, ids = await _openai_style_models(base, key)
     except Exception as exc:
         logger.debug("live model listing failed for %s: %s", provider, exc)
         return fallback
+    if status == 401:
+        return {**fallback, "detail": "That API key was rejected by the provider."}
+    if status != 200:
+        return {**fallback, "detail": f"Provider returned HTTP {status}."}
+    if not ids:
+        return fallback
+    return {"provider": provider, "models": ids, "source": "live", "detail": ""}
