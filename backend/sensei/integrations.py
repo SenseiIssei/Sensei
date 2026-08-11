@@ -617,10 +617,30 @@ BLOCK_REGISTRY: tuple[BlockIntegration, ...] = (
             f'base_url = "{ep.openai}"\n'
             'wire_api = "chat"\n'
             'env_key = "OPENAI_API_KEY"\n'
+            "\n"
+            # The MCP server is the part that works for everyone. Routing Codex
+            # through the provider above requires an API key, because a custom
+            # provider cannot use the ChatGPT sign-in — `auth.json` holds OAuth
+            # tokens and a null OPENAI_API_KEY, so selecting `sensei` on a
+            # subscription account swaps a working login for a missing env var.
+            # The tools below need no credential at all and compress whatever
+            # Codex chooses to send through them.
+            + (
+                "[mcp_servers.sensei]\n"
+                f"command = {json.dumps(ep.mcp_command)}\n"
+                f"args = {json.dumps(list(ep.mcp_args))}\n"
+                if ep.mcp_ready
+                else ""
+            )
         ),
-        conflicts=(r"^\s*\[model_providers\.sensei\]",),
-        note="Adds a `sensei` provider. Select it with `codex --config "
-        'model_provider=sensei`, or set `model_provider = "sensei"` yourself.',
+        conflicts=(
+            r"^\s*\[model_providers\.sensei\]",
+            r"^\s*\[mcp_servers\.sensei\]",
+        ),
+        note="Adds the `sensei` MCP tools, which work on a ChatGPT "
+        "subscription. Also defines a `sensei` provider for API-key users — "
+        "select it with `codex --config model_provider=sensei`. Do not select "
+        "it while signed in with ChatGPT: a custom provider needs an API key.",
     ),
     BlockIntegration(
         id="aider",

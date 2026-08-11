@@ -20,6 +20,15 @@ from sensei.security.rbac import require_admin
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 # Provider → display name, whether it has a free tier, and a few model choices.
+# A fallback, not a source of truth.
+#
+# `GET /api/setup/provider-models/{provider}` asks the provider what it serves
+# and says `source: "live"` when it answered. This list is what gets shown when
+# it could not — no key yet, or the provider is unreachable — and it is stale by
+# construction: it still offered gpt-4o and claude-3.5-sonnet long after both
+# were superseded, and there is no edit to this file that stops that happening
+# again. Entries here are a starting point for someone with no key configured,
+# nothing more. Providers added since do not pin a model at all.
 PROVIDER_CATALOG: dict[str, dict[str, Any]] = {
     "ollama": {
         "name": "Ollama (local)",
@@ -63,6 +72,15 @@ PROVIDER_CATALOG: dict[str, dict[str, Any]] = {
         "free": False,
         "models": ["mistral-large-latest", "codestral-latest"],
     },
+    # No `models` key: these are listed live or not at all, which is the point.
+    "moonshot": {"name": "Moonshot (Kimi)", "free": False, "models": []},
+    "dashscope": {"name": "Alibaba DashScope (Qwen)", "free": False, "models": []},
+    "xai": {"name": "xAI (Grok)", "free": False, "models": []},
+    "cerebras": {"name": "Cerebras", "free": False, "models": []},
+    "deepinfra": {"name": "DeepInfra", "free": False, "models": []},
+    "lmstudio": {"name": "LM Studio (local)", "free": True, "models": []},
+    "llamacpp": {"name": "llama.cpp (local)", "free": True, "models": []},
+    "vllm": {"name": "vLLM (local)", "free": True, "models": []},
 }
 
 

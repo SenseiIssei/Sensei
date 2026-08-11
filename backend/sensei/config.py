@@ -154,6 +154,61 @@ class Settings(BaseSettings):
     perplexity_api_key: str = ""
     perplexity_api_model: str = "sonar-pro"
 
+    # ── Providers added without pinning a model name ────────────────────────
+    #
+    # Every entry above ships a default model id, and every one of those is a
+    # guess with a shelf life: the catalog still offered gpt-4o and
+    # claude-3.5-sonnet long after both were superseded, and a wrong id fails at
+    # request time with a message about the model, not about the stale default.
+    #
+    # These leave the model empty and are listed in `_LIVE_MODEL_PROVIDERS`, so
+    # the UI asks the provider what it actually serves today. A name Sensei has
+    # never heard of works the moment the provider ships it.
+
+    # Moonshot AI (Kimi)
+    moonshot_api_base_url: str = "https://api.moonshot.ai/v1"
+    moonshot_api_key: str = ""
+    moonshot_api_model: str = ""
+
+    # Alibaba DashScope (Qwen), OpenAI-compatible endpoint
+    dashscope_api_base_url: str = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+    dashscope_api_key: str = ""
+    dashscope_api_model: str = ""
+
+    # xAI (Grok)
+    xai_api_base_url: str = "https://api.x.ai/v1"
+    xai_api_key: str = ""
+    xai_api_model: str = ""
+
+    # Cerebras
+    cerebras_api_base_url: str = "https://api.cerebras.ai/v1"
+    cerebras_api_key: str = ""
+    cerebras_api_model: str = ""
+
+    # DeepInfra
+    deepinfra_api_base_url: str = "https://api.deepinfra.com/v1/openai"
+    deepinfra_api_key: str = ""
+    deepinfra_api_model: str = ""
+
+    # ── Local servers ───────────────────────────────────────────────────────
+    # No key, no account, nothing leaves the machine. Each speaks the OpenAI
+    # wire format, so Sensei needs only the address.
+
+    # LM Studio
+    lmstudio_api_base_url: str = "http://localhost:1234/v1"
+    lmstudio_api_key: str = ""
+    lmstudio_api_model: str = ""
+
+    # llama.cpp server
+    llamacpp_api_base_url: str = "http://localhost:8080/v1"
+    llamacpp_api_key: str = ""
+    llamacpp_api_model: str = ""
+
+    # vLLM
+    vllm_api_base_url: str = "http://localhost:8000/v1"
+    vllm_api_key: str = ""
+    vllm_api_model: str = ""
+
     # Legacy single API (backward compat)
     api_base_url: str = ""
     api_key: str = ""
