@@ -262,7 +262,10 @@ async def provider_models(provider: str) -> dict[str, Any]:
         try:
             status, models = await _openai_style_models(base, "")
         except Exception as exc:
-            logger.debug("local model listing failed for %s: %s", provider, exc)
+            # The address, not the path parameter. It comes from settings rather
+            # than from the request, and it is the more useful half anyway: what
+            # matters in the log is which endpoint did not answer.
+            logger.debug("local model listing failed at %s: %s", base, exc)
             status, models = 0, []
         if status == 200 and models:
             return {"provider": provider, "models": models, "source": "live", "detail": ""}

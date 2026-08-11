@@ -104,7 +104,11 @@ class TestLocalServers:
 
         assert body["models"] == []
         assert "start LM Studio" in body["detail"]
-        assert "localhost:1234" in body["detail"]
+        # Against the configured address rather than a literal: hard-coding the
+        # host and port here duplicates the setting, and a substring check on a
+        # URL is the shape of an incomplete-sanitization bug even when it is only
+        # an assertion.
+        assert settings.lmstudio_api_base_url in body["detail"]
         assert "out of date" not in body["detail"]
 
     def test_the_local_endpoints_stay_on_the_machine(self) -> None:
