@@ -268,6 +268,35 @@ def test_a_frozen_binary_spawns_itself_not_a_module(monkeypatch: pytest.MonkeyPa
     assert ep.mcp_args == ("mcp",)
 
 
+@pytest.mark.skipif(
+    not integrations.mcp_available(),
+    reason="a build without the extra deliberately writes no mcp block",
+)
+def test_codex_gets_mcp_tools_that_work_without_an_api_key() -> None:
+    """Codex signed in with ChatGPT has OAuth tokens and a null OPENAI_API_KEY.
+
+    The provider block Sensei writes declares `env_key = "OPENAI_API_KEY"`, so
+    selecting it on a subscription account swaps a working login for a missing
+    environment variable. The MCP block needs no credential at all, which makes
+    it the part that actually helps most users — checked on a real machine,
+    where `auth.json` held exactly that shape.
+    """
+    codex = next(i for i in integrations.BLOCK_REGISTRY if i.id == "codex")
+    body = codex.body(integrations.endpoints())
+
+    assert "[mcp_servers.sensei]" in body
+    assert "[model_providers.sensei]" in body
+
+
+def test_codex_gets_no_mcp_block_when_mcp_cannot_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A build without the extra would point Codex at a command that exits
+    immediately — the same silent failure as pointing it at a missing file."""
+    monkeypatch.setattr(integrations, "mcp_available", lambda: False)
+    codex = next(i for i in integrations.BLOCK_REGISTRY if i.id == "codex")
+
+    assert "[mcp_servers.sensei]" not in codex.body(integrations.endpoints())
+
+
 def test_the_tray_points_tools_at_the_console_binary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

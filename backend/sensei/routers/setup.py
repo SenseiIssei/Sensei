@@ -19,11 +19,15 @@ persists to ``.env`` and puts API keys in the encrypted vault.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from sensei import hardware
 from sensei.config import settings
@@ -35,6 +39,8 @@ router = APIRouter(prefix="/setup", tags=["setup"])
 
 # Providers exposing an OpenAI-style GET /models. The base URL comes from
 # settings, so a custom/self-hosted endpoint works the same way.
+# Providers that answer `GET /models`, so the list shown is the one they serve
+# right now rather than whatever was true when this file was last edited.
 _LIVE_MODEL_PROVIDERS = {
     "openai",
     "openrouter",
@@ -45,7 +51,23 @@ _LIVE_MODEL_PROVIDERS = {
     "fireworks",
     "perplexity",
     "zai",
+    "moonshot",
+    "dashscope",
+    "xai",
+    "cerebras",
+    "deepinfra",
+    # Local servers. Worth listing for the same reason and one more: what a
+    # local server serves is whatever the user has loaded, which no catalog
+    # anywhere could know.
+    "lmstudio",
+    "llamacpp",
+    "vllm",
 }
+
+# Runs on this machine, so there is no account and no key to enter. Asking for
+# one before showing the model list would gate a local server behind a
+# credential that does not exist.
+_LOCAL_PROVIDERS = {"lmstudio", "llamacpp", "vllm", "ollama"}
 
 
 def _configured_providers() -> list[str]:
@@ -93,6 +115,56 @@ async def setup_status() -> dict[str, Any]:
         "catalog": [{"id": pid, **info} for pid, info in PROVIDER_CATALOG.items()],
         "compression_enabled": settings.compression_enabled,
     }
+
+
+class PullRequest(BaseModel):
+    model: str
+
+
+@router.post("/ollama/pull")
+async def ollama_pull(req: PullRequest) -> StreamingResponse:
+    """Download a local model, streaming progress as it goes.
+
+    Getting a local model running was the one setup step Sensei sent people to a
+    terminal for — `ollama pull <something>`, with the name guessed from a list
+    that ages. Ollama's own library is the only current answer to "what can I
+    run", so this takes whatever tag the user types and reports progress rather
+    than validating against a list Sensei would have to maintain.
+
+    Streamed because these are gigabytes: a request that returns only when the
+    download finishes looks identical to one that has hung.
+    """
+    model = req.model.strip()
+    if not model:
+        raise HTTPException(status_code=400, detail="no model named")
+
+    async def progress() -> AsyncIterator[bytes]:
+        try:
+            # No overall deadline, but a connect timeout so an Ollama that is not
+            # running fails in seconds instead of hanging: the download itself is
+            # gigabytes and legitimately takes as long as it takes.
+            limits = httpx.Timeout(None, connect=10.0)
+            async with (
+                httpx.AsyncClient(timeout=limits) as c,
+                c.stream("POST", f"{settings.ollama_host}/api/pull", json={"model": model}) as r,
+            ):
+                if r.status_code != 200:
+                    yield _sse({"error": f"Ollama answered {r.status_code}"})
+                    return
+                async for line in r.aiter_lines():
+                    if line.strip():
+                        yield _sse(json.loads(line))
+        except (httpx.HTTPError, json.JSONDecodeError) as exc:
+            # Reported into the stream rather than raised: the response has
+            # already started, so an exception here would truncate it and the
+            # browser would see a download that simply stopped.
+            yield _sse({"error": f"{type(exc).__name__}: {exc}"})
+
+    return StreamingResponse(progress(), media_type="text/event-stream")
+
+
+def _sse(payload: dict[str, Any]) -> bytes:
+    return f"data: {json.dumps(payload)}\n\n".encode()
 
 
 @router.get("/tools")
@@ -161,7 +233,7 @@ async def provider_models(provider: str) -> dict[str, Any]:
         }
 
     key = getattr(settings, _key_attr(provider), "")
-    if not key:
+    if not key and provider not in _LOCAL_PROVIDERS:
         return {**fallback, "detail": "Enter an API key to load this provider's live model list."}
 
     base = getattr(settings, f"{provider}_api_base_url", "")
@@ -169,10 +241,11 @@ async def provider_models(provider: str) -> dict[str, Any]:
         return fallback
 
     try:
+        # No empty bearer for a local server: some reject a malformed header
+        # outright, which would look like the server being down.
+        headers = {"Authorization": f"Bearer {key}"} if key else {}
         async with httpx.AsyncClient(timeout=8.0) as c:
-            r = await c.get(
-                f"{base.rstrip('/')}/models", headers={"Authorization": f"Bearer {key}"}
-            )
+            r = await c.get(f"{base.rstrip('/')}/models", headers=headers)
         if r.status_code == 401:
             return {**fallback, "detail": "That API key was rejected by the provider."}
         if r.status_code != 200:
