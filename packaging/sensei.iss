@@ -24,6 +24,9 @@
 #ifndef SourceExe
   #define SourceExe "dist-app\sensei.exe"
 #endif
+#ifndef SourceExeW
+  #define SourceExeW "dist-app\senseiw.exe"
+#endif
 
 #define AppName "Sensei"
 #define AppPublisher "SenseiIssei"
@@ -62,18 +65,25 @@ Name: "startup"; Description: "Start Sensei when I sign in (runs in the system t
 Name: "wiretools"; Description: "Connect the AI tools already on this machine"; GroupDescription: "Setup"
 
 [Files]
+; Two binaries from one codebase, the `python.exe` / `pythonw.exe` convention.
+; `sensei.exe` has a console and is what you type commands into; `senseiw.exe`
+; has none and is what every shortcut points at, so nothing the user clicks
+; ever puts a black rectangle on their desktop.
 Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "sensei.exe"; Flags: ignoreversion
+Source: "{#SourceExeW}"; DestDir: "{app}"; DestName: "senseiw.exe"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-; The Start-menu entry runs the tray, not the bare server: a shortcut that opens
-; a console window and holds it is not what someone clicking "Sensei" wants.
-Name: "{group}\{#AppName}"; Filename: "{app}\sensei.exe"; Parameters: "tray"; WorkingDir: "{app}"
+; Every shortcut is the windowed binary with no arguments, which defaults to the
+; tray. A shortcut that opens a console and holds it is not what someone
+; clicking "Sensei" wants, and a server with neither console nor icon can only
+; be stopped in Task Manager.
+Name: "{group}\{#AppName}"; Filename: "{app}\senseiw.exe"; WorkingDir: "{app}"
 Name: "{group}\Sensei Dashboard"; Filename: "http://localhost:7000/app/"
 Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\sensei.exe"; Parameters: "tray"; WorkingDir: "{app}"; Tasks: desktopicon
-Name: "{userstartup}\{#AppName}"; Filename: "{app}\sensei.exe"; Parameters: "tray --no-browser"; WorkingDir: "{app}"; Tasks: startup
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\senseiw.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{userstartup}\{#AppName}"; Filename: "{app}\senseiw.exe"; Parameters: "tray --no-browser"; WorkingDir: "{app}"; Tasks: startup
 
 [Run]
 ; Wiring happens before the first launch so the tools are already routed when
@@ -81,7 +91,7 @@ Name: "{userstartup}\{#AppName}"; Filename: "{app}\sensei.exe"; Parameters: "tra
 ; the consent, and `setup-tools --undo` is the way back.
 Filename: "{app}\sensei.exe"; Parameters: "setup-tools"; WorkingDir: "{app}"; \
   StatusMsg: "Connecting your AI tools..."; Flags: runhidden waituntilterminated; Tasks: wiretools
-Filename: "{app}\sensei.exe"; Parameters: "tray"; WorkingDir: "{app}"; \
+Filename: "{app}\senseiw.exe"; WorkingDir: "{app}"; \
   Description: "Start Sensei now"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]

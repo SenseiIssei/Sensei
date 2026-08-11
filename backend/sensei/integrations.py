@@ -245,6 +245,12 @@ class Integration:
     revert: Callable[[dict[str, Any]], bool]
     binaries: tuple[str, ...] = ()
     extra_dirs: tuple[Callable[[], Path], ...] = ()
+    # Where the tool used to keep its configuration. Editors move these: Devin
+    # relocated Windsurf's from `~/.codeium/windsurf/` to `%APPDATA%/devin/` and
+    # now prompts to copy it across. Writing only to the current location leaves
+    # an existing install unwired until the user notices; writing only to the
+    # old one wires a directory the tool has stopped reading.
+    legacy_paths: tuple[Callable[[], Path], ...] = ()
     # Where this tool reads per-repository configuration, if it does. Set means
     # `--project` can scope the change to one checkout instead of the machine —
     # which is what someone wants when only some of their work should route
@@ -256,12 +262,28 @@ class Integration:
     # confident claim that turns out to be wrong is worse than a hedged one.
     verified: bool = True
 
+    def targets(self) -> list[Path]:
+        """Every config file this tool might be reading, current one first.
+
+        All of them get written, not just the first. A tool mid-migration reads
+        one and will read the other after its next update, and there is no way
+        from here to know which side of that the user is on — Devin asks about
+        it in a dialog box. Writing both costs a few hundred bytes and removes
+        the question.
+        """
+        paths = [self.path(), *(p() for p in self.legacy_paths)]
+        seen: list[Path] = []
+        for path in paths:
+            if path not in seen:
+                seen.append(path)
+        return seen
+
     def detect(self) -> bool:
         if any(shutil.which(b) for b in self.binaries):
             return True
-        target = self.path()
-        if target.exists() or _is_tool_dir(target.parent):
-            return True
+        for target in self.targets():
+            if target.exists() or _is_tool_dir(target.parent):
+                return True
         return any(d().exists() for d in self.extra_dirs)
 
 
@@ -295,6 +317,17 @@ def _xdg_config() -> Path:
     if sys.platform == "win32":
         return Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
     return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+
+
+def _devin_config() -> Path:
+    """Devin's current MCP config, which used to live under `.codeium`."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+    elif sys.platform == "darwin":
+        base = Path.home() / "Library" / "Application Support"
+    else:
+        base = _xdg_config()
+    return base / "devin" / "mcp_config.json"
 
 
 def _claude_desktop_config() -> Path:
@@ -453,11 +486,17 @@ REGISTRY: tuple[Integration, ...] = (
     ),
     Integration(
         id="windsurf",
-        name="Windsurf",
-        path=lambda: Path.home() / ".codeium" / "windsurf" / "mcp_config.json",
+        name="Windsurf / Devin",
+        binaries=("windsurf", "devin"),
+        # Devin moved this out of the Codeium directory. Both are written: an
+        # install that has not migrated yet still reads the old one, and the
+        # app itself offers to copy the file across when it notices.
+        path=_devin_config,
+        legacy_paths=(lambda: Path.home() / ".codeium" / "windsurf" / "mcp_config.json",),
         apply=_mcp_apply(("mcpServers",)),
         revert=_mcp_revert(("mcpServers",)),
-        note="MCP server.",
+        note="MCP server. Written to both the current and the former config "
+        "location, because Devin migrates it on its own schedule.",
     ),
     Integration(
         id="cline",
@@ -588,6 +627,23 @@ def _write_manifest(doc: dict[str, Any]) -> None:
     _atomic_write(MANIFEST_PATH, _dump_json(doc))
 
 
+def declined() -> set[str]:
+    """Tools the user has actively disconnected.
+
+    Without this there is no difference between "not wired yet" and "wired, and
+    then deliberately unwired", and the background watcher cannot tell them
+    apart either — it would reconnect a tool seconds after `setup-tools --undo`
+    removed it, forever, and the only way out would be to turn the watcher off.
+    An undo has to mean something after the process it ran in has exited.
+    """
+    raw = _read_manifest().get("declined", [])
+    return {str(x) for x in raw} if isinstance(raw, list) else set()
+
+
+def _set_declined(manifest: dict[str, Any], ids: set[str]) -> None:
+    manifest["declined"] = sorted(ids)
+
+
 def _record(
     manifest: dict[str, Any],
     *,
@@ -630,8 +686,9 @@ def _apply_json(
     *,
     dry_run: bool,
     project: Path | None = None,
+    path: Path | None = None,
 ) -> Outcome:
-    path = integration.project_path(project) if project else integration.path()
+    path = path or (integration.project_path(project) if project else integration.path())
     doc = _load_json(path)
     if doc is None:
         return Outcome(
@@ -704,6 +761,7 @@ def apply_all(
     host: str | None = None,
     port: int | None = None,
     project: Path | None = None,
+    automatic: bool = False,
 ) -> list[Outcome]:
     """Wire up every detected tool. Returns one Outcome per tool considered.
 
@@ -711,15 +769,33 @@ def apply_all(
     touched, and only inside that directory. Detection is skipped in that mode:
     committing a `.cursor/mcp.json` for a teammate who has Cursor and you do not
     is a legitimate thing to want.
+
+    ``automatic`` marks the call as coming from the background watcher rather
+    than from a person. The two must not behave the same: a watcher has to
+    respect an earlier disconnect, while someone typing `setup-tools` is asking
+    for exactly this tool right now and that supersedes whatever they decided
+    last week.
     """
     ep = endpoints(host, port)
     manifest = _read_manifest()
     stamp = time.strftime("%Y%m%d-%H%M%S")
     results: list[Outcome] = []
+    opted_out = declined()
 
     candidates: list[Integration | BlockIntegration] = [*REGISTRY, *BLOCK_REGISTRY]
     for integration in candidates:
         if only is not None and integration.id not in only:
+            continue
+
+        if automatic and integration.id in opted_out:
+            results.append(
+                Outcome(
+                    integration.id,
+                    integration.name,
+                    "unchanged",
+                    detail="disconnected by hand — run `sensei setup-tools` to reconnect",
+                )
+            )
             continue
 
         if project is not None:
@@ -733,15 +809,32 @@ def apply_all(
 
         try:
             if isinstance(integration, Integration):
-                results.append(
-                    _apply_json(integration, ep, manifest, stamp, dry_run=dry_run, project=project)
-                )
+                if project is not None:
+                    results.append(
+                        _apply_json(
+                            integration, ep, manifest, stamp, dry_run=dry_run, project=project
+                        )
+                    )
+                else:
+                    # One outcome per file, so a tool mid-migration shows both
+                    # locations rather than one line that hides the second.
+                    for target in integration.targets():
+                        results.append(
+                            _apply_json(
+                                integration, ep, manifest, stamp, dry_run=dry_run, path=target
+                            )
+                        )
             else:
                 results.append(_apply_block(integration, ep, manifest, stamp, dry_run=dry_run))
         except OSError as exc:
             results.append(Outcome(integration.id, integration.name, "failed", detail=str(exc)))
 
     if not dry_run:
+        if not automatic:
+            # An explicit request is the newest statement of intent, so it
+            # clears the earlier refusal for the tools it actually touched.
+            touched = {r.tool_id for r in results if r.status in ("applied", "unchanged")}
+            _set_declined(manifest, opted_out - touched)
         _write_manifest(manifest)
     return results
 
@@ -840,6 +933,11 @@ def undo_all(*, only: set[str] | None = None, dry_run: bool = False) -> list[Out
 
     if not dry_run:
         manifest["entries"] = kept
+        # Remember the refusal, not just the removal. The files are back to how
+        # they were, but the background watcher still sees an installed tool
+        # that is not wired, and that is indistinguishable from a fresh install
+        # unless the decision is written down.
+        _set_declined(manifest, declined() | {r.tool_id for r in results if r.status == "applied"})
         _write_manifest(manifest)
     return results
 

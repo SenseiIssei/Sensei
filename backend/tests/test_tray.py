@@ -93,9 +93,21 @@ class TestInstallerScript:
 
     def test_the_shortcut_starts_the_tray_not_a_console(self, script: str) -> None:
         """Clicking "Sensei" in the Start menu should not open a terminal
-        window that has to stay open."""
+        window that has to stay open.
+
+        `Parameters: "tray"` used to be what carried this, and it was not
+        enough: a console-subsystem binary allocates a window whichever verb it
+        is given, so the shortcut opened a black rectangle and then sat in the
+        tray behind it. What actually settles it is which binary the shortcut
+        names, so that is what this asserts.
+        """
         icons = script.split("[Icons]", 1)[1].split("[Run]", 1)[0]
-        assert 'Parameters: "tray"' in icons
+        shortcuts = [
+            line for line in icons.splitlines() if "Filename:" in line and "{app}\\" in line
+        ]
+        assert shortcuts, "no shortcuts point into the install directory at all"
+        for line in shortcuts:
+            assert "senseiw.exe" in line, f"shortcut opens a console: {line.strip()}"
 
     def test_wiring_the_tools_is_a_choice(self, script: str) -> None:
         """Editing other programs' configuration is not something an installer

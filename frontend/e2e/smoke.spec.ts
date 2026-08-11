@@ -91,7 +91,7 @@ test("the setup wizard does not drop on top of the dashboard", async ({ page }) 
 
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /SAVINGS/ })).toBeVisible();
-  await expect(page.getByText("No model provider configured.")).toBeVisible();
+  await expect(page.getByText("Your tools are connected and being compressed.")).toBeVisible();
 
   // Long enough for the old behaviour to have swapped the view out.
   await page.waitForTimeout(3000);
