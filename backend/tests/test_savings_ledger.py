@@ -113,6 +113,33 @@ def test_missing_tool_is_labelled_rather_than_blank(ledger: SavingsLedger) -> No
     assert ledger.breakdown("tool")[0]["key"] == "unknown"
 
 
+def test_a_missing_model_names_the_tool_that_had_none(ledger: SavingsLedger) -> None:
+    """`sensei_compress` shrinks a blob and is never told which model it is for,
+    or whether it is for one at all.
+
+    Labelling that "unknown" states the absence as though it were a gap in the
+    data — the same reading that made "by tool → unknown" look like a bug back
+    when it actually was one. Naming the tool says which row it is and why there
+    is nothing to show.
+    """
+    ledger.append(_event(1000, 100), tool="MCP")
+
+    assert ledger.breakdown("model")[0]["key"] == "n/a (MCP)"
+
+
+def test_a_missing_model_with_no_tool_either_is_still_unknown(ledger: SavingsLedger) -> None:
+    """Nothing to name, so there is nothing better to say."""
+    ledger.append(_event(1000, 100))
+
+    assert ledger.breakdown("model")[0]["key"] == "unknown"
+
+
+def test_a_real_model_is_untouched(ledger: SavingsLedger) -> None:
+    ledger.append(_event(1000, 100), tool="Claude Code", model="claude-opus-5")
+
+    assert ledger.breakdown("model")[0]["key"] == "claude-opus-5"
+
+
 def test_breakdown_rejects_an_arbitrary_column(ledger: SavingsLedger) -> None:
     """The dimension is interpolated into SQL, so it has to be a closed set."""
     with pytest.raises(ValueError, match="not a groupable dimension"):
