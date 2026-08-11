@@ -102,14 +102,16 @@ class TestLocalServers:
 
         body = client.get("/api/setup/provider-models/lmstudio").json()
 
+        # The whole sentence, not a substring of it. Two reasons: a `in` check
+        # against a URL has the shape of an incomplete-sanitization bug even
+        # when it is only an assertion, and the point here is that the message
+        # is actionable — which is a property of the sentence, not of a
+        # fragment appearing somewhere inside it.
         assert body["models"] == []
-        assert "start LM Studio" in body["detail"]
-        # Against the configured address rather than a literal: hard-coding the
-        # host and port here duplicates the setting, and a substring check on a
-        # URL is the shape of an incomplete-sanitization bug even when it is only
-        # an assertion.
-        assert settings.lmstudio_api_base_url in body["detail"]
-        assert "out of date" not in body["detail"]
+        assert body["detail"] == (
+            f"Nothing answering at {settings.lmstudio_api_base_url} — "
+            "start LM Studio, then reload this list."
+        )
 
     def test_the_local_endpoints_stay_on_the_machine(self) -> None:
         """These must never point somewhere that could receive a prompt."""
