@@ -16,7 +16,7 @@
 ; that no longer exists would break Claude Code, Cursor and the rest with a
 ; "connection refused" that never mentions Sensei.
 ;
-;   iscc packaging\sensei.iss /DAppVersion=0.1.12 /DSourceExe=..\dist-app\sensei.exe
+;   iscc packaging\sensei.iss /DAppVersion=0.1.13 /DSourceExe=..\dist-app\sensei.exe
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
