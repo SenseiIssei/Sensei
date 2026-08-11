@@ -266,8 +266,20 @@ class SavingsLedger:
         # of zero length. A request that saved nothing is real, but "unknown ·
         # 0 · 0%" sitting under the tools that did save something reads as a
         # failure rather than as an absence.
+        # A row can legitimately have no model: `sensei_compress` shrinks a blob
+        # of text and is never told which model it is destined for, or whether
+        # it is destined for one at all. Labelling that "unknown" states the
+        # absence as if it were a gap in the data — the same reading that made
+        # "by tool → unknown" look like a bug when it was one. Naming the tool
+        # instead says which it is and why there is nothing to show.
+        label = (
+            f"CASE WHEN {dimension} = '' AND tool != '' THEN 'n/a (' || tool || ')'"
+            f" WHEN {dimension} = '' THEN 'unknown' ELSE {dimension} END"
+            if dimension == "model"
+            else f"CASE WHEN {dimension} = '' THEN 'unknown' ELSE {dimension} END"
+        )
         rows = self._query(
-            f"SELECT CASE WHEN {dimension} = '' THEN 'unknown' ELSE {dimension} END AS k,"  # noqa: S608
+            f"SELECT {label} AS k,"  # noqa: S608
             " COALESCE(SUM(before),0), COALESCE(SUM(after),0), COALESCE(SUM(saved),0), COUNT(*)"
             " FROM events GROUP BY k HAVING SUM(saved) > 0 ORDER BY SUM(saved) DESC LIMIT ?",
             (limit,),
