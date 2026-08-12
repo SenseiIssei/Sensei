@@ -38,10 +38,24 @@ try:
 except Exception:  # pragma: no cover - the extra simply isn't installed
     _mcp = []
 
+# The Rust accelerator, when the build environment has it. Imported inside a
+# `try` in three compressor modules, so PyInstaller's static analysis never sees
+# it and the binary shipped without it for every release — `sensei doctor` said
+# "Rust accelerator: not installed" on an installed copy, and every compression
+# took the pure-Python path at roughly a fifth of the speed.
+#
+# Optional at build time on purpose: a contributor without a Rust toolchain
+# still gets a working binary, just a slower one.
+try:
+    _accel = collect_submodules("sensei_core")
+except Exception:  # pragma: no cover — the wheel simply isn't installed
+    _accel = []
+
 hiddenimports = (
     collect_submodules("sensei")
     + collect_submodules("uvicorn")
     + _mcp
+    + _accel
     + ["fastapi", "pydantic", "pydantic_settings", "httpx", "tiktoken", "anyio", "starlette"]
 )
 
