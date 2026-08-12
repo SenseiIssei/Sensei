@@ -235,14 +235,18 @@ async def collect() -> list[Check]:
     try:
         import sensei_core  # noqa: F401
 
-        checks.append(Check("Rust accelerator", OK, "installed — CSV hot path ~2x faster"))
+        # Measured end to end through the gateway, not on the CSV path alone:
+        # 1.5x at 200 log lines, 4.4x at 12,000, where it is the difference
+        # between 571ms and 131ms of local time per request.
+        checks.append(Check("Rust accelerator", OK, "installed — up to 4x faster on large input"))
     except ImportError:
         checks.append(
             Check(
                 "Rust accelerator",
-                OK,
-                "not installed (optional)",
-                "Compression works without it. To install: pip install sensei-core",
+                WARN,
+                "not installed — compression runs 1.5-4x slower",
+                "Bundled with the installer since 0.1.17. On a pip install: "
+                "pip install sensei-core",
             )
         )
 

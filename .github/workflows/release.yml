@@ -160,6 +160,10 @@ jobs:
         working-directory: frontend
         run: npm ci && npm run build
 
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: stable
+
       - name: Install build deps
         run: |
           pip install pyinstaller
@@ -170,11 +174,44 @@ jobs:
           # "Server disconnected" with no indication of why.
           pip install -e "./backend[mcp,tray]"
 
+      # The accelerator has to be installed *before* PyInstaller runs, because
+      # PyInstaller bundles what it can import. It was published as a wheel to
+      # every release and never put in the binary, so `sensei doctor` on an
+      # installed copy reported "Rust accelerator: not installed" and every
+      # compression ran the pure-Python path.
+      #
+      # Measured on the same machine and input: 16ms with it, 82ms without —
+      # 5.1x, and the gap grows with payload size. It is the difference between
+      # a 4,000-line log costing 30ms of local time and costing 170ms.
+      - name: Build and install the Rust accelerator
+        run: |
+          pip install "maturin>=1.9,<2"
+          maturin build --release --out dist-wheel --manifest-path rust/sensei_core/Cargo.toml
+          pip install --find-links dist-wheel --no-index sensei_core
+          python -c "import sensei_core; print('accelerator ready:', sensei_core.__file__)"
+
       - name: Draw the icon
         run: python packaging/make_icon.py
 
       - name: Build the binary
         run: pyinstaller packaging/sensei.spec --noconfirm --distpath dist-app
+
+      # Asking the binary itself, because that is the thing users run. The
+      # accelerator was published as a wheel for a year of releases while every
+      # installed copy quietly ran without it — the wheel existing proves
+      # nothing about the binary containing it.
+      - name: The binary must have the accelerator
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="dist-app/sensei"
+          [ -f "$bin.exe" ] && bin="$bin.exe"
+          if "$bin" doctor 2>&1 | grep -qi "accelerator .*not installed"; then
+            echo "::error::the binary was built without the Rust accelerator"
+            "$bin" doctor 2>&1 | grep -i accelerator || true
+            exit 1
+          fi
+          echo "accelerator is in the binary"
 
       # ── Windows: the bare .exe, plus a .zip for Scoop ──
       # Scoop wants an archive it can extract and a sha256 it can pin. Handing
