@@ -1,28 +1,39 @@
-"""Never rewrite what the provider is caching.
+"""The provider's prompt cache, and what actually preserves it.
 
-A `cache_control` marker caches everything up to and including the block it sits
-on. Rewriting any of that changes the cache key, so the next request pays full
-price for a prefix that would have been billed at a fraction — which can cost
-several times whatever the rewrite saved. Compression that loses money is worse
-than no compression, and the savings ledger cannot see it happen.
+The cache is keyed on the bytes the provider receives, which are the bytes
+Sensei sends. So the question is never "did Sensei change the text" but "does
+Sensei produce the same text for the same message on every turn". Compression is
+deterministic, so it does — and compressing everything is cache-safe.
 
-Measured on real Claude Code traffic: 33 markers across 22 requests.
+What breaks it is a decision that depends on position. `gateway_preserve_cache`
+compresses only the newest message, so a message compressed while it was newest
+arrives uncompressed on the next turn. Different bytes, cache miss, every turn —
+on precisely the cache-heavy agents the setting used to recommend itself for.
+
+Written after going the wrong way first: the cached prefix was protected on
+sight of a `cache_control` marker, which is where Claude Code puts one on the
+*last* message. That protected the entire request and compressed nothing — a
+real task went from 12,561 tokens saved to 1.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
+
 import pytest
 
+from sensei.compression.router import ContentRouter
 from sensei.config import settings
 from sensei.routers.gateway import compress_anthropic_request
 
-# Repetitive on purpose. Flowing prose is left alone by the compressor anyway,
-# so a prose fixture cannot tell "protected because cached" from "nothing to do".
-BIG = "\n".join(
-    f"file: src/module_{i}/handler.py  status=unchanged  lines={100 + i}  owner=team-a"
-    for i in range(400)
-)
-TOOL_OUTPUT = "\n".join(f"2026-08-11 INFO worker={s % 4} item={s} status=ok" for s in range(400))
+
+def _tool_output(n: int) -> str:
+    return "\n".join(f"2026-08-11 INFO worker={s % 4} item={s} n={n} status=ok" for s in range(300))
+
+
+def _digest(messages: list[dict]) -> str:
+    return hashlib.sha256(json.dumps(messages, sort_keys=True).encode()).hexdigest()
 
 
 @pytest.fixture(autouse=True)
@@ -32,105 +43,90 @@ def _defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "gateway_preserve_cache", False)
 
 
-def _system(cached: bool) -> list[dict]:
-    block: dict = {"type": "text", "text": BIG}
-    if cached:
-        block["cache_control"] = {"type": "ephemeral"}
-    return [block]
+def test_compression_is_deterministic() -> None:
+    """Everything below rests on this. If the same text could compress two ways,
+    no amount of care about which messages get touched would keep a cache."""
+    text = _tool_output(0)
+    digests = {hashlib.sha256(ContentRouter().compress(text).compressed.encode()).hexdigest()}
+    for _ in range(4):
+        digests.add(hashlib.sha256(ContentRouter().compress(text).compressed.encode()).hexdigest())
+
+    assert len(digests) == 1
 
 
-class TestACachedPrefixIsLeftAlone:
-    def test_a_marked_system_prompt_is_not_rewritten(self) -> None:
-        """This is the default configuration, and it used to rewrite it."""
-        system, _, _ = compress_anthropic_request(
-            _system(cached=True), [{"role": "user", "content": TOOL_OUTPUT}]
-        )
-
-        assert system[0]["text"] == BIG
-        assert system[0]["cache_control"] == {"type": "ephemeral"}
-
-    def test_an_unmarked_system_prompt_is_still_compressed(self) -> None:
-        """No caching means nothing to protect, so the old behaviour stands —
-        this must not become a blanket refusal to touch system prompts."""
-        system, _, _ = compress_anthropic_request(
-            _system(cached=False), [{"role": "user", "content": TOOL_OUTPUT}]
-        )
-
-        assert system[0]["text"] != BIG
-        assert len(system[0]["text"]) < len(BIG)
-
-    def test_a_marker_anywhere_protects_everything_before_it(self) -> None:
-        """The marker caches the prefix up to itself, so one on the last tool
-        definition protects the system prompt too."""
-        messages = [
-            {"role": "user", "content": [{"type": "text", "text": BIG}]},
-            {
-                "role": "assistant",
-                "content": [{"type": "text", "text": BIG, "cache_control": {"type": "ephemeral"}}],
-            },
-            {"role": "user", "content": TOOL_OUTPUT},
+class TestTheCachedPrefixSurvivesAnotherTurn:
+    def test_by_default_the_prefix_is_byte_identical_next_turn(self) -> None:
+        """Which is what the provider needs, and it comes for free from
+        determinism — not from leaving anything uncompressed."""
+        turn_n = [
+            {"role": "user", "content": _tool_output(0)},
+            {"role": "assistant", "content": _tool_output(1)},
         ]
+        turn_n1 = [*turn_n, {"role": "user", "content": _tool_output(2)}]
 
-        system, out, _ = compress_anthropic_request(_system(cached=False), messages)
+        _, out_n, _ = compress_anthropic_request(None, [dict(m) for m in turn_n])
+        _, out_n1, _ = compress_anthropic_request(None, [dict(m) for m in turn_n1])
 
-        assert system[0]["text"] == BIG, "system sits inside the cached prefix"
-        assert out[0]["content"][0]["text"] == BIG
-        assert out[1]["content"][0]["text"] == BIG
+        assert _digest(out_n) == _digest(out_n1[:2])
 
-    def test_everything_after_the_marker_is_still_compressed(self) -> None:
-        """Otherwise protecting the cache would cost the whole point of this.
-
-        The tokens on an agent transcript are in the turns *after* the cached
-        prefix — tool output, file dumps, command results.
-        """
-        messages = [
-            {
-                "role": "user",
-                "content": [{"type": "text", "text": BIG, "cache_control": {"type": "ephemeral"}}],
-            },
-            {"role": "assistant", "content": TOOL_OUTPUT},
-            {"role": "user", "content": TOOL_OUTPUT},
-        ]
-
-        _, out, savings = compress_anthropic_request(_system(cached=True), messages)
-
-        assert out[0]["content"][0]["text"] == BIG, "the cached turn was rewritten"
-        assert len(out[1]["content"]) < len(TOOL_OUTPUT)
-        assert len(out[2]["content"]) < len(TOOL_OUTPUT)
-        assert savings["tokens_saved"] > 0
-
-    def test_more_than_the_last_message_survives_compression(self) -> None:
-        """`gateway_preserve_cache` compresses only the final message, because
-        without markers it cannot know where the prefix ends. With markers it
-        can, so several turns of tool output get compressed rather than one."""
-        messages = [
-            {
-                "role": "user",
-                "content": [{"type": "text", "text": BIG, "cache_control": {"type": "ephemeral"}}],
-            },
-            {"role": "assistant", "content": TOOL_OUTPUT},
-            {"role": "user", "content": TOOL_OUTPUT},
-        ]
-
-        _, out, _ = compress_anthropic_request(_system(cached=True), messages)
-
-        assert len(out[1]["content"]) < len(TOOL_OUTPUT), "the middle turn was skipped"
-
-
-class TestTheManualSettingStillWorks:
-    def test_preserve_cache_protects_an_unmarked_request(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Someone routing a client that caches without saying so can still ask
-        for the conservative behaviour."""
+    def test_preserve_cache_is_what_breaks_it(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The setting that used to describe itself as the one to enable for a
+        cache-heavy agent. A message compressed while newest comes back
+        uncompressed once it is not."""
         monkeypatch.setattr(settings, "gateway_preserve_cache", True)
+        turn_n = [
+            {"role": "user", "content": _tool_output(0)},
+            {"role": "assistant", "content": _tool_output(1)},
+        ]
+        turn_n1 = [*turn_n, {"role": "user", "content": _tool_output(2)}]
+
+        _, out_n, _ = compress_anthropic_request(None, [dict(m) for m in turn_n])
+        _, out_n1, _ = compress_anthropic_request(None, [dict(m) for m in turn_n1])
+
+        assert _digest(out_n) != _digest(out_n1[:2])
+
+
+class TestCompressionIsNotGivenUpForCaching:
+    def test_a_marked_request_is_still_compressed(self) -> None:
+        """Claude Code marks its *last* message, so treating a marker as
+        "protect everything up to here" protects the whole request. That was
+        tried; it reduced a real task from 12,561 tokens saved to 1."""
         messages = [
-            {"role": "user", "content": TOOL_OUTPUT},
-            {"role": "user", "content": TOOL_OUTPUT},
+            {"role": "user", "content": _tool_output(0)},
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": _tool_output(1),
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
+            },
         ]
 
-        system, out, _ = compress_anthropic_request(_system(cached=False), messages)
+        _, out, savings = compress_anthropic_request(None, messages)
 
-        assert system[0]["text"] == BIG
-        assert out[0]["content"] == TOOL_OUTPUT
-        assert len(out[1]["content"]) < len(TOOL_OUTPUT)
+        assert savings["tokens_saved"] > 0
+        assert len(out[0]["content"]) < len(_tool_output(0))
+
+    def test_the_marker_itself_is_passed_through(self) -> None:
+        """Sensei rewrites the text inside a block, never the block's own
+        fields — dropping the marker would turn every request into a cache
+        write instead of a read."""
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": _tool_output(0),
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
+            }
+        ]
+
+        _, out, _ = compress_anthropic_request(None, messages)
+
+        assert out[0]["content"][0]["cache_control"] == {"type": "ephemeral"}
