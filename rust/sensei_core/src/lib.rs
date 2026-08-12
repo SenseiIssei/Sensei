@@ -373,8 +373,6 @@ const BOILERPLATE: &[&str] = &[
     r"(?i)See (?:the )?(?:documentation|docs|README|guide) for more details\.?",
 ];
 
-const MAX_PARAGRAPH: usize = 500;
-
 struct TextEngine {
     replacements: Vec<(Regex, String)>,
     fillers: Vec<Regex>,
@@ -428,29 +426,6 @@ fn text_engine() -> &'static TextEngine {
     })
 }
 
-fn split_sentences(line: &str) -> Vec<String> {
-    // Mirror Python re.split(r"(?<=[.!?])\s+", line) without lookbehind.
-    let chars: Vec<char> = line.chars().collect();
-    let mut parts: Vec<String> = Vec::new();
-    let mut start = 0usize;
-    let mut i = 0usize;
-    while i < chars.len() {
-        if chars[i].is_whitespace() && i > 0 && matches!(chars[i - 1], '.' | '!' | '?') {
-            parts.push(chars[start..i].iter().collect());
-            let mut j = i;
-            while j < chars.len() && chars[j].is_whitespace() {
-                j += 1;
-            }
-            start = j;
-            i = j;
-        } else {
-            i += 1;
-        }
-    }
-    parts.push(chars[start..].iter().collect());
-    parts
-}
-
 fn do_compress_text(input: &str) -> String {
     let e = text_engine();
     let mut text = input.to_string();
@@ -492,28 +467,16 @@ fn do_compress_text(input: &str) -> String {
         text = out.join("\n");
     }
 
-    // truncate paragraphs
-    {
-        let mut out: Vec<String> = Vec::new();
-        for line in text.split('\n') {
-            if line.chars().count() > MAX_PARAGRAPH {
-                let sentences = split_sentences(line);
-                if sentences.len() > 3 {
-                    out.push(format!(
-                        "{} […] {}",
-                        sentences[0],
-                        sentences[sentences.len() - 1]
-                    ));
-                } else {
-                    let head: String = line.chars().take(MAX_PARAGRAPH).collect();
-                    out.push(format!("{head}…"));
-                }
-            } else {
-                out.push(line.to_string());
-            }
-        }
-        text = out.join("\n");
-    }
+    // Paragraph truncation used to happen here. It now lives on the Python
+    // side, where the setting that governs it lives, and where it is off by
+    // default: it deletes sentences rather than compressing them, and it fires
+    // on whether a line happens to be longer than 500 characters — so a
+    // document keeps everything while the same text pasted out of a PDF, being
+    // one long line, keeps two sentences of a hundred and sixty.
+    //
+    // Leaving it here would have made the flag a lie on every installed copy,
+    // because this function replaces the whole Python path when the wheel is
+    // present.
 
     // fix caps
     text = e

@@ -226,6 +226,17 @@ class Settings(BaseSettings):
     # Replace no-break spaces with ordinary ones. Off by default: an NBSP is
     # deliberate in typeset prose, and it is reported either way.
     strip_nbsp: bool = False
+    # Replace the middle of any line over 500 characters with a marker.
+    #
+    # Off, because it is deletion rather than compression and it fires on a
+    # distinction the user cannot see: a document with paragraph breaks passes
+    # through whole, while the same text pasted out of a PDF is one long line
+    # and loses almost all of it. Measured on one document both ways — 160
+    # sentences kept with the breaks, 2 without.
+    #
+    # On, the marker states how much went and that the original is retrievable,
+    # so a model reading it can ask rather than answer around the gap.
+    text_truncate_paragraphs: bool = False
     ccr_ttl_hours: int = 24
     ccr_cache_dir: str = ".sensei_cache"
     # Ask the model for terser answers. Output tokens cost roughly 4-5x input
