@@ -1,3 +1,3 @@
 """Sensei — Self-hosted AI workspace that compresses prompts before they leave your machine."""
 
-__version__ = "0.1.17"
+__version__ = "0.1.18"
