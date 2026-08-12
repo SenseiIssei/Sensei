@@ -184,8 +184,20 @@ jobs:
       # 5.1x, and the gap grows with payload size. It is the difference between
       # a 4,000-line log costing 30ms of local time and costing 170ms.
       - name: Build and install the Rust accelerator
+        shell: bash
         run: |
+          set -euo pipefail
           pip install "maturin>=1.9,<2"
+          # A PyO3 extension module must not link against libpython; it resolves
+          # Python symbols from the interpreter that loads it. The wheels job
+          # gets this for free from cibuildwheel, and calling maturin directly
+          # against macOS's framework Python does not — it fails at link time
+          # with a page of "__Py_IncRef ... symbol(s) not found for architecture
+          # arm64", which is this and nothing else.
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            export RUSTFLAGS="-C link-arg=-undefined -C link-arg=dynamic_lookup"
+            export MACOSX_DEPLOYMENT_TARGET=11.0
+          fi
           maturin build --release --out dist-wheel --manifest-path rust/sensei_core/Cargo.toml
           pip install --find-links dist-wheel --no-index sensei_core
           python -c "import sensei_core; print('accelerator ready:', sensei_core.__file__)"
