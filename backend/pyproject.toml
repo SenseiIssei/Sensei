@@ -10,7 +10,7 @@ build-backend = "setuptools.build_meta"
 # worse trade: `pip install sensei-gateway` is read once, `sensei up` is typed
 # every day.
 name = "sensei-gateway"
-version = "0.1.16"
+version = "0.1.17"
 description = "Self-hosted AI workspace that compresses prompts before they leave your machine"
 readme = "README.md"
 license = {text = "MIT"}
