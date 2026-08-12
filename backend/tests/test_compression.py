@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 
 from sensei.compression.codecomp import CodeCompressor
@@ -120,13 +121,23 @@ class TestTextCompressor:
         result = comp.compress("In order to win, you must try.")
         assert result[0].isupper()
 
-    def test_rust_matches_python(self):
+    @pytest.mark.parametrize("truncate", [False, True])
+    def test_rust_matches_python(self, truncate, monkeypatch):
+        """Both settings, because the two paths disagreed on exactly one of them.
+
+        Truncation used to live inside the Rust function, which replaces the
+        whole Python path when the wheel is present — so a setting on the Python
+        side would have been a setting that does nothing on every installed
+        copy. It now runs after the accelerator, and this parametrisation is
+        what keeps the two honest.
+        """
         from unittest import mock
 
         from sensei.compression import textcomp
 
         if textcomp._core is None:
             return
+        monkeypatch.setattr(textcomp.settings, "text_truncate_paragraphs", truncate)
         samples = [
             "Basically, in order to actually get started, you must install everything.",
             "the vast majority of the configuration is going to be handled automatically",

@@ -225,6 +225,7 @@ Webhooks and external channels.
 | `SENSEI_SAVINGS_RETENTION_DAYS` | `400` |
 | `SENSEI_STRIP_INVISIBLE` | `true` |
 | `SENSEI_STRIP_NBSP` | `false` |
+| `SENSEI_TEXT_TRUNCATE_PARAGRAPHS` | `false` |
 
 ## Notes on a few that matter
 

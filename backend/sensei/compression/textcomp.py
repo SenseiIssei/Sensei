@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import ClassVar
 
+from sensei.config import settings
+
 # Optional Rust accelerator (rust/sensei_core). Byte-compatible with the Python
 # path below; soft-imported so installs without the wheel still work.
 try:  # pragma: no cover - depends on whether the wheel was built
@@ -124,8 +126,12 @@ class TextCompressor:
     def compress(self, text: str) -> str:
         """Compress prose text."""
         # Fast path: Rust accelerator (byte-identical output) when available.
+        # Truncation is applied afterwards rather than inside it, so the setting
+        # governs both paths — the accelerator replaces this whole function when
+        # the wheel is present, and a flag it cannot see would be a flag that
+        # does nothing on every installed copy.
         if _core is not None:
-            return _core.compress_text(text)
+            return self._truncate_paragraphs(_core.compress_text(text))
 
         # 1. Strip boilerplate references.
         for pat in self._boilerplate:
@@ -146,12 +152,19 @@ class TextCompressor:
         text = re.sub(r"\n{3,}", "\n\n", text)
         text = self._dedupe_lines(text)
 
-        # 6. Truncate very long paragraphs.
-        text = self._truncate_paragraphs(text)
-
-        # 7. Restore sentence capitalization and trim.
+        # 6. Restore sentence capitalization and trim.
         text = self._fix_caps(text)
-        return text.strip()
+
+        # 7. Truncate very long paragraphs — last, on trimmed text, and after
+        # the capitalisation pass rather than before it.
+        #
+        # Both details are parity with the accelerator, which does everything up
+        # to and including fix_caps and returns trimmed. Truncating first gave
+        # different capitalisation around the marker; truncating untrimmed text
+        # made a trailing space into an empty final "sentence", so the two paths
+        # disagreed on the count by one and on whether a last sentence survived.
+        # The parity test parametrised over the setting caught both.
+        return self._truncate_paragraphs(text.strip())
 
     def _cleanup(self, text: str) -> str:
         # Written for linear time: this runs on untrusted text (crawled pages,
@@ -179,16 +192,49 @@ class TextCompressor:
         return "\n".join(deduped)
 
     def _truncate_paragraphs(self, text: str) -> str:
+        """Drop the middle of over-long lines. Off unless asked for.
+
+        This is not compression, it is deletion, and it is the only thing in
+        this pipeline that discards content it cannot reconstruct. Everything
+        else — deduplication, schema extraction, filler removal — takes out
+        material that is repeated or carries no meaning. This takes out
+        sentences nobody has read.
+
+        It only bites a line longer than 500 characters, which sounds narrow
+        and is not: a document keeps its paragraph breaks and passes through
+        untouched, while *the same text* pasted out of a PDF, or typed as one
+        long message, is a single line. Measured on one document both ways:
+        9,638 characters and 160 sentences survive with the breaks, 129
+        characters and 2 sentences without them. The model is handed "first
+        sentence [...] last sentence" and answers about a document it never
+        saw, confidently, with no sign that 158 sentences are missing.
+
+        So it is now opt-in, and when it is on it says how much it removed
+        instead of implying an ellipsis. The original is in the CCR store
+        either way, which is what makes the pointer worth printing.
+        """
+        if not settings.text_truncate_paragraphs:
+            return text
+
         result: list[str] = []
         for line in text.split("\n"):
-            if len(line) > self.MAX_PARAGRAPH:
-                sentences = re.split(r"(?<=[.!?])\s+", line)
-                if len(sentences) > 3:
-                    result.append(sentences[0] + " […] " + sentences[-1])
-                else:
-                    result.append(line[: self.MAX_PARAGRAPH] + "…")
-            else:
+            if len(line) <= self.MAX_PARAGRAPH:
                 result.append(line)
+                continue
+            sentences = re.split(r"(?<=[.!?])\s+", line)
+            if len(sentences) > 3:
+                dropped = len(sentences) - 2
+                result.append(
+                    f"{sentences[0]} [... {dropped} sentences removed by Sensei; "
+                    f"the full text is retrievable by ccr_id ...] {sentences[-1]}"
+                )
+            else:
+                cut = len(line) - self.MAX_PARAGRAPH
+                result.append(
+                    f"{line[: self.MAX_PARAGRAPH]}"
+                    f"[... {cut} characters removed by Sensei; "
+                    f"the full text is retrievable by ccr_id ...]"
+                )
         return "\n".join(result)
 
     def _fix_caps(self, text: str) -> str:
