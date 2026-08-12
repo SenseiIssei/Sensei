@@ -179,6 +179,51 @@ class TestThroughTheRouter:
         assert ZWSP in result.compressed
 
 
+class TestTheAsciiFastPath:
+    """Pure-ASCII input skips the whole function, because it has to be clean.
+
+    Every character this module removes or counts lives above U+007F — the
+    zero-width set, the bidi controls, the no-break spaces — and a homoglyph is
+    non-ASCII by definition, since the whole point is a non-Latin character that
+    passes for a Latin one.
+
+    Worth guarding because it is not a micro-optimisation: on 880KB of log
+    output this function was 43.65ms of a 47ms compression, four regex passes
+    plus a per-word script check. The exit takes it to 0.001ms.
+    """
+
+    def test_ascii_input_comes_back_untouched(self) -> None:
+        text = "def handle(request):\n    return process(request.body)\n" * 200
+        out, findings = invisible.clean(text)
+
+        assert out is text, "the fast path should not even copy"
+        assert findings == invisible.Findings()
+
+    @pytest.mark.parametrize(
+        ("name", "char"),
+        [
+            ("zero width space", ZWSP),
+            ("byte order mark", chr(0xFEFF)),
+            ("soft hyphen", chr(0x00AD)),
+            ("bidi override", chr(0x202E)),
+            ("no-break space", chr(0x00A0)),
+            ("cyrillic a", chr(0x0430)),
+        ],
+    )
+    def test_nothing_it_looks_for_is_ascii(self, name: str, char: str) -> None:
+        """The premise, stated as a test. If any of these were ASCII the exit
+        would silently stop removing it."""
+        assert not char.isascii(), name
+
+    def test_the_exit_does_not_fire_on_mixed_content(self) -> None:
+        """One non-ASCII character anywhere means the full path runs."""
+        text = "x = 1\n" * 500 + f"y = 2{ZWSP}\n"
+        out, findings = invisible.clean(text, is_code=True)
+
+        assert findings.invisible == 1
+        assert ZWSP not in out
+
+
 def test_the_token_saving_is_real() -> None:
     """The claim this feature is sold on. One zero-width space per line is what
     pasting out of a web interface produces, and each one is its own token."""

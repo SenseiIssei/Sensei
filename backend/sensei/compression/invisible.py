@@ -202,6 +202,20 @@ def clean(text: str, *, is_code: bool = False, strip_nbsp: bool = False) -> tupl
     if not text:
         return text, Findings()
 
+    # Every character this function looks for lives above U+007F: the zero-width
+    # set, the bidi controls, the no-break spaces, and homoglyphs by definition —
+    # a Cyrillic `a` that passes for a Latin one is not ASCII. So pure-ASCII text
+    # cannot contain a single one, and all the work below is guaranteed to find
+    # nothing.
+    #
+    # Worth an early exit because that is the normal case — logs, source, English
+    # prose — and because the work is not cheap: four regex passes plus a
+    # per-word script check over the whole input. Measured on 880KB of log
+    # output, this function was 43.65ms of a 47ms compression, and `isascii()`
+    # is a C-level scan that does not register at 0.001ms resolution.
+    if text.isascii():
+        return text, Findings()
+
     pattern = _CODE_RE if is_code else _ALWAYS_RE
     findings = Findings(
         invisible=len(pattern.findall(text)),
