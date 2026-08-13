@@ -68,6 +68,38 @@ ALWAYS_STRIP = "".join(
     )
 )
 
+# The Unicode tag block, and the deprecated language tag that heads it.
+#
+# These render as absolutely nothing — not a thin space, nothing — and each one
+# maps to an ASCII character, so a whole readable instruction can be written in
+# them and pasted into a document that looks innocent. That is the technique
+# usually called ASCII smuggling, and it is a prompt-injection channel rather
+# than a curiosity: a gateway whose job is forwarding text to a model is exactly
+# the place it would arrive, and the human reviewing the text cannot see it.
+#
+# Deprecated since Unicode 5.1 for everything except emoji subdivision flags,
+# and those cannot be told apart by code point: England is U+1F3F4 followed by
+# the tag letters g, b, e, n, g and a cancel tag — the same lowercase letters a
+# hidden sentence is written in. The first attempt here excluded the lowercase
+# range to protect flags, which left the whole readable alphabet unfiltered and
+# made the feature useless for the case it exists for.
+#
+# So the split is by context, not by code point: a tag run that follows the flag
+# base and ends in a cancel tag is a flag and stays; every other tag character
+# goes. See `_SMUGGLED_RE`.
+TAG_CHARACTERS = "".join(map(chr, [0xE0001, *range(0xE0020, 0xE0080)]))
+
+# Variation selectors, minus the two that do visible work.
+#
+# The rest carry no meaning of their own and are the other well-known place to
+# hide a payload — a byte per selector, invisible, surviving copy and paste.
+#
+# U+FE0E and U+FE0F are excluded on purpose: they choose between the text and
+# emoji presentation of the preceding character, so removing U+FE0F turns a
+# rendered emoji back into a dingbat. That is the same class of mistake as
+# stripping a zero-width joiner out of a family emoji.
+VARIATION_SELECTORS = "".join(map(chr, [*range(0xFE00, 0xFE0E), *range(0xE0100, 0xE01F0)]))
+
 # Meaningful in Indic, Persian and Arabic text, and in emoji sequences. Stripped
 # from source code, where they cannot mean anything, and left alone elsewhere.
 CODE_ONLY_STRIP = "".join(
@@ -118,6 +150,14 @@ NBSP = "".join(
 _ALWAYS_RE = re.compile(f"[{ALWAYS_STRIP}]")
 _CODE_RE = re.compile(f"[{ALWAYS_STRIP}{CODE_ONLY_STRIP}]")
 _BIDI_RE = re.compile(f"[{BIDI_CONTROLS}]")
+# Alternation, not a plain character class: the first branch matches a whole
+# emoji subdivision flag and is put back untouched, the second matches a single
+# smuggled character and is dropped. Ordering matters — the flag has to be
+# recognised before its tag letters are seen individually.
+_SMUGGLED_RE = re.compile(
+    "(\U0001f3f4[\U000e0020-\U000e007e]{1,6}\U000e007f)"
+    f"|([{TAG_CHARACTERS}{VARIATION_SELECTORS}])"
+)
 _NBSP_RE = re.compile(f"[{NBSP}]")
 
 # An identifier-ish run containing both Latin and non-Latin letters. A word
@@ -131,12 +171,17 @@ class Findings:
 
     invisible: int = 0
     bidi: int = 0
+    # Tag characters and variation selectors. Counted apart from `invisible`
+    # because finding one is a different kind of news: the others are usually a
+    # paste artefact, while a tag character is somebody encoding readable text
+    # in a form the reader cannot see.
+    smuggled: int = 0
     nbsp: int = 0
     mixed_script_words: list[str] = field(default_factory=list)
 
     @property
     def removed(self) -> int:
-        return self.invisible + self.bidi
+        return self.invisible + self.bidi + self.smuggled
 
     @property
     def anything(self) -> bool:
@@ -146,6 +191,7 @@ class Findings:
         return {
             "invisible_removed": self.invisible,
             "bidi_removed": self.bidi,
+            "smuggled_removed": self.smuggled,
             "nbsp_seen": self.nbsp,
             # Capped: a payload full of transliterated text would otherwise put
             # thousands of words into a response nobody reads.
@@ -220,6 +266,7 @@ def clean(text: str, *, is_code: bool = False, strip_nbsp: bool = False) -> tupl
     findings = Findings(
         invisible=len(pattern.findall(text)),
         bidi=len(_BIDI_RE.findall(text)),
+        smuggled=sum(1 for m in _SMUGGLED_RE.finditer(text) if m.group(2)),
         nbsp=len(_NBSP_RE.findall(text)),
         mixed_script_words=_mixed_script_words(text),
     )
@@ -228,6 +275,9 @@ def clean(text: str, *, is_code: bool = False, strip_nbsp: bool = False) -> tupl
         text = pattern.sub("", text)
     if findings.bidi:
         text = _BIDI_RE.sub("", text)
+    if findings.smuggled:
+        # Keep group 1 (a flag), drop group 2 (everything else).
+        text = _SMUGGLED_RE.sub(lambda m: m.group(1) or "", text)
     if strip_nbsp and findings.nbsp:
         # A plain space, not nothing: an NBSP is a space that was asked not to
         # break, and deleting it would join two words.
