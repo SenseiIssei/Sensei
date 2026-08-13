@@ -245,6 +245,15 @@ class ContentRouter:
                 findings.bidi,
                 content_type.value,
             )
+        if findings.smuggled:
+            logger.warning(
+                "Removed %d tag character(s) or variation selector(s) from a %s "
+                "payload. These render as nothing at all and each maps to an "
+                "ASCII character, so they can carry readable instructions that a "
+                "model sees and a human reviewing the text does not.",
+                findings.smuggled,
+                content_type.value,
+            )
         if findings.mixed_script_words:
             logger.warning(
                 "Payload contains identifier(s) mixing Latin with another alphabet, "
