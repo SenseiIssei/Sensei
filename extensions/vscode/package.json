@@ -67,11 +67,11 @@
     "publish:ovsx": "ovsx publish --no-dependencies"
   },
   "devDependencies": {
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.2.0",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.9.2",
-    "esbuild": "^0.28.1",
-    "ovsx": "^1.1.0",
+    "esbuild": "^0.28.2",
+    "ovsx": "^1.1.1",
     "typescript": "^7.0.2"
   }
 }
