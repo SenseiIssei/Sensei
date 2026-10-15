@@ -61,13 +61,13 @@ class TestPatternsAreCompiledOnce:
         assert isinstance(router._STRONG_CODE_RE, re.Pattern)
         assert isinstance(router._WEAK_CODE_RE, re.Pattern)
 
-    def test_comment_patterns_are_compiled(self) -> None:
+    def test_language_patterns_are_compiled(self) -> None:
+        """Comment stripping is a linear scanner now; detection still uses
+        regexes, and those must be compiled once, not per line."""
         import re
 
-        assert isinstance(codecomp._BLOCK_COMMENT_RE, re.Pattern)
-        assert isinstance(codecomp._DEFAULT_COMMENT_RE, re.Pattern)
-        for lang, pat in codecomp._COMMENT_RES.items():
-            assert isinstance(pat, re.Pattern), lang
+        for lang, patterns in codecomp.CodeCompressor._COMPILED.items():
+            assert all(isinstance(p, re.Pattern) for p in patterns), lang
 
 
 class TestImportPrefixes:
