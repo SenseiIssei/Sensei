@@ -34,36 +34,36 @@ How Sensei reaches a model.
 |---|---|
 | `SENSEI_ANTHROPIC_API_BASE_URL` | `https://api.anthropic.com/v1` |
 | `SENSEI_ANTHROPIC_API_KEY` | _(empty)_ |
-| `SENSEI_ANTHROPIC_API_MODEL` | `claude-3-5-sonnet-20241022` |
+| `SENSEI_ANTHROPIC_API_MODEL` | `claude-sonnet-5-5` |
 | `SENSEI_API_PROVIDER` | `openrouter` |
 | `SENSEI_CEREBRAS_API_BASE_URL` | `https://api.cerebras.ai/v1` |
 | `SENSEI_CEREBRAS_API_KEY` | _(empty)_ |
 | `SENSEI_CEREBRAS_API_MODEL` | _(empty)_ |
-| `SENSEI_COHERE_API_BASE_URL` | `https://api.cohere.com/v1` |
+| `SENSEI_COHERE_API_BASE_URL` | `https://api.cohere.ai/compatibility/v1` |
 | `SENSEI_COHERE_API_KEY` | _(empty)_ |
-| `SENSEI_COHERE_API_MODEL` | `command-r-plus` |
+| `SENSEI_COHERE_API_MODEL` | `command-a-plus-05-2026` |
 | `SENSEI_DASHSCOPE_API_BASE_URL` | `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` |
 | `SENSEI_DASHSCOPE_API_KEY` | _(empty)_ |
 | `SENSEI_DASHSCOPE_API_MODEL` | _(empty)_ |
 | `SENSEI_DEEPINFRA_API_BASE_URL` | `https://api.deepinfra.com/v1/openai` |
 | `SENSEI_DEEPINFRA_API_KEY` | _(empty)_ |
 | `SENSEI_DEEPINFRA_API_MODEL` | _(empty)_ |
-| `SENSEI_DEEPSEEK_API_BASE_URL` | `https://api.deepseek.com/v1` |
+| `SENSEI_DEEPSEEK_API_BASE_URL` | `https://api.deepseek.com` |
 | `SENSEI_DEEPSEEK_API_KEY` | _(empty)_ |
-| `SENSEI_DEEPSEEK_API_MODEL` | `deepseek-chat` |
+| `SENSEI_DEEPSEEK_API_MODEL` | `deepseek-flash` |
 | `SENSEI_EMBEDDINGS_API_KEY` | _(empty)_ |
 | `SENSEI_FIREWORKS_API_BASE_URL` | `https://api.fireworks.ai/inference/v1` |
 | `SENSEI_FIREWORKS_API_KEY` | _(empty)_ |
-| `SENSEI_FIREWORKS_API_MODEL` | `accounts/fireworks/models/llama-v3p3-70b-instruct` |
-| `SENSEI_GOOGLE_API_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta` |
+| `SENSEI_FIREWORKS_API_MODEL` | `accounts/fireworks/models/glm-5p3` |
+| `SENSEI_GOOGLE_API_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai` |
 | `SENSEI_GOOGLE_API_KEY` | _(empty)_ |
-| `SENSEI_GOOGLE_API_MODEL` | `gemini-2.0-flash` |
+| `SENSEI_GOOGLE_API_MODEL` | `gemini-3.8-flash` |
 | `SENSEI_GROQ_API_BASE_URL` | `https://api.groq.com/openai/v1` |
 | `SENSEI_GROQ_API_KEY` | _(empty)_ |
-| `SENSEI_GROQ_API_MODEL` | `llama-3.3-70b-versatile` |
-| `SENSEI_HUGGINGFACE_API_BASE_URL` | `https://api-inference.huggingface.co/models` |
+| `SENSEI_GROQ_API_MODEL` | `openai/gpt-oss-120b` |
+| `SENSEI_HUGGINGFACE_API_BASE_URL` | `https://router.huggingface.co/v1` |
 | `SENSEI_HUGGINGFACE_API_KEY` | _(empty)_ |
-| `SENSEI_HUGGINGFACE_API_MODEL` | `THUDM/glm-5.2-744b` |
+| `SENSEI_HUGGINGFACE_API_MODEL` | `openai/gpt-oss-120b` |
 | `SENSEI_LLAMACPP_API_BASE_URL` | `http://localhost:8080/v1` |
 | `SENSEI_LLAMACPP_API_KEY` | _(empty)_ |
 | `SENSEI_LLAMACPP_API_MODEL` | _(empty)_ |
@@ -79,25 +79,25 @@ How Sensei reaches a model.
 | `SENSEI_MOONSHOT_API_MODEL` | _(empty)_ |
 | `SENSEI_OPENAI_API_BASE_URL` | `https://api.openai.com/v1` |
 | `SENSEI_OPENAI_API_KEY` | _(empty)_ |
-| `SENSEI_OPENAI_API_MODEL` | `gpt-4o` |
+| `SENSEI_OPENAI_API_MODEL` | `gpt-6.1-sol` |
 | `SENSEI_OPENROUTER_API_BASE_URL` | `https://openrouter.ai/api/v1` |
 | `SENSEI_OPENROUTER_API_KEY` | _(empty)_ |
-| `SENSEI_OPENROUTER_API_MODEL` | `zhipuai/glm-5.2` |
+| `SENSEI_OPENROUTER_API_MODEL` | `~anthropic/claude-sonnet-latest` |
 | `SENSEI_PERPLEXITY_API_BASE_URL` | `https://api.perplexity.ai` |
 | `SENSEI_PERPLEXITY_API_KEY` | _(empty)_ |
 | `SENSEI_PERPLEXITY_API_MODEL` | `sonar-pro` |
-| `SENSEI_TOGETHER_API_BASE_URL` | `https://api.together.xyz/v1` |
+| `SENSEI_TOGETHER_API_BASE_URL` | `https://api.together.ai/v1` |
 | `SENSEI_TOGETHER_API_KEY` | _(empty)_ |
-| `SENSEI_TOGETHER_API_MODEL` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` |
+| `SENSEI_TOGETHER_API_MODEL` | `zai-org/GLM-5.3` |
 | `SENSEI_VLLM_API_BASE_URL` | `http://localhost:8000/v1` |
 | `SENSEI_VLLM_API_KEY` | _(empty)_ |
 | `SENSEI_VLLM_API_MODEL` | _(empty)_ |
 | `SENSEI_XAI_API_BASE_URL` | `https://api.x.ai/v1` |
 | `SENSEI_XAI_API_KEY` | _(empty)_ |
 | `SENSEI_XAI_API_MODEL` | _(empty)_ |
-| `SENSEI_ZAI_API_BASE_URL` | `https://open.bigmodel.cn/api/paas/v4` |
+| `SENSEI_ZAI_API_BASE_URL` | `https://api.z.ai/api/paas/v4` |
 | `SENSEI_ZAI_API_KEY` | _(empty)_ |
-| `SENSEI_ZAI_API_MODEL` | `glm-5.2` |
+| `SENSEI_ZAI_API_MODEL` | `glm-5.3` |
 
 ## Local models
 
@@ -111,7 +111,7 @@ Ollama, llama.cpp and vLLM.
 | `SENSEI_LOCAL_MODEL_PATH` | _(empty)_ |
 | `SENSEI_LOCAL_PORT` | `8080` |
 | `SENSEI_OLLAMA_HOST` | `http://localhost:11434` |
-| `SENSEI_OLLAMA_MODEL` | `glm-5.2` |
+| `SENSEI_OLLAMA_MODEL` | `qwen3.5:9b` |
 
 ## Compression
 
@@ -121,6 +121,7 @@ The pipeline that saves the tokens.
 |---|---|
 | `SENSEI_CCR_CACHE_DIR` | `.sensei_cache` |
 | `SENSEI_CCR_TTL_HOURS` | `24` |
+| `SENSEI_CODE_COMPRESSION` | `safe` |
 | `SENSEI_COMPRESSION_ENABLED` | `true` |
 | `SENSEI_GATEWAY_COMPRESS_SYSTEM` | `true` |
 | `SENSEI_GATEWAY_PRESERVE_CACHE` | `false` |
@@ -219,6 +220,11 @@ Webhooks and external channels.
 | `SENSEI_API_MODEL` | _(empty)_ |
 | `SENSEI_AUTO_CONNECT` | `true` |
 | `SENSEI_AUTO_CONNECT_INTERVAL_SECONDS` | `30` |
+| `SENSEI_FALLBACK_BASE_URL` | `http://localhost:11434` |
+| `SENSEI_FALLBACK_ENABLED` | `false` |
+| `SENSEI_FALLBACK_MODEL` | _(empty)_ |
+| `SENSEI_MCP_PAGE_CHARS` | `12000` |
+| `SENSEI_MCP_SERVERS_FILE` | _(empty)_ |
 | `SENSEI_OUTPUT_HOLDOUT` | `0.1` |
 | `SENSEI_SAVINGS_DB` | `.sensei_savings.db` |
 | `SENSEI_SAVINGS_PERSIST` | `true` |
@@ -226,6 +232,9 @@ Webhooks and external channels.
 | `SENSEI_STRIP_INVISIBLE` | `true` |
 | `SENSEI_STRIP_NBSP` | `false` |
 | `SENSEI_TEXT_TRUNCATE_PARAGRAPHS` | `false` |
+| `SENSEI_UPDATE_CHECK` | `false` |
+| `SENSEI_UPSTREAM_RETRIES` | `2` |
+| `SENSEI_UPSTREAM_RETRY_MAX_WAIT` | `8.0` |
 
 ## Notes on a few that matter
 
