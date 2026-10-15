@@ -16,9 +16,9 @@ class TestConfig:
         s = Settings()
         assert s.api_provider == "openrouter"
         assert s.ollama_host == "http://localhost:11434"
-        assert s.ollama_model == "glm-5.2"
+        assert s.ollama_model == "qwen3.5:9b"
         assert s.openrouter_api_base_url == "https://openrouter.ai/api/v1"
-        assert s.zai_api_base_url == "https://open.bigmodel.cn/api/paas/v4"
+        assert s.zai_api_base_url == "https://api.z.ai/api/paas/v4"
 
     def test_security_defaults(self):
         s = Settings()

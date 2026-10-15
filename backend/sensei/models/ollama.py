@@ -25,7 +25,7 @@ class OllamaProvider(ModelProvider):
     """Local model provider using Ollama — free, no API key required.
 
     Ollama runs models locally and exposes a REST API at localhost:11434.
-    Supports any GGUF model including GLM-5.2 quantized variants.
+    Supports any model in the Ollama library or any GGUF you import.
     """
 
     def __init__(

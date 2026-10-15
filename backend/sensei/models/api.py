@@ -7,7 +7,7 @@ from typing import ClassVar
 
 import httpx
 
-from sensei.config import settings
+from sensei.config import Settings, settings
 from sensei.models.base import (
     ChatCompletion,
     ChatMessage,
@@ -29,36 +29,19 @@ class APIModelProvider(ModelProvider):
     Cohere, Fireworks AI, Perplexity, and any custom OpenAI-compatible endpoint.
     """
 
+    # Derived from the Settings model rather than repeated here: this table
+    # used to be a second copy of every default, and the two drifted — the
+    # settings said one model while the fallback below still said gpt-4o.
     PROVIDER_DEFAULTS: ClassVar[dict[str, dict[str, str]]] = {
-        "zai": {"base_url": "https://open.bigmodel.cn/api/paas/v4", "model": "glm-5.2"},
-        "openrouter": {"base_url": "https://openrouter.ai/api/v1", "model": "zhipuai/glm-5.2"},
-        "huggingface": {
-            "base_url": "https://api-inference.huggingface.co/models",
-            "model": "THUDM/glm-5.2-744b",
-        },
-        "openai": {"base_url": "https://api.openai.com/v1", "model": "gpt-4o"},
-        "anthropic": {
-            "base_url": "https://api.anthropic.com/v1",
-            "model": "claude-3-5-sonnet-20241022",
-        },
-        "google": {
-            "base_url": "https://generativelanguage.googleapis.com/v1beta",
-            "model": "gemini-2.0-flash",
-        },
-        "groq": {"base_url": "https://api.groq.com/openai/v1", "model": "llama-3.3-70b-versatile"},
-        "mistral": {"base_url": "https://api.mistral.ai/v1", "model": "mistral-large-latest"},
-        "together": {
-            "base_url": "https://api.together.xyz/v1",
-            "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-        },
-        "deepseek": {"base_url": "https://api.deepseek.com/v1", "model": "deepseek-chat"},
-        "cohere": {"base_url": "https://api.cohere.com/v1", "model": "command-r-plus"},
-        "fireworks": {
-            "base_url": "https://api.fireworks.ai/inference/v1",
-            "model": "accounts/fireworks/models/llama-v3p3-70b-instruct",
-        },
-        "perplexity": {"base_url": "https://api.perplexity.ai", "model": "sonar-pro"},
-    }
+        name: {
+            "base_url": Settings.model_fields[f"{name}_api_base_url"].default,
+            "model": Settings.model_fields[f"{name}_api_model"].default,
+        }
+        for name in (
+            "zai", "openrouter", "huggingface", "openai", "anthropic", "google", "groq",
+            "mistral", "together", "deepseek", "cohere", "fireworks", "perplexity",
+        )
+    }  # fmt: skip
 
     # Providers that use OpenAI-compatible chat/completions endpoint
     OPENAI_COMPATIBLE: ClassVar[set[str]] = {
@@ -159,7 +142,7 @@ class APIModelProvider(ModelProvider):
             self.model = (
                 model
                 or settings.api_model
-                or self.PROVIDER_DEFAULTS.get(self.provider_name, {}).get("model", "glm-5.2")
+                or self.PROVIDER_DEFAULTS.get(self.provider_name, {}).get("model", "")
             )
 
         self.base_url = self.base_url.rstrip("/")
@@ -284,7 +267,7 @@ class APIModelProvider(ModelProvider):
             backend="openai-compatible",
             context_window=1_000_000,
             status=ModelStatus.available if available else ModelStatus.unavailable,
-            description=f"GLM-5.2 via {label} API at {self.base_url}",
+            description=f"{self.model} via {label} at {self.base_url}",
         )
 
     async def is_available(self) -> bool:

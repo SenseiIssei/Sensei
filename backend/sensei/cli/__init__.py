@@ -38,7 +38,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "  sensei up                    start Sensei and open the web UI\n"
             "  sensei up --expose           also serve it to your local network\n"
             "  sensei wrap claude           run Claude Code through Sensei\n"
-            "  sensei wrap aider -- --model gpt-4o\n"
+            "  sensei wrap aider -- --model gpt-6.1-sol\n"
             "  sensei setup-tools --dry-run see what would be configured\n"
             "  sensei setup-tools           wire up Cursor, Cline, Codex, ...\n"
             "  sensei doctor                diagnose a broken setup\n"
@@ -129,16 +129,19 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p_mcp = sub.add_parser(
         "mcp",
-        help="run as an MCP server (stdio)",
+        help="run as an MCP server (stdio or HTTP)",
         description="Exposes sensei_compress / sensei_retrieve / sensei_stats to any "
-        "MCP client. Normally launched by the client, not by hand.",
+        "MCP client, plus sensei_find_tools / sensei_call_tool for the servers listed "
+        "in ~/.sensei/mcp-servers.json. Normally launched by the client, not by hand.",
     )
     p_mcp.add_argument(
         "--transport",
         choices=["stdio", "sse", "streamable-http"],
         default="stdio",
-        help="stdio is what MCP clients spawn; the others are for remote setups",
+        help="stdio is what MCP clients spawn; streamable-http serves http://HOST:PORT/mcp",
     )
+    p_mcp.add_argument("--host", default="127.0.0.1", help="bind address for HTTP transports")
+    p_mcp.add_argument("--port", type=int, default=7001, help="port for HTTP transports")
 
     return parser
 
@@ -215,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "mcp":
             from sensei import mcp_server
 
-            return mcp_server.run(transport=args.transport)
+            return mcp_server.run(transport=args.transport, host=args.host, port=args.port)
 
         parser.print_help()
         return 0

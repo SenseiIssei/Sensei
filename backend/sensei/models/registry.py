@@ -93,19 +93,19 @@ async def list_available_models() -> list[ModelInfo]:
     if not models:
         models.append(
             ModelInfo(
-                id="ollama:glm-5.2",
-                name="GLM-5.2 (Ollama - not running)",
+                id=f"ollama:{settings.ollama_model}",
+                name=f"{settings.ollama_model} (Ollama - not running)",
                 provider="local",
                 backend="ollama",
                 context_window=settings.local_context_size,
                 status=ModelStatus.unavailable,
-                description="Install Ollama and run: ollama pull glm-5.2",
+                description=f"Install Ollama and run: ollama pull {settings.ollama_model}",
             )
         )
         models.append(
             ModelInfo(
-                id="local:glm-5.2",
-                name="GLM-5.2 Local (not configured)",
+                id="local:model",
+                name="Local model (not configured)",
                 provider="local",
                 backend=settings.local_backend,
                 context_window=settings.local_context_size,
@@ -133,7 +133,7 @@ async def list_available_models() -> list[ModelInfo]:
         models.append(
             ModelInfo(
                 id=f"api:{settings.api_provider}",
-                name=f"GLM-5.2 ({label} - not configured)",
+                name=f"{label} (not configured)",
                 provider="api",
                 backend="openai-compatible",
                 context_window=1_000_000,
