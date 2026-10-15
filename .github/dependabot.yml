@@ -35,6 +35,12 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 3
+    ignore:
+      # The typings must not be newer than engines.vscode, or vsce refuses to
+      # package. engines stays low on purpose: Cursor and Windsurf ship older
+      # VS Code cores, and raising it would block installing there.
+      - dependency-name: "@types/vscode"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     groups:
       extension-deps:
         patterns: ["*"]
