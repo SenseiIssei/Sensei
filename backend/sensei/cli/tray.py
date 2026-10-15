@@ -120,6 +120,37 @@ def run(port: int | None = None, open_browser: bool = True) -> int:
         # blocking here freezes the menu.
         threading.Thread(target=setup_tools.run, daemon=True).start()
 
+    from sensei.cli import system
+
+    def starts_at_login(*_: Any) -> bool:
+        try:
+            return system.autostart_status().enabled
+        except Exception:
+            return False
+
+    def toggle_autostart(*_: Any) -> None:
+        if starts_at_login():
+            system.autostart_disable()
+        else:
+            system.autostart_enable()
+
+    def check_updates(icon: Any, *_: Any) -> None:
+        def work() -> None:
+            try:
+                info = system.check()
+            except Exception as exc:
+                icon.notify(f"Could not check for updates: {exc}", "Sensei")
+                return
+            if info["update_available"]:
+                icon.notify(
+                    f"Sensei {info['latest']} is available — run `sensei update`.", "Sensei"
+                )
+                webbrowser.open(info["url"])
+            else:
+                icon.notify(f"Sensei {info['current']} is up to date.", "Sensei")
+
+        threading.Thread(target=work, daemon=True).start()
+
     def quit_sensei(icon: Any, *_: Any) -> None:
         server.should_exit = True
         icon.stop()
@@ -131,6 +162,8 @@ def run(port: int | None = None, open_browser: bool = True) -> int:
         menu=pystray.Menu(
             pystray.MenuItem("Open dashboard", open_dashboard, default=True),
             pystray.MenuItem("Connect my AI tools", wire_tools),
+            pystray.MenuItem("Start at login", toggle_autostart, checked=starts_at_login),
+            pystray.MenuItem("Check for updates", check_updates),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit Sensei", quit_sensei),
         ),

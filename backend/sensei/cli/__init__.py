@@ -10,6 +10,8 @@ look up per tool. This replaces all of that:
     sensei doctor          find out exactly why something isn't working
     sensei models          what your machine can run, and what it already has
     sensei stats           tokens and dollars saved
+    sensei autostart on    start with your login, on every OS
+    sensei update          install the latest release
     sensei chat            interactive console chat
 """
 
@@ -44,6 +46,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "  sensei doctor                diagnose a broken setup\n"
             "  sensei models --pull llama3.2:3b\n"
             "  sensei mcp                   serve compression as MCP tools\n"
+            "  sensei autostart on          start Sensei when you log in\n"
+            "  sensei update --check        is there a newer release?\n"
         ),
     )
     parser.add_argument("-V", "--version", action="version", version=f"sensei {__version__}")
@@ -143,6 +147,24 @@ def _build_parser() -> argparse.ArgumentParser:
     p_mcp.add_argument("--host", default="127.0.0.1", help="bind address for HTTP transports")
     p_mcp.add_argument("--port", type=int, default=7001, help="port for HTTP transports")
 
+    p_auto = sub.add_parser(
+        "autostart",
+        help="start Sensei when you log in (on, off, status)",
+        description="Uses the platform's own per-user mechanism: a Run key on Windows, a "
+        "LaunchAgent on macOS, a systemd user service (or XDG autostart) on Linux. No "
+        "administrator rights, and `off` removes it again.",
+    )
+    p_auto.add_argument("action", nargs="?", choices=["on", "off", "status"], default="status")
+
+    p_update = sub.add_parser(
+        "update",
+        help="check for and install a newer release",
+        description="Asks GitHub for the latest release — only when you run this. Binary "
+        "installs are replaced in place after checking SHA256SUMS; pip installs get the "
+        "command to run.",
+    )
+    p_update.add_argument("--check", action="store_true", help="only report, install nothing")
+
     return parser
 
 
@@ -214,6 +236,16 @@ def main(argv: list[str] | None = None) -> int:
             from sensei.cli import chat
 
             return chat.run()
+
+        if args.command == "autostart":
+            from sensei.cli import system
+
+            return system.run_autostart(args.action)
+
+        if args.command == "update":
+            from sensei.cli import system
+
+            return system.run_update(check_only=args.check)
 
         if args.command == "mcp":
             from sensei import mcp_server

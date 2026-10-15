@@ -270,6 +270,11 @@ class Settings(BaseSettings):
     savings_persist: bool = True
     savings_db: str = ".sensei_savings.db"
 
+    # Ask GitHub once a day whether a newer release exists, and show it in the
+    # dashboard and tray. Off by default: it is a request to a third party, and
+    # Sensei makes none unless you ask. `sensei update --check` works either way.
+    update_check: bool = False
+
     # MCP proxy: other MCP servers (REA, GhidraMCP, filesystem, GitHub, …)
     # behind `sensei_find_tools` / `sensei_call_tool`, with compressed results.
     # Empty = ~/.sensei/mcp-servers.json. Same format as Claude Desktop's.
