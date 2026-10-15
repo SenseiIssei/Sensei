@@ -86,6 +86,10 @@ def test_nothing_but_counters_is_stored(ledger: SavingsLedger) -> None:
         "blocks",
         "output_tokens",
         "shaped",
+        # What the provider billed and served from its prompt cache — counters.
+        "prompt_billed",
+        "cache_read",
+        "cache_write",
     }
 
 

@@ -54,6 +54,13 @@ class Redactor:
         return text, counts
 
 
+# Fields that carry opaque, provider-signed blobs: Anthropic thinking-block
+# signatures and redacted thinking, OpenAI encrypted reasoning. The provider
+# verifies them byte for byte and rejects the whole request if one changes, and
+# a base64 blob can contain a run that happens to look like a key.
+_OPAQUE_KEYS = frozenset({"signature", "encrypted_content", "data"})
+
+
 def redact_payload(obj: Any, redactor: Redactor | None = None) -> tuple[Any, dict[str, int]]:
     """Recursively redact every string leaf in a request payload.
 
@@ -72,7 +79,7 @@ def redact_payload(obj: Any, redactor: Redactor | None = None) -> tuple[Any, dic
         if isinstance(o, list):
             return [walk(x) for x in o]
         if isinstance(o, dict):
-            return {k: walk(v) for k, v in o.items()}
+            return {k: (v if k in _OPAQUE_KEYS else walk(v)) for k, v in o.items()}
         return o
 
     return walk(obj), counts

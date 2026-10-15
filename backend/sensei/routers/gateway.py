@@ -3,26 +3,35 @@
 Point any tool at Sensei as its API base URL and Sensei transparently compresses
 each prompt before forwarding it upstream, then returns a normal response.
 
-- OpenAI clients (OpenAI SDK, Codex, Copilot, Cursor, Continue, Aider,
-  LangChain): base URL ``http://<host>:<port>/v1`` → ``/v1/chat/completions``.
+- OpenAI clients (OpenAI SDK, Cursor, Continue, Aider, LangChain):
+  base URL ``http://<host>:<port>/v1`` → ``/v1/chat/completions``.
+- Codex and anything else on OpenAI's Responses API → ``/v1/responses``
+  (plus ``/v1/responses/compact`` and ``/v1/responses/input_tokens``).
 - Anthropic clients (Claude Code, Anthropic SDK): ``ANTHROPIC_BASE_URL`` →
-  ``http://<host>:<port>`` → ``/v1/messages``.
+  ``http://<host>:<port>`` → ``/v1/messages`` and ``/v1/messages/count_tokens``.
 
 Auth is pass-through: whatever key the client sends (``Authorization: Bearer`` or
 ``x-api-key``) is forwarded upstream, so tools keep using their own credentials.
 If the client sends no key, Sensei falls back to a server-configured one. Savings
 are reported in ``X-Sensei-*`` headers and a ``sensei`` block in JSON responses.
+
+Upstream failures are reported as what they were. A provider that answers 429
+gets retried (honouring Retry-After) and, if it is still 429, the client sees
+429 — not a 200 with an error hidden inside an event stream. Optionally a local
+model takes over when the provider stays down; see ``fallback_enabled``.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import random
 import time
 from typing import Any
 
 import httpx
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from sensei import output_shaping
 from sensei.compression.router import ContentRouter
@@ -31,6 +40,7 @@ from sensei.models.api import APIModelProvider
 from sensei.savings import get_savings_tracker
 from sensei.security.filtering import check_policy
 from sensei.security.redaction import redact_payload
+from sensei.usage import UsageSniffer, from_response
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +91,26 @@ def _savings(before: int, after: int, saved: int, blocks: int) -> dict[str, Any]
     }
 
 
+class _Tally:
+    """Running totals while one request body is compressed."""
+
+    __slots__ = ("after", "before", "blocks", "saved")
+
+    def __init__(self) -> None:
+        self.before = self.after = self.saved = self.blocks = 0
+
+    def add(self, before: int, after: int, saved: int, blocks: int) -> None:
+        self.before += before
+        self.after += after
+        self.saved += saved
+        self.blocks += blocks
+
+    def result(self) -> dict[str, Any]:
+        if self.before:
+            return _savings(self.before, self.after, self.saved, self.blocks)
+        return _savings(0, 0, 0, self.blocks) if self.blocks else _no_savings()
+
+
 # Which client sent this. Ordered most- to least-specific, because several of
 # these ship an SDK string as well as their own — Claude Code sends both
 # "claude-cli" and "anthropic-sdk-python", and attributing its savings to the
@@ -93,12 +123,15 @@ _CLIENT_SIGNATURES: tuple[tuple[str, str], ...] = (
     ("codex", "Codex"),
     ("aider", "Aider"),
     ("cline", "Cline"),
+    ("roo-code", "Roo Code"),
+    ("kilo-code", "Kilo Code"),
     ("continue", "Continue"),
     ("opencode", "opencode"),
     ("goose", "Goose"),
     ("crush", "Crush"),
     ("zed", "Zed"),
     ("copilot", "Copilot"),
+    ("rea-agents", "REA"),
     ("sensei", "Sensei UI"),
     # SDKs last: a bare SDK string means "something we don't have a name for",
     # which is still more useful on a chart than "unknown".
@@ -126,37 +159,16 @@ def _client_name(request: Request) -> str:
         if needle in agent:
             return label
 
-    # Fall back to the agent's own name rather than dropping it. An unmatched
-    # client used to be recorded as "" and rendered as "unknown", which is a
-    # dead end: you cannot tell whether it was a tool worth adding to the table
-    # above or a stray curl. `python-httpx/0.28` tells you which, and takes one
-    # line to act on.
-    #
-    # Only the product token — everything before the first space — so a UA
-    # carrying an OS build and a locale does not become a chart label nobody
-    # can read, and so two versions of the same tool group together.
+    # Fall back to the agent's own name rather than dropping it: an unmatched
+    # `python-httpx/0.28` says which tool it was, and takes one line to add to
+    # the table above. Only the product token, so versions group together.
     product = raw.split(" ", 1)[0].split("/", 1)[0]
     return product[:64] if product else ""
 
 
 def _completion_tokens(data: dict[str, Any]) -> int:
-    """How many tokens the model wrote, across both wire formats.
-
-    OpenAI reports `usage.completion_tokens`; Anthropic reports
-    `usage.output_tokens`. Streaming responses are not counted at all — the
-    usage block arrives in a terminal event this proxy passes through
-    untouched, and reconstructing it would mean parsing the stream, which is
-    the one thing a compression proxy should not add to the hot path. The
-    holdout comparison therefore covers non-streaming traffic and says so.
-    """
-    usage = data.get("usage")
-    if not isinstance(usage, dict):
-        return 0
-    for key in ("completion_tokens", "output_tokens"):
-        value = usage.get(key)
-        if isinstance(value, int) and value >= 0:
-            return value
-    return 0
+    """How many tokens the model wrote, across every wire format."""
+    return from_response(data).output
 
 
 def _savings_headers(savings: dict[str, Any]) -> dict[str, str]:
@@ -170,12 +182,27 @@ def _savings_headers(savings: dict[str, Any]) -> dict[str, str]:
 # ─── compression of request bodies ───────────────────────────────────────────
 
 
-def _compress_text(text: Any) -> tuple[Any, int, int, int, int]:
+def _compress_text(text: Any, *, edit_target: bool = False) -> tuple[Any, int, int, int, int]:
     """Compress a single string; return (text, before, after, saved, blocks)."""
     if not isinstance(text, str) or len(text) < _MIN_COMPRESS_LEN:
         return text, 0, 0, 0, 0
-    r = _router().compress(text)
+    r = _router().compress(text, edit_target=edit_target)
     return r.compressed, r.original_tokens, r.compressed_tokens, r.tokens_saved, 1
+
+
+def _compress_part_list(
+    parts: list[Any], tally: _Tally, *, edit_target: bool, types: tuple[str, ...]
+) -> list[Any]:
+    """Compress the text parts of a content list; images, audio and files pass."""
+    out = []
+    for part in parts:
+        if isinstance(part, dict) and part.get("type") in types and "text" in part:
+            new_text, *counts = _compress_text(part["text"], edit_target=edit_target)
+            tally.add(*counts)
+            out.append(part if new_text is part["text"] else {**part, "text": new_text})
+        else:
+            out.append(part)
+    return out
 
 
 def compress_request_messages(
@@ -183,63 +210,66 @@ def compress_request_messages(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Compress OpenAI-style chat messages, preserving order/roles/extra fields.
 
-    System messages are compressed only when ``gateway_compress_system`` is on
-    (and long enough). Short and structured (vision/tool) content pass through.
+    System messages are compressed only when ``gateway_compress_system`` is on.
+    ``tool`` messages are tool results — what an agent read from disk or from a
+    command — and are compressed as edit targets, so code in them stays exact.
+    Images and audio parts pass through untouched.
     """
     if not settings.compression_enabled:
         return messages, _no_savings()
 
-    # Cache-preserving mode: only touch the last message so the cached prefix
-    # (everything before it) stays byte-identical.
     preserve = settings.gateway_preserve_cache
     last_idx = len(messages) - 1
+    tally = _Tally()
 
     out: list[dict[str, Any]] = []
-    before = after = saved = blocks = 0
     for idx, msg in enumerate(messages):
         role = msg.get("role", "user")
         content = msg.get("content")
-        skip_system = role == "system" and not settings.gateway_compress_system
-        if (preserve and idx != last_idx) or skip_system or not isinstance(content, str):
+        skip_system = role in ("system", "developer") and not settings.gateway_compress_system
+        if (preserve and idx != last_idx) or skip_system:
             out.append(msg)
             continue
-        new_content, b, a, s, bl = _compress_text(content)
-        before, after, saved, blocks = before + b, after + a, saved + s, blocks + bl
-        new_msg = dict(msg)
-        new_msg["content"] = new_content
-        out.append(new_msg)
+        edit_target = role in ("tool", "function")
+        if isinstance(content, str):
+            new_content, *counts = _compress_text(content, edit_target=edit_target)
+            tally.add(*counts)
+        elif isinstance(content, list):
+            new_content = _compress_part_list(
+                content, tally, edit_target=edit_target, types=("text",)
+            )
+        else:
+            out.append(msg)
+            continue
+        out.append({**msg, "content": new_content})
 
-    if not before:
-        return out, _no_savings() if not blocks else _savings(0, 0, 0, blocks)
-    return out, _savings(before, after, saved, blocks)
+    return out, tally.result()
 
 
-def _compress_anthropic_content(content: Any) -> tuple[Any, int, int, int, int]:
+def _compress_anthropic_content(
+    content: Any, *, edit_target: bool = False
+) -> tuple[Any, int, int, int, int]:
     """Compress an Anthropic ``content`` value (string or list of blocks)."""
     if isinstance(content, str):
-        return _compress_text(content)
+        return _compress_text(content, edit_target=edit_target)
     if isinstance(content, list):
-        before = after = saved = blocks = 0
+        tally = _Tally()
         out = []
         for block in content:
             if isinstance(block, dict) and block.get("type") == "text":
-                nt, b, a, s, bl = _compress_text(block.get("text"))
-                nb = dict(block)
-                nb["text"] = nt
+                new_text, *counts = _compress_text(block.get("text"), edit_target=edit_target)
+                tally.add(*counts)
+                out.append({**block, "text": new_text})
             elif isinstance(block, dict) and block.get("type") == "tool_result":
                 # Tool outputs (file reads, command output, search results) are
-                # where agents like Claude Code spend most tokens — and they
-                # aren't part of the cached prefix, so compressing them is both
-                # high-value and prompt-cache-safe.
-                ni, b, a, s, bl = _compress_anthropic_content(block.get("content"))
-                nb = dict(block)
-                nb["content"] = ni
+                # where agents like Claude Code spend most tokens. They are
+                # also what the model edits next, so code inside stays exact.
+                inner, *counts = _compress_anthropic_content(block.get("content"), edit_target=True)
+                tally.add(*counts)
+                out.append({**block, "content": inner})
             else:
                 out.append(block)
-                continue
-            out.append(nb)
-            before, after, saved, blocks = before + b, after + a, saved + s, blocks + bl
-        return out, before, after, saved, blocks
+        return out, tally.before, tally.after, tally.saved, tally.blocks
     return content, 0, 0, 0, 0
 
 
@@ -258,15 +288,13 @@ def compress_anthropic_request(
     #
     # What is not safe is a decision that depends on position. `preserve_cache`
     # compresses only the newest message, so a message compressed while it was
-    # newest arrives uncompressed on the next turn: different bytes, cache miss,
-    # every single turn. The setting sold as the one to enable for a cache-heavy
-    # agent was the only thing here that broke caching for one.
+    # newest arrives uncompressed on the next turn: different bytes, cache miss.
     preserve = settings.gateway_preserve_cache
-    before = after = saved = blocks = 0
+    tally = _Tally()
     new_system = system
     if system is not None and settings.gateway_compress_system and not preserve:
-        new_system, b, a, s, bl = _compress_anthropic_content(system)
-        before, after, saved, blocks = before + b, after + a, saved + s, blocks + bl
+        new_system, *counts = _compress_anthropic_content(system)
+        tally.add(*counts)
 
     new_messages = []
     last_idx = len(messages) - 1
@@ -274,16 +302,93 @@ def compress_anthropic_request(
         if preserve and idx != last_idx:
             new_messages.append(msg)  # keep the cached prefix byte-exact
             continue
-        nc, b, a, s, bl = _compress_anthropic_content(msg.get("content"))
-        nm = dict(msg)
-        nm["content"] = nc
-        new_messages.append(nm)
-        before, after, saved, blocks = before + b, after + a, saved + s, blocks + bl
+        new_content, *counts = _compress_anthropic_content(msg.get("content"))
+        tally.add(*counts)
+        new_messages.append({**msg, "content": new_content})
 
-    savings = _savings(before, after, saved, blocks) if before else _no_savings()
-    if blocks and not before:
-        savings = _savings(0, 0, 0, blocks)
-    return new_system, new_messages, savings
+    return new_system, new_messages, tally.result()
+
+
+# Responses API item types whose `output` is a tool result.
+_TOOL_OUTPUT_ITEMS = (
+    "function_call_output",
+    "custom_tool_call_output",
+    "local_shell_call_output",
+    "mcp_call_output",
+)
+_TEXT_PART_TYPES = ("input_text", "output_text", "text")
+
+
+def compress_responses_request(body: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Compress an OpenAI Responses request (``instructions`` + ``input``).
+
+    Text parts of messages and the ``output`` of tool calls are compressed.
+    Everything else — function calls, reasoning items (often encrypted),
+    images, file references, item ids — passes through untouched, because the
+    API validates them and the model relies on them being exactly as it left
+    them.
+    """
+    if not settings.compression_enabled:
+        return body, _no_savings()
+
+    tally = _Tally()
+    out = dict(body)
+    preserve = settings.gateway_preserve_cache
+
+    instructions = body.get("instructions")
+    if isinstance(instructions, str) and settings.gateway_compress_system and not preserve:
+        out["instructions"], *counts = _compress_text(instructions)
+        tally.add(*counts)
+
+    items = body.get("input")
+    if isinstance(items, str):
+        out["input"], *counts = _compress_text(items)
+        tally.add(*counts)
+        return out, tally.result()
+    if not isinstance(items, list):
+        return out, tally.result()
+
+    last_idx = len(items) - 1
+    new_items: list[Any] = []
+    for idx, item in enumerate(items):
+        if not isinstance(item, dict) or (preserve and idx != last_idx):
+            new_items.append(item)
+            continue
+        kind = item.get("type", "message" if "role" in item else "")
+        if kind == "message":
+            role = item.get("role")
+            if role in ("system", "developer") and not settings.gateway_compress_system:
+                new_items.append(item)
+                continue
+            content = item.get("content")
+            if isinstance(content, str):
+                new_content, *counts = _compress_text(content)
+                tally.add(*counts)
+            elif isinstance(content, list):
+                new_content = _compress_part_list(
+                    content, tally, edit_target=False, types=_TEXT_PART_TYPES
+                )
+            else:
+                new_items.append(item)
+                continue
+            new_items.append({**item, "content": new_content})
+        elif kind in _TOOL_OUTPUT_ITEMS:
+            output = item.get("output")
+            if isinstance(output, str):
+                new_output, *counts = _compress_text(output, edit_target=True)
+                tally.add(*counts)
+            elif isinstance(output, list):
+                new_output = _compress_part_list(
+                    output, tally, edit_target=True, types=_TEXT_PART_TYPES
+                )
+            else:
+                new_items.append(item)
+                continue
+            new_items.append({**item, "output": new_output})
+        else:
+            new_items.append(item)
+    out["input"] = new_items
+    return out, tally.result()
 
 
 # ─── upstream forwarding ─────────────────────────────────────────────────────
@@ -300,6 +405,7 @@ def _incoming_bearer(request: Request) -> str | None:
 # pooled client safely serves requests carrying different keys.
 _clients: dict[str, httpx.AsyncClient] = {}
 _LIMITS = httpx.Limits(max_keepalive_connections=20, max_connections=100, keepalive_expiry=90.0)
+_TIMEOUT = httpx.Timeout(300.0, connect=10.0)
 
 
 def _pooled_client(base_url: str) -> httpx.AsyncClient:
@@ -307,16 +413,9 @@ def _pooled_client(base_url: str) -> httpx.AsyncClient:
     client = _clients.get(base)
     if client is None or client.is_closed:
         try:
-            client = httpx.AsyncClient(
-                base_url=base,
-                timeout=httpx.Timeout(300.0, connect=10.0),
-                limits=_LIMITS,
-                http2=True,
-            )
+            client = httpx.AsyncClient(base_url=base, timeout=_TIMEOUT, limits=_LIMITS, http2=True)
         except ImportError:  # `h2` not installed — pooled HTTP/1.1 keep-alive
-            client = httpx.AsyncClient(
-                base_url=base, timeout=httpx.Timeout(300.0, connect=10.0), limits=_LIMITS
-            )
+            client = httpx.AsyncClient(base_url=base, timeout=_TIMEOUT, limits=_LIMITS)
         _clients[base] = client
     return client
 
@@ -336,6 +435,113 @@ def _error(status: int, message: str, etype: str, headers: dict[str, str]) -> JS
     )
 
 
+# 529 is Anthropic's "overloaded". 408/409 are not retried: a timeout already
+# cost the client its patience, and a conflict will conflict again.
+_RETRY_STATUSES = frozenset({429, 500, 502, 503, 504, 529})
+# Upstream response headers worth handing back: request ids for support
+# tickets, and rate-limit state that Claude Code and the OpenAI SDK read to
+# pace themselves. Hop-by-hop and encoding headers are never forwarded.
+_PASS_HEADER_PREFIXES = ("anthropic-", "openai-", "x-ratelimit-", "x-request-id", "request-id")
+_PASS_HEADERS = frozenset({"retry-after", "retry-after-ms"})
+
+
+def _upstream_headers(resp: httpx.Response) -> dict[str, str]:
+    out = {}
+    for name, value in resp.headers.items():
+        low = name.lower()
+        if low in _PASS_HEADERS or low.startswith(_PASS_HEADER_PREFIXES):
+            out[name] = value
+    return out
+
+
+def _retry_delay(resp: httpx.Response | None, attempt: int) -> float:
+    cap = max(0.0, settings.upstream_retry_max_wait)
+    if resp is not None:
+        for header, scale in (("retry-after-ms", 0.001), ("retry-after", 1.0)):
+            raw = resp.headers.get(header)
+            if raw:
+                try:
+                    return min(cap, max(0.0, float(raw) * scale))
+                except ValueError:
+                    break
+    # Exponential backoff with full jitter: up to 0.5s, 1s, 2s … randomised so
+    # a dozen agents retrying at once do not all land in the same millisecond.
+    return min(cap, random.uniform(0, 0.5 * 2**attempt))  # noqa: S311 — jitter, not crypto
+
+
+async def _send(
+    base_url: str, path: str, payload: dict[str, Any], headers: dict[str, str]
+) -> tuple[httpx.Response | None, Exception | None]:
+    """POST upstream with retries; the response is returned unread (streaming).
+
+    Retries happen only here, before a single byte has reached the client, so
+    a retried request is indistinguishable from a slow one.
+    """
+    client = _pooled_client(base_url)
+    attempts = 1 + max(0, settings.upstream_retries)
+    last_exc: Exception | None = None
+    for attempt in range(attempts):
+        resp: httpx.Response | None = None
+        try:
+            request = client.build_request("POST", path, json=payload, headers=headers)
+            resp = await client.send(request, stream=True)
+        except httpx.TransportError as exc:
+            last_exc = exc
+            logger.warning(
+                "Upstream %s%s unreachable (attempt %d): %s", base_url, path, attempt + 1, exc
+            )
+        if resp is not None:
+            if resp.status_code not in _RETRY_STATUSES or attempt == attempts - 1:
+                return resp, None
+            logger.info("Upstream %s%s answered %d, retrying", base_url, path, resp.status_code)
+        if attempt < attempts - 1:
+            delay = _retry_delay(resp, attempt)
+            if resp is not None:
+                await resp.aclose()
+            await asyncio.sleep(delay)
+    return None, last_exc
+
+
+def _fallback_target(api: str) -> tuple[str, str] | None:
+    """Base URL and path for the local fallback, or None when it is off."""
+    if not settings.fallback_enabled or not settings.fallback_base_url:
+        return None
+    base = settings.fallback_base_url.rstrip("/")
+    if not base.endswith("/v1"):
+        base += "/v1"
+    paths = {"anthropic": "/messages", "openai": "/chat/completions", "responses": "/responses"}
+    return base, paths[api]
+
+
+async def _try_fallback(
+    api: str, payload: dict[str, Any], headers: dict[str, str]
+) -> tuple[httpx.Response | None, str]:
+    target = _fallback_target(api)
+    if target is None:
+        return None, ""
+    base, path = target
+    model = settings.fallback_model or settings.ollama_model
+    local_payload = {**payload, "model": model}
+    # Never hand the client's provider credential to another server.
+    local_headers = {
+        k: v for k, v in headers.items() if k.lower() not in ("authorization", "x-api-key")
+    }
+    local_headers["authorization"] = "Bearer sensei-fallback"
+    try:
+        client = _pooled_client(base)
+        request = client.build_request("POST", path, json=local_payload, headers=local_headers)
+        resp = await client.send(request, stream=True)
+    except httpx.TransportError as exc:
+        logger.warning("Local fallback %s unreachable: %s", base, exc)
+        return None, ""
+    if resp.status_code >= 400:
+        await resp.aclose()
+        logger.warning("Local fallback %s answered %d", base, resp.status_code)
+        return None, ""
+    logger.warning("Provider unavailable — answered by local fallback %s (%s)", base, model)
+    return resp, model
+
+
 async def _forward(
     *,
     base_url: str,
@@ -344,10 +550,12 @@ async def _forward(
     up_headers: dict[str, str],
     savings: dict[str, Any],
     stream: bool,
+    api: str = "openai",
     meta: dict[str, Any] | None = None,
     redactions: int = 0,
     tool: str = "",
     shaped: int = -1,
+    record: bool = True,
 ) -> Any:
     headers = _savings_headers(savings)
     if redactions:
@@ -356,48 +564,110 @@ async def _forward(
         # Visible to the caller so a holdout assignment can be correlated with
         # what came back, without having to read the ledger.
         headers["X-Sensei-Output-Shaped"] = "true" if shaped else "false"
+
     tracker = get_savings_tracker()
-    row_id = tracker.record(
-        savings,
-        tool=tool,
-        provider=str((meta or {}).get("provider") or (meta or {}).get("api") or ""),
-        model=str((meta or {}).get("model") or ""),
-        shaped=shaped,
-    )
-    if meta is not None:
-        from sensei.audit import get_audit_log
+    row_id = None
+    if record:
+        row_id = tracker.record(
+            savings,
+            tool=tool,
+            provider=str((meta or {}).get("provider") or (meta or {}).get("api") or ""),
+            model=str((meta or {}).get("model") or ""),
+            shaped=shaped,
+        )
+        if meta is not None:
+            from sensei.audit import get_audit_log
 
-        if redactions:
-            meta = {**meta, "redactions": redactions}
-        get_audit_log().record("gateway.request", **meta)
+            if redactions:
+                meta = {**meta, "redactions": redactions}
+            get_audit_log().record("gateway.request", **meta)
 
-    client = _pooled_client(base_url)
+    resp, exc = await _send(base_url, path, payload, up_headers)
 
-    if stream:
+    if record and (resp is None or resp.status_code in _RETRY_STATUSES):
+        fallback, model = await _try_fallback(api, payload, up_headers)
+        if fallback is not None:
+            if resp is not None:
+                await resp.aclose()
+            resp = fallback
+            headers["X-Sensei-Fallback"] = model
 
-        async def event_stream():
-            async with client.stream("POST", path, json=payload, headers=up_headers) as resp:
-                async for chunk in resp.aiter_bytes():
-                    yield chunk
-
-        return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
-
-    try:
-        resp = await client.post(path, json=payload, headers=up_headers)
-    except httpx.HTTPError as exc:
+    if resp is None:
         logger.warning("Gateway upstream request failed: %s", exc)
         return _error(502, f"Upstream request failed: {exc}", "upstream_error", headers)
 
-    if resp.headers.get("content-type", "").startswith("application/json"):
-        data = resp.json()
+    headers.update(_upstream_headers(resp))
+    content_type = resp.headers.get("content-type", "")
+
+    # Errors go back as errors, with the provider's own status and body. A
+    # streaming request that hit a 429 used to come back as `200 OK` with
+    # `text/event-stream` and a JSON error inside, which clients parse as a
+    # stream that ended early — the rate limit was invisible.
+    if resp.status_code >= 400:
+        body = await resp.aread()
+        await resp.aclose()
+        return Response(
+            content=body,
+            status_code=resp.status_code,
+            media_type=content_type or "application/json",
+            headers=headers,
+        )
+
+    if stream and "event-stream" in content_type:
+        sniffer = UsageSniffer()
+        upstream = resp
+
+        async def event_stream():
+            try:
+                async for chunk in upstream.aiter_bytes():
+                    sniffer.feed(chunk)
+                    yield chunk
+            except httpx.HTTPError as err:
+                # Headers are already sent; all that is left is to stop cleanly
+                # and let the client see a truncated stream.
+                logger.warning("Upstream stream broke off: %s", err)
+            finally:
+                await upstream.aclose()
+                tracker.ledger.set_usage(row_id, sniffer.close())
+
+        return StreamingResponse(
+            event_stream(), status_code=resp.status_code, media_type=content_type, headers=headers
+        )
+
+    raw = await resp.aread()
+    await resp.aclose()
+    if content_type.startswith("application/json"):
+        try:
+            data = resp.json()
+        except ValueError:
+            data = None
         if isinstance(data, dict):
-            data["sensei"] = savings
-            if row_id is not None:
-                tracker.ledger.set_output_tokens(row_id, _completion_tokens(data))
-        return JSONResponse(status_code=resp.status_code, content=data, headers=headers)
-    return JSONResponse(
-        status_code=resp.status_code, content={"raw": resp.text, "sensei": savings}, headers=headers
+            if record:
+                data["sensei"] = savings
+                tracker.ledger.set_usage(row_id, from_response(data))
+            return JSONResponse(status_code=resp.status_code, content=data, headers=headers)
+    return Response(
+        content=raw, status_code=resp.status_code, media_type=content_type or None, headers=headers
     )
+
+
+def _apply_policy(payload: dict[str, Any]) -> tuple[dict[str, Any], int, str | None]:
+    """Redaction, then the block-list. Returns (payload, redactions, reason)."""
+    redactions = 0
+    if settings.redaction_enabled:
+        payload, counts = redact_payload(payload)
+        redactions = sum(counts.values())
+    return payload, redactions, check_policy(payload)
+
+
+async def _json_body(request: Request) -> dict[str, Any] | JSONResponse:
+    try:
+        body = await request.json()
+    except Exception:
+        return _error(400, "Invalid JSON body", "invalid_request_error", {})
+    if not isinstance(body, dict):
+        return _error(400, "Request body must be a JSON object", "invalid_request_error", {})
+    return body
 
 
 # ─── OpenAI-compatible endpoints ─────────────────────────────────────────────
@@ -407,7 +677,7 @@ async def _forward(
 async def list_models_openai() -> dict[str, Any]:
     """OpenAI-compatible model list (so clients that probe /v1/models work)."""
     provider = APIModelProvider()
-    model_id = provider.model or settings.ollama_model or "glm-5.2"
+    model_id = provider.model or settings.ollama_model
     return {
         "object": "list",
         "data": [
@@ -421,13 +691,26 @@ async def list_models_openai() -> dict[str, Any]:
     }
 
 
+def _openai_auth(request: Request, provider: APIModelProvider) -> str | None:
+    return _incoming_bearer(request) or provider.api_key or None
+
+
+def _no_key(provider: APIModelProvider, savings: dict[str, Any]) -> JSONResponse:
+    return _error(
+        502,
+        f"No API key. Send Authorization: Bearer <key> or set "
+        f"SENSEI_{provider.provider_name.upper()}_API_KEY.",
+        "upstream_not_configured",
+        _savings_headers(savings),
+    )
+
+
 @router.post("/v1/chat/completions")
 async def chat_completions(request: Request) -> Any:
     """OpenAI-compatible chat completions with transparent prompt compression."""
-    try:
-        body = await request.json()
-    except Exception:
-        return _error(400, "Invalid JSON body", "invalid_request_error", {})
+    body = await _json_body(request)
+    if isinstance(body, JSONResponse):
+        return body
 
     messages = body.get("messages")
     if not isinstance(messages, list):
@@ -436,15 +719,9 @@ async def chat_completions(request: Request) -> Any:
     compressed, savings = compress_request_messages(messages)
 
     provider = APIModelProvider()
-    api_key = _incoming_bearer(request) or provider.api_key
+    api_key = _openai_auth(request, provider)
     if not api_key:
-        return _error(
-            502,
-            f"No API key. Send Authorization: Bearer <key> or set "
-            f"SENSEI_{provider.provider_name.upper()}_API_KEY.",
-            "upstream_not_configured",
-            _savings_headers(savings),
-        )
+        return _no_key(provider, savings)
 
     # Shaping runs after compression, so the instruction is not itself
     # compressed away, and its cost shows up honestly as input tokens.
@@ -460,12 +737,7 @@ async def chat_completions(request: Request) -> Any:
     if not payload.get("model"):
         payload["model"] = provider.model
 
-    red_total = 0
-    if settings.redaction_enabled:
-        payload, red_counts = redact_payload(payload)
-        red_total = sum(red_counts.values())
-
-    reason = check_policy(payload)
+    payload, red_total, reason = _apply_policy(payload)
     if reason:
         return _error(403, reason, "blocked_by_policy", _savings_headers(savings))
 
@@ -476,6 +748,7 @@ async def chat_completions(request: Request) -> Any:
         up_headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
         savings=savings,
         stream=bool(payload.get("stream")),
+        api="openai",
         redactions=red_total,
         tool=_client_name(request),
         shaped=shaped,
@@ -488,25 +761,94 @@ async def chat_completions(request: Request) -> Any:
     )
 
 
-# ─── Anthropic-compatible endpoint (Claude Code) ─────────────────────────────
+@router.post("/v1/responses")
+async def responses(request: Request) -> Any:
+    """OpenAI Responses API with transparent prompt compression.
+
+    This is the API Codex speaks — its config accepts only
+    ``wire_api = "responses"`` — and the one OpenAI requires for tool calling
+    on its current models. Requests are compressed and forwarded to the
+    configured provider's ``/responses``; Ollama, llama.cpp, LM Studio and vLLM
+    serve it locally too.
+    """
+    body = await _json_body(request)
+    if isinstance(body, JSONResponse):
+        return body
+    if "input" not in body:
+        return _error(400, "'input' is required", "invalid_request_error", {})
+
+    payload, savings = compress_responses_request(body)
+
+    provider = APIModelProvider()
+    api_key = _openai_auth(request, provider)
+    if not api_key:
+        return _no_key(provider, savings)
+    if not payload.get("model"):
+        payload["model"] = provider.model
+
+    payload, red_total, reason = _apply_policy(payload)
+    if reason:
+        return _error(403, reason, "blocked_by_policy", _savings_headers(savings))
+
+    return await _forward(
+        base_url=provider.base_url,
+        path="/responses",
+        payload=payload,
+        up_headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        savings=savings,
+        stream=bool(payload.get("stream")),
+        api="responses",
+        redactions=red_total,
+        tool=_client_name(request),
+        meta={
+            "api": "responses",
+            "provider": provider.provider_name,
+            "model": payload.get("model"),
+            "tokens_saved": savings.get("tokens_saved", 0),
+        },
+    )
 
 
-@router.post("/v1/messages")
-async def messages_anthropic(request: Request) -> Any:
-    """Anthropic Messages API with transparent prompt compression."""
-    try:
-        body = await request.json()
-    except Exception:
-        return _error(400, "Invalid JSON body", "invalid_request_error", {})
+@router.post("/v1/responses/{action}")
+async def responses_action(action: str, request: Request) -> Any:
+    """``/responses/compact`` and ``/responses/input_tokens``.
 
-    messages = body.get("messages")
-    if not isinstance(messages, list):
-        return _error(400, "'messages' must be a list", "invalid_request_error", {})
+    Codex calls ``compact`` with the whole conversation when its context fills
+    up; the input is compressed exactly as for ``/responses``, so a token count
+    taken here matches what a real turn would send. Other sub-resources pass
+    through untouched.
+    """
+    body = await _json_body(request)
+    if isinstance(body, JSONResponse):
+        return body
+    provider = APIModelProvider()
+    if action in ("compact", "input_tokens"):
+        payload, savings = compress_responses_request(body)
+    else:
+        payload, savings = body, _no_savings()
+    api_key = _openai_auth(request, provider)
+    if not api_key:
+        return _no_key(provider, savings)
+    return await _forward(
+        base_url=provider.base_url,
+        path=f"/responses/{action}",
+        payload=payload,
+        up_headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        savings=savings,
+        stream=False,
+        api="responses",
+        tool=_client_name(request),
+        record=action == "compact",
+        meta={"api": "responses", "provider": provider.provider_name, "model": body.get("model")},
+    )
 
-    new_system, new_messages, savings = compress_anthropic_request(body.get("system"), messages)
 
-    # Forward the client's auth verbatim so both API-key and OAuth (Claude
-    # subscription) modes work; fall back to a server-configured key.
+# ─── Anthropic-compatible endpoints (Claude Code) ────────────────────────────
+
+
+def _anthropic_headers(request: Request) -> dict[str, str] | None:
+    """Forward the client's auth verbatim so both API-key and OAuth (Claude
+    subscription) modes work; fall back to a server-configured key."""
     up_headers = {
         "anthropic-version": request.headers.get("anthropic-version", _ANTHROPIC_VERSION),
         "content-type": "application/json",
@@ -523,13 +865,34 @@ async def messages_anthropic(request: Request) -> Any:
     if not has_auth and settings.anthropic_api_key:
         up_headers["x-api-key"] = settings.anthropic_api_key
         has_auth = True
-    if not has_auth:
-        return _error(
-            502,
-            "No API key. Send x-api-key: <key> or set SENSEI_ANTHROPIC_API_KEY.",
-            "upstream_not_configured",
-            _savings_headers(savings),
-        )
+    return up_headers if has_auth else None
+
+
+def _anthropic_no_key(savings: dict[str, Any]) -> JSONResponse:
+    return _error(
+        502,
+        "No API key. Send x-api-key: <key> or set SENSEI_ANTHROPIC_API_KEY.",
+        "upstream_not_configured",
+        _savings_headers(savings),
+    )
+
+
+@router.post("/v1/messages")
+async def messages_anthropic(request: Request) -> Any:
+    """Anthropic Messages API with transparent prompt compression."""
+    body = await _json_body(request)
+    if isinstance(body, JSONResponse):
+        return body
+
+    messages = body.get("messages")
+    if not isinstance(messages, list):
+        return _error(400, "'messages' must be a list", "invalid_request_error", {})
+
+    new_system, new_messages, savings = compress_anthropic_request(body.get("system"), messages)
+
+    up_headers = _anthropic_headers(request)
+    if up_headers is None:
+        return _anthropic_no_key(savings)
 
     shaped = -1
     if settings.output_shaper:
@@ -545,12 +908,7 @@ async def messages_anthropic(request: Request) -> Any:
         payload["system"] = new_system
     payload["messages"] = new_messages
 
-    red_total = 0
-    if settings.redaction_enabled:
-        payload, red_counts = redact_payload(payload)
-        red_total = sum(red_counts.values())
-
-    reason = check_policy(payload)
+    payload, red_total, reason = _apply_policy(payload)
     if reason:
         return _error(403, reason, "blocked_by_policy", _savings_headers(savings))
 
@@ -561,12 +919,48 @@ async def messages_anthropic(request: Request) -> Any:
         up_headers=up_headers,
         savings=savings,
         stream=bool(payload.get("stream")),
+        api="anthropic",
         redactions=red_total,
         tool=_client_name(request),
         shaped=shaped,
         meta={
             "api": "anthropic",
+            "provider": "anthropic",
             "model": payload.get("model"),
             "tokens_saved": savings.get("tokens_saved", 0),
         },
+    )
+
+
+@router.post("/v1/messages/count_tokens")
+async def count_tokens_anthropic(request: Request) -> Any:
+    """Token counting, over the request as Sensei would actually send it.
+
+    Claude Code calls this to decide when to compact. Without this route it got
+    a 404 through the gateway; an uncompressed passthrough would count a prompt
+    bigger than the one really sent, and compact too early.
+    """
+    body = await _json_body(request)
+    if isinstance(body, JSONResponse):
+        return body
+    messages = body.get("messages")
+    if not isinstance(messages, list):
+        return _error(400, "'messages' must be a list", "invalid_request_error", {})
+    new_system, new_messages, savings = compress_anthropic_request(body.get("system"), messages)
+    up_headers = _anthropic_headers(request)
+    if up_headers is None:
+        return _anthropic_no_key(savings)
+    payload = dict(body)
+    if new_system is not None:
+        payload["system"] = new_system
+    payload["messages"] = new_messages
+    return await _forward(
+        base_url=settings.anthropic_api_base_url,
+        path="/messages/count_tokens",
+        payload=payload,
+        up_headers=up_headers,
+        savings=savings,
+        stream=False,
+        api="anthropic",
+        record=False,
     )
