@@ -5,35 +5,95 @@
   "version": "0.8.0",
   "publisher": "senseiissei",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/SenseiIssei/Sensei" },
-  "engines": { "vscode": "^1.85.0" },
-  "categories": ["AI", "Machine Learning", "Other"],
-  "keywords": ["claude", "copilot", "codex", "tokens", "compression", "llm", "proxy"],
-  "activationEvents": ["onStartupFinished"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SenseiIssei/Sensei"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Machine Learning",
+    "Other"
+  ],
+  "keywords": [
+    "claude",
+    "copilot",
+    "codex",
+    "tokens",
+    "compression",
+    "llm",
+    "proxy"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
       "activitybar": [
-        { "id": "sensei", "title": "Sensei", "icon": "media/sensei.svg" }
+        {
+          "id": "sensei",
+          "title": "Sensei",
+          "icon": "media/sensei.svg"
+        }
       ]
     },
     "views": {
       "sensei": [
-        { "type": "webview", "id": "sensei.chatView", "name": "Chat" }
+        {
+          "type": "webview",
+          "id": "sensei.chatView",
+          "name": "Chat"
+        }
       ]
     },
     "commands": [
-      { "command": "sensei.openChat", "title": "Sensei: Open Chat" },
-      { "command": "sensei.routeClaudeCode", "title": "Sensei: Route Claude Code through Sensei" },
-      { "command": "sensei.routeCodex", "title": "Sensei: Route OpenAI Codex / CLI through Sensei" },
-      { "command": "sensei.unroute", "title": "Sensei: Stop routing tools through Sensei" },
-      { "command": "sensei.showSavings", "title": "Sensei: Show token savings" },
-      { "command": "sensei.setApiKey", "title": "Sensei: Set provider, model & API key" },
-      { "command": "sensei.showLogs", "title": "Sensei: Show server logs" },
-      { "command": "sensei.compareModels", "title": "Sensei: Compare models" },
-      { "command": "sensei.addToKnowledge", "title": "Sensei: Add current file to knowledge base" },
-      { "command": "sensei.askDocs", "title": "Sensei: Ask your docs (RAG)" },
-      { "command": "sensei.runAgent", "title": "Sensei: Run agent task" }
+      {
+        "command": "sensei.openChat",
+        "title": "Sensei: Open Chat"
+      },
+      {
+        "command": "sensei.routeClaudeCode",
+        "title": "Sensei: Route Claude Code through Sensei"
+      },
+      {
+        "command": "sensei.routeCodex",
+        "title": "Sensei: Route OpenAI Codex / CLI through Sensei"
+      },
+      {
+        "command": "sensei.unroute",
+        "title": "Sensei: Stop routing tools through Sensei"
+      },
+      {
+        "command": "sensei.showSavings",
+        "title": "Sensei: Show token savings"
+      },
+      {
+        "command": "sensei.setApiKey",
+        "title": "Sensei: Set provider, model & API key"
+      },
+      {
+        "command": "sensei.showLogs",
+        "title": "Sensei: Show server logs"
+      },
+      {
+        "command": "sensei.compareModels",
+        "title": "Sensei: Compare models"
+      },
+      {
+        "command": "sensei.addToKnowledge",
+        "title": "Sensei: Add current file to knowledge base"
+      },
+      {
+        "command": "sensei.askDocs",
+        "title": "Sensei: Ask your docs (RAG)"
+      },
+      {
+        "command": "sensei.runAgent",
+        "title": "Sensei: Run agent task"
+      }
     ],
     "configuration": {
       "title": "Sensei",
@@ -73,5 +133,10 @@
     "esbuild": "^0.28.2",
     "ovsx": "^1.2.0",
     "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "ovsx": {
+      "@vscode/vsce": "$@vscode/vsce"
+    }
   }
 }
