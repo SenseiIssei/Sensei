@@ -160,7 +160,7 @@ hand.
 
 **On real coding-agent sessions Sensei removes 3.9% of tool-output tokens — 0.68% of the bill once prompt caching is priced in.** End to end through the gateway, against an emulated prompt cache, the input bill falls 0.74% with the cache still hitting 97.4% of prompt tokens. On the seeded agent corpus — 32 synthetic tool outputs shaped like real ones — it removes **37.9%**.
 
-| Measured on | What it is | Sensei 0.2.0 | Headroom 0.41.0 |
+| Measured on | What it is | Sensei 0.3.0 | Headroom 0.41.0 |
 |---|---|--:|--:|
 | **Real sessions** | 429 Claude Code + 1 Codex sessions, 96,910 tool results, replayed locally ([how](docs/benchmarks.md#your-own-sessions)) | **3.9%** of tokens · **0.68%** of the bill | **3.6%** of tokens · **0.56%** of the bill |
 | **Gateway, end to end** | 15 Claude Code sessions, 2,140 turns through the live gateway against a prompt-cache emulator ([how](docs/benchmarks.md#gateway-replay)) | input bill **-0.74%** · cache hits 97.4% (0.2: -0.74%) · CPU 15 ms/request (0.2: 84) | — |
@@ -169,7 +169,7 @@ hand.
 | Agent corpus, in dollars | One session, cached, priced as `claude-opus-5-5` ([model](docs/benchmarks.md#cost-model)) | 25.7% | 10.5% |
 | Facts kept | Corpus: every fact an agent needs must still be there | 74 / 74 | 72 / 74 |
 | File reads unchanged | Corpus: Read / `cat` output is edited next by exact match | 6 / 6 | 5 / 6 |
-| Latency p50 · p95 | Corpus: the compress call alone, per tool output | 1.9 · 21 ms | 2.7 · 47 ms |
+| Latency p50 · p95 | Corpus: the compress call alone, per tool output | 3.0 · 22 ms | 2.7 · 47 ms |
 | Latency p95 · p99 | Real sessions: per distinct tool result, and the slow tail | 1.1 · 3.5 ms | 6.8 · 21 ms |
 
 <sub>tiktoken/cl100k_base on the text the model receives, identical input for both tools · corpus seed 20261016 (sha256 `70503a47eb5b`) · measured 2026-10-16 · bill = recorded usage priced as `claude-opus-5-5`, net of prompt caching · regenerate with `cd backend && python -m benchmarks.refresh`</sub>
