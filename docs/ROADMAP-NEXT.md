@@ -8,6 +8,59 @@ The strategic picture is in [MEGAPLAN.md](MEGAPLAN.md). This is the queue.
 
 ---
 
+## Landed in 0.2 (2026-10-16)
+
+See [CHANGELOG.md](../CHANGELOG.md). In short: the Responses API (Codex),
+`count_tokens`, honest upstream errors with retries and an optional local
+fallback, prompt-cache accounting, edit-safe tool results, a string-safe code
+compressor, disassembly compression, the MCP proxy, one-command installers,
+autostart and updates on every OS, and the redesign.
+
+### Next, in order
+
+These came out of a competitor survey in October 2026 (LiteLLM, Portkey,
+Bifrost, OpenRouter, Headroom, Edgee, rtk, Atlassian's mcp-compressor) and were
+deliberately left for after 0.2 rather than half-built:
+
+1. **Tool-schema compression in the gateway.** Shorten `description` and
+   JSON-schema text in the `tools` array of a request, and use Anthropic's
+   `defer_loading` above a size threshold. Large for agents with many tools —
+   but it changes what the model is told about its tools, so it needs an eval
+   (does the agent still pick the right tool?) before it ships.
+2. **Exact response cache**, opt-in. Hash of the compressed request → stored
+   response, for retries, CI and evals. Semantic matching only after that, with
+   a multi-turn guard.
+3. **Budgets and spend caps** per tool or key: the ledger already records tool,
+   provider and model; this is a threshold and a clear 429.
+4. **A rule-based model router** (tool-result-only turns and short turns to a
+   cheaper model), measured with the existing holdout machinery rather than
+   claimed.
+5. **Reversible tool-result clearing** — Anthropic's `context_management`
+   `clear_tool_uses` for every backend, but leaving a CCR id behind instead of a
+   placeholder, so a cleared result can be fetched back.
+6. **"Same next action" evals** (CoACT-style): replay recorded agent turns with
+   raw and compressed tool output and compare the next tool call. A stronger
+   quality claim than fact retention.
+7. **MCP 2026-07-28 statelessness end to end** and a listing in the MCP
+   Registry (`server.json`). The SDK handles the transport; the listing is
+   distribution.
+8. **PyPI, Homebrew, Scoop, winget.** Wired in `release.yml` but each needs an
+   account or a token only the maintainer can create — see
+   [packaging.md](packaging.md). Until then the one-command installers are the
+   supported path.
+
+### Left out on purpose
+
+- **Image compression** (Headroom has it): screenshots are rarely what an agent
+  over-spends on, and lossy image changes are hard to verify.
+- **Telemetry of any kind**, including "anonymous" update pings: the update
+  check is opt-in and asks GitHub only.
+- **Driving disassemblers directly** (running Ghidra/IDA/r2 from Sensei): the
+  MCP proxy fronts the servers that already do this well, and keeps GPL code
+  out of an MIT project.
+
+---
+
 ## Landed since this was written (2026-08-10)
 
 - **`sensei setup-tools`** — the config-file counterpart to `wrap`. Detects the

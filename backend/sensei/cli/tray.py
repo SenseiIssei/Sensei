@@ -74,7 +74,7 @@ def run(port: int | None = None, open_browser: bool = True) -> int:
         import pystray
     except ImportError:
         print("The tray needs the optional 'tray' extra:")
-        print('    pip install "sensei-gateway[tray]"')
+        print('    pip install -e "backend[tray]"   (the release binaries include it)')
         return 1
 
     import uvicorn

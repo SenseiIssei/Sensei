@@ -475,17 +475,31 @@ jobs:
           upload-signing-artifacts: false
       - name: Write the install/verify notes
         run: |
-          cat > release-notes.md <<'EOF'
+          # What's new: this version's section of CHANGELOG.md, if it has one.
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            /^## / { if (found) exit; if (index($0, "[" v "]") || index($0, " " v)) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > release-notes.md || true
+
+          cat >> release-notes.md <<'EOF'
+
           ## Install
 
+          One command, no Python needed — downloads the binary for your machine
+          and checks it against `SHA256SUMS` before installing:
+
           ```bash
-          pipx install sensei-gateway              # any platform, needs Python 3.11+
-          brew install senseiissei/tap/sensei      # macOS, Linux
-          winget install SenseiIssei.Sensei        # Windows
-          scoop install sensei                     # Windows, portable
+          # macOS / Linux
+          curl -fsSL https://raw.githubusercontent.com/SenseiIssei/Sensei/main/install.sh | sh
           ```
 
-          Or take a single file that needs no Python at all:
+          ```powershell
+          # Windows
+          irm https://raw.githubusercontent.com/SenseiIssei/Sensei/main/install.ps1 | iex
+          ```
+
+          Or take a single file yourself:
 
           | Platform | File |
           |---|---|

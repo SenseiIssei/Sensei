@@ -4,16 +4,20 @@
 
 # Sensei
 
-### Your AI tools, using a fraction of the tokens.
+### Your AI coding tools, using a fraction of the tokens.
 
-<sub>A self-hosted workspace built on the compression ideas from
-<a href="https://github.com/headroomlabs-ai/headroom">Headroom</a> and the
-workspace design of <a href="https://github.com/pewdiepie-archdaemon/odysseus">Odysseus</a>.</sub>
+A free, self-hosted gateway that compresses what Claude Code, Codex, Cursor and
+friends send to the model — before it leaves your machine.
 
 [![CI](https://github.com/SenseiIssei/Sensei/actions/workflows/ci.yml/badge.svg)](https://github.com/SenseiIssei/Sensei/actions/workflows/ci.yml)
 [![Security](https://github.com/SenseiIssei/Sensei/actions/workflows/security.yml/badge.svg)](https://github.com/SenseiIssei/Sensei/actions/workflows/security.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-22c55e)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11%20|%203.12%20|%203.13-3776AB)](https://python.org)
+[![Release](https://img.shields.io/github/v/release/SenseiIssei/Sensei?color=7989ec)](https://github.com/SenseiIssei/Sensei/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-4ac97e)](LICENSE)
+[![Python 3.11–3.14](https://img.shields.io/badge/python-3.11%20–%203.14-3776AB)](https://python.org)
+
+**Windows · macOS · Linux** — one command to install, no Python needed.
+
+<img src="docs/screenshots/overview-dark.png" alt="Sensei's overview: 148.7k tokens saved across 70 requests from Claude Code, Codex, Cursor, Aider and Cline, with the prompt-cache hit rate and per-tool breakdown" width="860">
 
 </div>
 
@@ -21,107 +25,97 @@ workspace design of <a href="https://github.com/pewdiepie-archdaemon/odysseus">O
 
 ## The idea in one picture
 
-AI tools send a lot of text to the model. Most of it is repetitive — file
-listings, build logs, JSON blobs. You pay for every character of it.
+AI coding tools send a lot of text to the model. Most of it is repetitive —
+file listings, build logs, JSON blobs, disassembly. You pay for every character.
 
 Sensei sits in the middle and squeezes that text down before it's sent. The
-model still gets everything it needs; you just stop paying for the padding.
+model still gets everything it needs; you stop paying for the padding.
 
 ```mermaid
 flowchart LR
-    A["🧑‍💻 Your AI tool<br/><sub>Claude Code, Cursor, Aider…</sub>"]
-    B["🥋 Sensei<br/><sub>runs on your machine</sub>"]
-    C["☁️ The model<br/><sub>Anthropic, OpenAI, or local</sub>"]
+    A["🧑‍💻 Your AI tool<br/><sub>Claude Code, Codex, Cursor…</sub>"]
+    B["Sensei<br/><sub>runs on your machine</sub>"]
+    C["☁️ The model<br/><sub>Anthropic, OpenAI, Gemini, or local</sub>"]
 
     A -- "50,000 tokens" --> B
     B -- "10,000 tokens" --> C
     C -- "answer" --> B
     B -- "answer" --> A
 
-    style B fill:#16a34a,stroke:#22c55e,color:#fff
+    style B fill:#4d62e5,stroke:#a6b0f2,color:#fff
 ```
 
-**Nothing changes about how you work.** Same tools, same API key, same answers.
+**Nothing changes about how you work.** Same tools, same sign-in, same answers.
 Just a smaller bill.
 
 ---
 
 ## How much smaller?
 
-These are real measurements, not estimates. You can run them yourself with one
-command (see [For the nerds](#-for-the-nerds)).
+Measured, not estimated — reproduce it with one command
+(see [For the nerds](#-for-the-nerds)):
 
 ```mermaid
 xychart-beta
     title "Tokens removed, by kind of content"
     x-axis ["Build logs", "JSON output", "Search results", "Stack traces", "Prose", "Code"]
     y-axis "% removed" 0 --> 100
-    bar [88, 79, 69, 61, 44, 40]
+    bar [88, 79, 69, 55, 44, 42]
 ```
 
-**Across a realistic mix: 79% fewer tokens.**
+**Across a realistic mix: 79% fewer tokens**, with every fact an agent needs
+still present (checked nightly at a floor of 100%). Disassembly listings from
+objdump, radare2 or Ghidra lose 42–56%.
 
-For JSON and logs — which is where AI coding tools spend most of their budget —
-nothing is lost. Sensei restructures the text rather than summarising it, so the
-model sees the same facts.
-
-> **What that means in money.** If you spend €100/month on API calls, a 79%
-> reduction on the input side is a large part of that bill. Sensei shows you the
-> running total: `sensei stats`.
+For JSON and logs — where coding agents spend most of their budget — nothing is
+lost: Sensei restructures the text rather than summarising it. Code an agent
+has *read from disk* is left byte-exact, because it may edit that code next by
+exact string match.
 
 ---
 
 ## Get started
 
-**1. Install**
-
-On Windows, take [the installer](https://github.com/SenseiIssei/Sensei/releases/latest)
-(`sensei-setup-*.exe`). It installs per-user — no administrator prompt, because
-Sensei listens on loopback and only touches files in your own home directory —
-adds a Start-menu entry, and offers to connect the AI tools you already have and
-to start with Windows. Uninstalling puts those tools back.
-
-Everywhere else:
+**1. Install** — downloads the binary for your machine and checks it against the
+release's `SHA256SUMS` before installing.
 
 ```bash
-pipx install sensei-gateway
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/SenseiIssei/Sensei/main/install.sh | sh
 ```
+
+```powershell
+# Windows (per-user, no administrator prompt)
+irm https://raw.githubusercontent.com/SenseiIssei/Sensei/main/install.ps1 | iex
+```
+
+The installer offers to start Sensei when you log in and to connect the AI
+tools it finds — every file it touches is shown first and backed up.
 
 <details>
 <summary>Other ways in</summary>
 
-```bash
-brew install senseiissei/tap/sensei      # macOS and Linux
-winget install SenseiIssei.Sensei        # Windows
-scoop bucket add senseiissei https://github.com/SenseiIssei/scoop-bucket
-scoop install sensei                     # Windows, portable
-pip install sensei-gateway               # any platform with Python 3.11+
-```
+- **A single file**, from [the latest release](https://github.com/SenseiIssei/Sensei/releases/latest):
+  `sensei-setup-*.exe` (Windows installer), `.dmg` (macOS), `.AppImage` /
+  `.deb` / `.rpm` (Linux), or the bare binary in a `.tar.gz` / `.zip`.
+- **pip**, from the release's wheel (Python 3.11+):
+  `pipx install https://github.com/SenseiIssei/Sensei/releases/download/v0.2.0/sensei_gateway-0.2.0-py3-none-any.whl`
+- **From source:** `git clone https://github.com/SenseiIssei/Sensei && cd Sensei && pip install -e "backend[mcp,tray]"`
+- **Docker:** `docker compose up -d`, then open <http://localhost:7000/app/>.
 
-Or download a single file from [the latest
-release](https://github.com/SenseiIssei/Sensei/releases/latest) — `.exe` for
-Windows, `.dmg` for macOS, `.AppImage`/`.deb`/`.rpm` for Linux — which needs no
-Python at all.
-
-The distribution is called `sensei-gateway` because `sensei` on PyPI is an
-unrelated HTTP library from 2023. The command you type is `sensei`.
+The builds are not code-signed yet; the [release notes](https://github.com/SenseiIssei/Sensei/releases/latest)
+explain the OS warnings and how to verify a download with `sha256sum` or Sigstore.
 
 </details>
 
 **2. Start it**
 
 ```bash
-sensei up      # in a terminal
-sensei tray    # in the background, with a system-tray icon
+sensei tray    # in the background, with a tray icon (what autostart uses)
+sensei up      # or in a terminal
 ```
 
-`tray` serves exactly what `up` serves, without a window you have to leave open.
-Right-click the icon to open the dashboard, connect your tools, or quit. Needs
-`pip install "sensei-gateway[tray]"`; the Windows installer includes it.
-
-Your browser opens and asks you one question: do you want to run a model on your
-own computer (free), or use a service like OpenAI (paste a key). Pick one, click
-save. Done.
+Open <http://localhost:7000/app/>. That's the dashboard above.
 
 **3. Point your tools at it**
 
@@ -129,137 +123,118 @@ save. Done.
 sensei setup-tools
 ```
 
-Sensei finds the AI tools already on your machine — Claude Code, Claude Desktop,
-Cursor, Windsurf, Cline, Roo, Kilo, Zed, Continue, Codex, Aider — and configures
-them. You are shown exactly which files it will touch before it touches them,
-every one is backed up, and `sensei setup-tools --undo` puts them all back.
+Sensei finds the AI tools already on your machine — Claude Code, Claude
+Desktop, Codex, Cursor, Windsurf, Cline, Roo, Kilo, Zed, Continue, Gemini CLI,
+opencode, Aider — and routes them through the gateway. Each keeps its own
+sign-in, subscriptions included. `sensei setup-tools --undo` puts everything
+back; `sensei doctor --verify` sends a real request through to prove it works.
 
-Only some of your work should route through it? `sensei setup-tools --project`
-writes the configuration into the current repository instead of the machine, so
-you can commit it for everyone or keep it to one checkout.
-
-To confirm it actually worked rather than assuming:
+For a tool you launch from a terminal there is also the zero-config version:
 
 ```bash
-sensei doctor --verify
+sensei wrap claude      # or codex, aider, opencode, goose, crush, …
 ```
 
-That sends a real request through the running gateway and reports what came
-back — separately from whether your provider is set up, because "compression is
-broken" and "you haven't added a key yet" are different problems with different
-fixes.
-
-For a tool you launch from a terminal, there is also the no-config version,
-which sets one environment variable for that process and nothing else:
+**4. Keep it running and current**
 
 ```bash
-sensei wrap claude
+sensei autostart on     # start at login — Windows, macOS and Linux
+sensei update           # install the latest release
 ```
-
-Same for `codex`, `aider`, `cursor-agent`, `cline`, `continue`, `opencode`,
-`goose` and `crush` — just swap the name.
-
-**4. Watch the number go up**
-
-Open <http://localhost:7000/app/> and click **Tokens Saved**: what you saved
-today, over the last thirty days, and which tool saved it. `sensei stats` prints
-the same thing in the terminal.
-
-The history is a SQLite file on your own disk holding counters and model names —
-no prompts, no responses, nothing transmitted. `SENSEI_SAVINGS_PERSIST=false`
-turns it off and the totals go back to being per-process.
-
-**Or use it as an MCP server**
-
-If your tool speaks [MCP](https://modelcontextprotocol.io), Sensei plugs in
-directly — no base URL to change:
-
-```jsonc
-{
-  "mcpServers": {
-    "sensei": { "command": "sensei", "args": ["mcp"] }
-  }
-}
-```
-
-The agent gets three tools: compress a blob before putting it in context, get
-the exact original back if it turns out it needed it, and check what's been
-saved. Needs `pip install "sensei-gateway[mcp]"`.
-
-<details>
-<summary><b>Prefer Docker?</b></summary>
-
-```bash
-git clone https://github.com/SenseiIssei/Sensei.git && cd Sensei
-docker compose up -d
-```
-
-Then open <http://localhost:7000/app/>.
-
-</details>
 
 ---
 
 ## What it looks like
 
-<img src="docs/screenshots/savings.png" alt="The savings dashboard: 40.2k tokens saved across 85 requests, broken down by tool, provider and model" width="820">
+Calm on purpose: quiet surfaces, one accent colour, and gold only for the number
+the page is about. Light and dark, following your system.
 
-<sub>**Tokens Saved**, after routing five different coding agents through the
-gateway. Real traffic against a local stub provider — the compression numbers
-are measured, the money is an estimate at your configured input price, and the
-history is one day because the machine was set up that morning.</sub>
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/overview-light.png" alt="The overview in the light theme"></td>
+<td width="50%"><img src="docs/screenshots/connections-dark.png" alt="Connections: which AI tools on this machine are routed through Sensei, and the gateway addresses"></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/settings-light.png" alt="Settings: theme, the chat's own model, updates and autostart"></td>
+<td><img src="docs/screenshots/chat-light.png" alt="First-run setup for Sensei's own chat: run a model locally or paste a key"></td>
+</tr>
+</table>
 
-<details>
-<summary><b>The chat window, and the phone layout</b></summary>
-
-<img src="docs/screenshots/chat.png" alt="The Sensei chat window" width="820">
-
-<img src="docs/screenshots/mobile.png" alt="Sensei at phone width with the sidebar drawer open" width="300">
-
-</details>
-
-Here is what the command line shows, which is real output:
-
-```console
-$ sensei models
-
-Your machine
-
-  System   Windows 11 (AMD64)
-  CPU      16 cores
-  RAM      15.3 GB
-  GPU      none detected — models will run on the CPU
-  Budget   7.7 GB usable for a model
-
-Suggestions for this machine
-
-  Qwen2.5 Coder 7B             7B     4.6 GB  fits comfortably
-    Code completion and review. Pairs well with the gateway.
-  Llama 3.2 3B                 3B     2.0 GB  fits comfortably
-    General chat on modest hardware. A sensible floor.
-  GLM-5.2                744B MoE   390.6 GB  too large
-
-Start here:  sensei models --pull qwen2.5-coder:7b
-```
-
-Something not working? Sensei tells you what to do about it:
-
-```console
-$ sensei doctor
-
-  [+] Python             3.12.10 on Windows AMD64
-  [+] Config file        D:\Sensei\.env
-  [!] Ollama             not installed
-        -> Optional. For free local inference: https://ollama.com
-  [x] Model access       no local model and no API key — Sensei cannot answer anything
-        -> Either install Ollama (free, local) or run 'sensei up' and paste an
-           API key into the setup wizard.
-  [+] Port               127.0.0.1:7000 is free
-  [+] Bind address       127.0.0.1
-```
+<sub>Real traffic through the gateway against a local stub provider — the
+compression numbers are measured; see [how these were taken](docs/screenshots/README.md).</sub>
 
 ---
 
+## Why Sensei
+
+| | Sensei | Typical gateway (LiteLLM, Portkey…) | Typical compressor |
+|---|---|---|---|
+| Compresses tool output before it is sent | ✅ JSON, logs, code, prose, disassembly | — | ✅ |
+| Keeps agents' exact-match edits working | ✅ file reads stay byte-exact | n/a | rarely considered |
+| Original always retrievable | ✅ by id, over MCP | — | sometimes |
+| OpenAI Chat, **Responses** and Anthropic APIs | ✅ incl. `count_tokens`, `/compact` | ✅ | varies |
+| Prompt-cache hit rate shown next to savings | ✅ | some | — |
+| MCP proxy with compressed, paged results | ✅ | some proxy MCP, few compress | some reduce the tool list |
+| Retries + local-model fallback | ✅ | ✅ | — |
+| Wires up your installed tools, reversibly | ✅ 13 tools | — | some |
+| Telemetry | **none, ever** | varies | varies |
+| Price | **free, MIT, everything included** | free core, paid extras common | free core, paid extras common |
+
+---
+
+## What's new in 0.2
+
+- **Codex works again** — Sensei now speaks OpenAI's Responses API, which is all
+  Codex speaks since early 2026.
+- **Agents' edits keep matching** — code they read from disk stays byte-exact,
+  and the code compressor no longer mangles string literals.
+- **Honest errors** — a rate limit arrives as a 429, not as a broken stream;
+  retries and an optional local-model fallback handle the rest.
+- **Prompt-cache accounting** — what the provider billed, next to what Sensei saved.
+- **MCP proxy** and **disassembly compression** — see below.
+- **One-command install, autostart and updates** on Windows, macOS and Linux.
+- **A calm redesign**, light and dark.
+
+Full list in the [changelog](CHANGELOG.md).
+
+---
+
+## MCP: Sensei as a server and as a proxy
+
+If your tool speaks [MCP](https://modelcontextprotocol.io), Sensei plugs in
+directly — no base URL to change:
+
+```jsonc
+{ "mcpServers": { "sensei": { "command": "sensei", "args": ["mcp"] } } }
+```
+
+The agent gets `sensei_compress`, `sensei_retrieve` and `sensei_stats`.
+
+**And it can front your other MCP servers.** Every server an agent connects to
+puts its whole tool list into the context on every turn. List them in
+`~/.sensei/mcp-servers.json` instead — same format as Claude Desktop's — and the
+agent sees two tools: `sensei_find_tools` (keyword search, schemas only for the
+matches) and `sensei_call_tool`. Results come back compressed; long ones arrive
+as a first page plus an id that `sensei_retrieve` pages through.
+
+```json
+{
+  "mcpServers": {
+    "rea":    { "command": "npx", "args": ["-y", "rea-agents", "mcp"] },
+    "ghidra": { "url": "http://127.0.0.1:8089/mcp" }
+  }
+}
+```
+
+That makes Sensei a good companion for reverse-engineering servers like
+[REA](https://github.com/morluto/rea) or GhidraMCP, whose disassembly listings
+it shortens by about half. Use them on software you are entitled to analyse:
+your own builds, binaries you have permission to inspect, malware samples in a
+defensive lab, CTF challenges.
+
+`sensei mcp --transport streamable-http --port 7001` serves MCP over HTTP.
+
+---
 ## Your data stays yours
 
 This matters more than the token savings, so it's worth being specific.
@@ -273,6 +248,8 @@ This matters more than the token savings, so it's worth being specific.
 | 🔑 **Your key stays yours** | Sensei forwards your API key to the provider you chose and to nobody else. It's encrypted on disk, never written in plain text. |
 | ✂️ **Secrets stripped** | Optionally, Sensei removes passwords, tokens and keys from prompts before they leave your computer. |
 | 📴 **Works offline** | If the server isn't running, the interface still opens and tells you how to start it. |
+
+---
 
 ---
 
@@ -320,37 +297,41 @@ Yes. MIT licensed, no paid tier, no feature held back. See the
 <details>
 <summary><b>What if I don't like it?</b></summary>
 
-`pip uninstall sensei`. Sensei keeps its data in dot-directories next to where
-you ran it; delete them and nothing remains.
+`sensei setup-tools --undo` and `sensei autostart off` first, then uninstall the
+way you installed (Settings → Apps on Windows, delete the binary elsewhere).
+Sensei's data lives in `~/.sensei`; delete it and nothing remains.
 
 </details>
 
 ---
-
 ## 🤓 For the nerds
 
 <details>
 <summary><b>Architecture</b></summary>
 
-Sensei is a FastAPI service that speaks both the OpenAI and Anthropic wire
-formats, so anything with a configurable base URL routes through it unchanged.
+Sensei is a FastAPI service that speaks the OpenAI Chat, OpenAI Responses and
+Anthropic Messages wire formats, so anything with a configurable base URL
+routes through it unchanged.
 
 ```mermaid
 flowchart TB
     subgraph client["Clients"]
         CC["Claude Code<br/><sub>ANTHROPIC_BASE_URL</sub>"]
-        CX["Codex / Cursor / Aider<br/><sub>OPENAI_BASE_URL</sub>"]
+        CX["Codex · Cursor · Aider<br/><sub>OPENAI_BASE_URL</sub>"]
+        MCPC["MCP clients<br/><sub>sensei mcp</sub>"]
         WEB["Web UI"]
         CLI["CLI · Qt app · VS Code ext"]
     end
 
     subgraph sensei["Sensei"]
-        GW["Gateway<br/><sub>/v1/chat/completions · /v1/messages</sub>"]
+        GW["Gateway<br/><sub>chat/completions · responses · messages</sub>"]
+        MP["MCP server + proxy<br/><sub>find · call · retrieve</sub>"]
         RT["ContentRouter<br/><sub>detects type, picks a compressor</sub>"]
         subgraph comp["Compressors"]
             SC["SmartCrusher<br/><sub>JSON → CSV schema</sub>"]
             LC["LogCompressor<br/><sub>triage + dedupe</sub>"]
-            CD["CodeCompressor<br/><sub>comments, imports</sub>"]
+            CD["CodeCompressor<br/><sub>comments, docstrings</sub>"]
+            DA["DisasmCompressor<br/><sub>bytes, gutters, padding</sub>"]
             TC["TextCompressor<br/><sub>filler, boilerplate</sub>"]
         end
         CA["CacheAligner<br/><sub>keeps the prefix byte-exact</sub>"]
@@ -358,27 +339,35 @@ flowchart TB
         RED["DLP redaction<br/><sub>strips secrets</sub>"]
     end
 
-    PROV["Provider<br/><sub>Anthropic · OpenAI · Ollama · 11 more</sub>"]
+    PROV["Provider<br/><sub>Anthropic · OpenAI · Gemini · Ollama · 20 more</sub>"]
 
     CC --> GW
     CX --> GW
     WEB --> GW
     CLI --> GW
     GW --> RT
-    RT --> SC & LC & CD & TC
-    SC & LC & CD & TC --> CA
+    MCPC --> MP
+    MP --> RT
+    RT --> SC & LC & CD & DA & TC
+    SC & LC & CD & DA & TC --> CA
     CA --> RED
     RED --> PROV
     RT -.stores originals.-> CCR
     CCR -.on request.-> PROV
 
-    style sensei fill:#0a0a0f,stroke:#22c55e
-    style comp fill:#111827,stroke:#374151
+    style sensei fill:#131619,stroke:#a6b0f2,color:#e8e8e8
+    style comp fill:#1a1d21,stroke:#363a3d,color:#e8e8e8
 ```
 
-The system prompt is left byte-identical on purpose. Providers cache on an exact
-prefix match, so touching it would invalidate the cache and cost more in latency
-than compression saves.
+Compression is deterministic: the same prefix always becomes the same bytes, so
+the provider's prompt cache keeps hitting turn after turn. The dashboard shows
+the hit rate the provider reports, so that claim can be checked rather than
+trusted.
+
+Upstream errors keep their status and rate-limit headers; 429, 5xx and 529 are
+retried before the first byte reaches the client, and with
+`SENSEI_FALLBACK_ENABLED` a local model (Ollama, llama.cpp, LM Studio, vLLM)
+answers when the provider stays down — marked with `X-Sensei-Fallback`.
 
 </details>
 
@@ -403,8 +392,14 @@ Identical lines are collapsed after normalising timestamps, hex addresses and
 UUIDs, so a thousand near-identical worker lines become one with a count.
 
 **CodeCompressor — source.** Strips comments, docstrings, blank lines and
-trailing whitespace, and folds consecutive import blocks. Regex-driven per
-language rather than a full parse, for speed and zero dependencies.
+trailing whitespace with a linear, string-aware scanner: `"#16a34a"` and
+`"https://…"` inside literals are data and survive. Code that reaches the model
+as a *tool result* — a file an agent may edit next by exact string match — is
+left byte-exact unless `SENSEI_CODE_COMPRESSION=aggressive`.
+
+**DisasmCompressor — objdump, GDB, radare2, Ghidra, IDA.** Drops the opcode-byte
+column, flow-arrow gutters and runs of padding instructions; keeps every
+address, mnemonic, operand and label. 42–56% on typical listings.
 
 **TextCompressor — prose.** Phrase substitution ("in order to" → "to"), filler
 removal, boilerplate sentence stripping, and line-level dedupe.
@@ -416,7 +411,7 @@ id and gets it back. Compression is therefore never destructive in practice.
 </details>
 
 <details>
-<summary><b>MCP server</b></summary>
+<summary><b>MCP server, in detail</b></summary>
 
 `sensei mcp` speaks the Model Context Protocol over stdio, which covers the
 tools that don't let you redirect a base URL — and the case where an agent wants
@@ -438,9 +433,11 @@ Verified end to end against a real MCP client — 582 → 287 tokens on a 40-rec
 JSON array, original recovered byte-identical.
 
 ```bash
-pip install "sensei-gateway[mcp]"
 sensei mcp            # stdio; normally your client spawns this, not you
 ```
+
+The release binaries include the MCP SDK; from a checkout, install it with
+`pip install -e "backend[mcp]"`.
 
 </details>
 
@@ -632,19 +629,24 @@ Full scope and reporting process: [SECURITY.md](SECURITY.md).
 ```
 backend/          FastAPI service, compression pipeline, CLI, tests
   sensei/
-    compression/  SmartCrusher, LogCompressor, CodeCompressor, TextCompressor,
-                  CacheAligner, CCR, ContentRouter
+    compression/  SmartCrusher, LogCompressor, CodeCompressor, DisasmCompressor,
+                  TextCompressor, CacheAligner, CCR, ContentRouter
     routers/      gateway, chat, RAG, agent, settings, setup, stats, …
     security/     auth, crypto, vault, redaction, RBAC, OIDC, sessions
     integrations  writes Sensei into other tools' config files, reversibly
     savings.py    in-memory totals + the local SQLite savings ledger
-    cli/          up · wrap · setup-tools · doctor · models · stats · chat
+    usage.py      what the provider billed, incl. prompt-cache reads
+    mcp_server.py MCP tools; mcp_proxy.py fronts other MCP servers
+    cli/          up · tray · wrap · setup-tools · doctor · models · stats ·
+                  autostart · update · mcp · chat
   benchmarks/     the compression benchmark
-frontend/         React 19 + Tailwind 4 + Vite 8, PWA
+frontend/         React 19 + Tailwind 4 + Vite 8, PWA, light and dark
 rust/sensei_core/ optional PyO3 accelerator
 extensions/vscode VS Code extension
 training/         Sensei-Compressor fine-tuning scaffold
 deploy/           nginx · Caddy · Traefik · systemd
+packaging/        PyInstaller spec, Windows installer, icons
+install.sh/.ps1   the one-command installers
 docs/             configuration reference (generated), the plan
 ```
 
@@ -655,7 +657,9 @@ docs/             configuration reference (generated), the plan
 
 Every action is pinned to a commit SHA. On each pull request:
 
-- backend tests across **{Linux, macOS, Windows} × Python {3.11, 3.12, 3.13}**
+- backend tests across **{Linux, macOS, Windows} × Python {3.11, 3.12, 3.13, 3.14}**
+- **the one-command installers run for real** on all three, against a published
+  release, and the Windows installer script compiled
 - `ruff` lint and format, with the rule set pinned so a new ruff release can't
   fail an unrelated PR
 - the Rust accelerator built and the **whole suite re-run against it** to prove
@@ -714,22 +718,23 @@ complete answer.**
 
 > Neither project endorses this one. Any bugs here are ours.
 
-Also worth knowing: [GLM-5.2](https://github.com/zai-org/GLM-5.2) is the model
-Sensei's defaults point at, and the reason a lot of the compression tuning
-assumes a very large context window.
+### 🔍 [REA](https://github.com/morluto/rea) · MIT
+
+**The reverse-engineering angle.** REA showed how far an agent gets on software
+without source when the tools hand it the right views — and that oversized
+results should come back as a reference to page through, not as a wall of text.
+Sensei's paged MCP results and its disassembly compressor follow that idea; the
+MCP proxy is meant to sit in front of servers like it.
+
+---
 
 ---
 
 ## Contributing
 
-Issues and PRs welcome — [CONTRIBUTING.md](CONTRIBUTING.md) has the setup.
-
-**[docs/ROADMAP-NEXT.md](docs/ROADMAP-NEXT.md) is the queue** — what's planned,
-in what order, and why. It also lists the things that cost real time to discover
-and aren't visible from reading the code.
-
-Most useful right now: compression heuristics for more languages, output-token
-shaping, mobile polish, and [screenshots for this page](docs/screenshots/README.md).
+Issues and PRs welcome — [CONTRIBUTING.md](CONTRIBUTING.md) has the setup, and
+[docs/ROADMAP-NEXT.md](docs/ROADMAP-NEXT.md) is the queue: what's planned, in
+what order, and why.
 
 <div align="center">
 <sub>MIT · built by <a href="https://github.com/SenseiIssei">@SenseiIssei</a></sub>

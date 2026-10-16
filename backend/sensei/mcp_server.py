@@ -13,7 +13,8 @@ never a one-way door: if a model decides it needs the untouched text, it asks
 for it. An agent that cannot recover the original is an agent that has to
 guess, which is worse than sending more tokens.
 
-Requires the optional MCP extra:  pip install "sensei-gateway[mcp]"
+Requires the optional MCP extra (bundled in the release binaries; from a
+checkout: pip install -e "backend[mcp]").
 """
 
 from __future__ import annotations
@@ -102,7 +103,7 @@ def build_server(hub: Any | None = None) -> Any:
             from mcp.server.fastmcp import FastMCP as server_class
         except ImportError as exc:  # pragma: no cover - depends on the extra
             raise RuntimeError(
-                "The MCP server needs the optional 'mcp' extra:\n    pip install \"sensei-gateway[mcp]\""
+                "The MCP server needs the optional 'mcp' extra:\n    pip install -e \"backend[mcp]\"   (the release binaries include it)"
             ) from exc
 
     if hub is None:
