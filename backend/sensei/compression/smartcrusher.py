@@ -340,6 +340,11 @@ class SmartCrusher:
     def _select_rows(self, rows: list[dict[str, Any]], terms: list[str]) -> list[int] | None:
         """Indices to keep, or None when the array should not be cut at all."""
         n = len(rows)
+        if self._unique_entities(rows):
+            # Forty issues, a hundred search hits: each row is a different
+            # thing somebody may ask about by name. Sampling them loses facts,
+            # however repetitive the field names make them look.
+            return None
         texts = [json.dumps(r, sort_keys=True, ensure_ascii=False) for r in rows]
         shapes = [_shape(t) for t in texts]
         diversity = len(set(shapes)) / n
@@ -414,6 +419,51 @@ class SmartCrusher:
             return None
         return sorted(keep)
 
+    # Above this many rows a retrievable cut beats sending every record.
+    UNIQUE_ENTITY_MAX_ROWS = 300
+
+    def _unique_entities(self, rows: list[dict[str, Any]]) -> bool:
+        """Records (issues, users, search hits), not a stream of events.
+
+        Sampling is for streams: log lines, metrics, polling results, where
+        rows repeat a template and the interesting ones stand out. A list of
+        records is different — every row is a thing somebody may ask about by
+        name — so it is only ever tabulated, never cut, unless it is huge.
+
+        A stream is ordered by time: some column holds timestamps that only go
+        one way. Even then, a column of free text whose rows differ in words
+        (commit messages, issue titles) makes it a list of records. Without a
+        time order, only rows that are near copies of each other count as a
+        stream.
+        """
+        n = len(rows)
+        if n > self.UNIQUE_ENTITY_MAX_ROWS:
+            return False
+        columns: dict[str, list[str]] = {}
+        for r in rows:
+            for k, v in r.items():
+                if isinstance(v, str):
+                    columns.setdefault(k, []).append(v)
+        dense = {k: v for k, v in columns.items() if len(v) >= n * 0.8}
+        ordered = False
+        for v in dense.values():
+            stamps = [x for x in v if _TIMESTAMP.match(x)]
+            if len(stamps) < len(v) * 0.9:
+                continue
+            up = sum(1 for x, y in pairwise(stamps) if y >= x)
+            if up >= (len(stamps) - 1) * 0.9 or up <= (len(stamps) - 1) * 0.1:
+                ordered = True
+        if not ordered:
+            shapes = {_shape(json.dumps(r, sort_keys=True, ensure_ascii=False)) for r in rows}
+            return len(shapes) >= n * 0.1
+        for v in dense.values():
+            if sum(1 for x in v if _TIMESTAMP.match(x)) >= len(v) * 0.5:
+                continue
+            words = [x for x in v if " " in x.strip()]
+            if len(words) >= len(v) * 0.5 and len({_shape(x) for x in v}) >= len(v) * 0.7:
+                return True
+        return False
+
     def _sample_scalars(self, data: list, ctx: Context, terms: list[str]) -> str | None:
         n = len(data)
         if all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in data):
@@ -477,6 +527,7 @@ class _Missing:
 _MISSING = _Missing()
 
 _SHAPE_NUM = re.compile(r"\d+(?:\.\d+)?")
+_TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2})?")
 _SHAPE_HEX = re.compile(r"\b[0-9a-f]{8,}\b|\b[0-9a-f-]{36}\b")
 
 
