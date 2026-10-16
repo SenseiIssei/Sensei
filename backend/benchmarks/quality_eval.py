@@ -34,6 +34,18 @@ gets switched off.
     python benchmarks/quality_eval.py
     python benchmarks/quality_eval.py --json results.json --min-retention 100
     python benchmarks/quality_eval.py --model gpt-4o --base-url http://localhost:7000/v1
+
+Two corpora are checked. ``micro`` is the hand-written set above, gated at
+100%. ``agent`` is the seeded corpus in ``benchmarks/corpus.py`` — realistic
+coding-agent tool output, every sample with its facts, file reads required to
+come back byte-exact. Its losses are reported, and the nightly
+``agent_bench --check`` fails when a fact that used to survive stops surviving.
+
+``--model`` is the optional LLM-graded mode. It asks each question twice, once
+against the original payload and once against the compressed one, so a wrong
+answer is attributed to compression only when the original got it right. It
+needs an endpoint and costs money (or nothing, through a local Ollama), and it
+is deliberately not part of CI.
 """
 
 from __future__ import annotations
@@ -293,70 +305,134 @@ def evaluate(router: ContentRouter | None = None) -> dict:
     }
 
 
+def evaluate_agent(router: ContentRouter | None = None, seed: int | None = None) -> dict:
+    """Fact retention and byte-exactness on the seeded agent corpus."""
+    from benchmarks.corpus import DEFAULT_SEED, build_corpus, corpus_digest
+
+    router = router or ContentRouter(enable_caching=False)
+    seed = DEFAULT_SEED if seed is None else seed
+    samples = build_corpus(seed)
+    cases = []
+    for s in samples:
+        # As the gateway treats a tool result: code and file views stay exact.
+        out = router.compress(s.text, edit_target=True)
+        haystack = _normalise(out.compressed)
+        missing = [f for f in s.facts if _normalise(f) not in haystack]
+        cases.append(
+            {
+                "name": s.name,
+                "kind": s.kind,
+                "type": out.content_type.value,
+                "facts_total": len(s.facts),
+                "facts_kept": len(s.facts) - len(missing),
+                "missing": missing,
+                "byte_exact_required": s.byte_exact,
+                "byte_exact_ok": (out.compressed == s.text) if s.byte_exact else None,
+                "size_reduction_pct": round((1 - len(out.compressed) / len(s.text)) * 100, 1),
+            }
+        )
+    total = sum(c["facts_total"] for c in cases)
+    kept = sum(c["facts_kept"] for c in cases)
+    return {
+        "corpus": {"seed": seed, "digest": corpus_digest(samples)},
+        "cases": cases,
+        "aggregate": {
+            "facts_total": total,
+            "facts_kept": kept,
+            "retention_pct": round(kept / total * 100, 1) if total else 100.0,
+            "byte_exact_violations": sum(1 for c in cases if c["byte_exact_ok"] is False),
+        },
+    }
+
+
 # ─── Optional: put a model in the loop ───────────────────────────────────────
 
 
-def evaluate_with_model(model: str, base_url: str, api_key: str | None) -> dict:
-    """Ask a real model the questions, against compressed context.
+def _ask(client, base_url: str, headers: dict, model: str, context: str, question: str) -> str:
+    prompt = (
+        "Answer using only the data below. Reply with the value alone, "
+        "no explanation.\n\n"
+        f"{context}\n\nQuestion: {question}"
+    )
+    resp = client.post(
+        f"{base_url.rstrip('/')}/chat/completions",
+        headers=headers,
+        json={"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0},
+    )
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
+
+
+def evaluate_with_model(
+    model: str, base_url: str, api_key: str | None, corpus: str = "both"
+) -> dict:
+    """Ask a real model the questions, against original and compressed context.
 
     This is the sufficient version of the check and it is opt-in: it needs an
     endpoint, it costs money per run, and a CI gate that requires a funded API
     key is a gate somebody eventually disables. Point it at a local Ollama
-    through the gateway and it costs nothing.
+    and it costs nothing. Point ``--base-url`` at the provider directly, not at
+    a Sensei gateway — otherwise the "original" arm is compressed too.
+
+    Each question is asked twice. A miss on the compressed text counts against
+    compression only if the original was answered correctly; a question the
+    model gets wrong either way measures the model, not Sensei.
     """
     import httpx
 
     router = ContentRouter(enable_caching=False)
-    cases = [c for c in CORPUS if c.question and c.answer]
-    outcomes = []
+    items: list[tuple[str, str, str, str, bool]] = []  # name, text, q, a, edit_target
+    if corpus in ("micro", "both"):
+        items += [(c.name, c.content, c.question, c.answer, False) for c in CORPUS if c.question]
+    if corpus in ("agent", "both"):
+        from benchmarks.corpus import build_corpus
+
+        items += [
+            (s.name, s.text, s.question, s.answer, True) for s in build_corpus() if s.question
+        ]
 
     headers = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
+    outcomes = []
     with httpx.Client(timeout=120.0) as client:
-        for case in cases:
-            compressed = router.compress(case.content, force_type=case.force_type)
-            prompt = (
-                "Answer using only the data below. Reply with the value alone, "
-                "no explanation.\n\n"
-                f"{compressed.compressed}\n\nQuestion: {case.question}"
-            )
-            try:
-                resp = client.post(
-                    f"{base_url.rstrip('/')}/chat/completions",
-                    headers=headers,
-                    json={
-                        "model": model,
-                        "messages": [{"role": "user", "content": prompt}],
-                        "temperature": 0,
-                    },
-                )
-                resp.raise_for_status()
-                reply = resp.json()["choices"][0]["message"]["content"]
+        for name, text, question, answer, edit_target in items:
+            compressed = router.compress(text, edit_target=edit_target).compressed
+            row: dict = {"name": name, "question": question, "expected": answer}
             # Reported per case rather than aborting: one unreachable model
             # should not discard the answers already collected.
+            try:
+                for arm, context in (("original", text), ("compressed", compressed)):
+                    reply = _ask(client, base_url, headers, model, context, question)
+                    row[arm] = reply.strip()[:200]
+                    row[f"{arm}_correct"] = answer.lower() in reply.lower()
             except Exception as exc:
-                outcomes.append({"name": case.name, "correct": False, "error": str(exc)})
-                continue
-            outcomes.append(
-                {
-                    "name": case.name,
-                    "question": case.question,
-                    "expected": case.answer,
-                    "answer": reply.strip()[:200],
-                    "correct": case.answer.lower() in reply.lower(),
-                }
-            )
+                row["error"] = str(exc)
+            row["correct"] = bool(row.get("compressed_correct"))
+            outcomes.append(row)
 
-    correct = sum(1 for o in outcomes if o.get("correct"))
+    asked = [o for o in outcomes if "error" not in o]
+    baseline_ok = [o for o in asked if o.get("original_correct")]
+    kept = [o for o in baseline_ok if o.get("compressed_correct")]
+    correct = sum(1 for o in asked if o.get("compressed_correct"))
     return {
         "model": model,
         "cases": outcomes,
         "aggregate": {
-            "asked": len(outcomes),
+            "asked": len(asked),
+            "errors": len(outcomes) - len(asked),
             "correct": correct,
-            "accuracy_pct": round(correct / len(outcomes) * 100, 1) if outcomes else 0.0,
+            "accuracy_pct": round(correct / len(asked) * 100, 1) if asked else 0.0,
+            "original_accuracy_pct": round(len(baseline_ok) / len(asked) * 100, 1)
+            if asked
+            else 0.0,
+            # Of the questions the model answers from the original, how many it
+            # still answers from the compressed text: the number that is about
+            # compression and not about the model.
+            "answer_retention_pct": round(len(kept) / len(baseline_ok) * 100, 1)
+            if baseline_ok
+            else 0.0,
         },
     }
 
@@ -374,11 +450,19 @@ def main() -> int:
         metavar="PCT",
         help="exit non-zero below this fact-retention percentage (nightly uses 100)",
     )
-    parser.add_argument("--model", help="also ask a real model the questions")
+    parser.add_argument(
+        "--corpus",
+        choices=("micro", "agent", "both"),
+        default="both",
+        help="which corpus to check (--min-retention gates the micro corpus)",
+    )
+    parser.add_argument(
+        "--model", help="also ask a real model the questions (A/B: original vs compressed)"
+    )
     parser.add_argument(
         "--base-url",
-        default="http://localhost:7000/v1",
-        help="OpenAI-compatible endpoint for --model (default: a local Sensei)",
+        default="http://localhost:11434/v1",
+        help="OpenAI-compatible endpoint for --model, NOT a Sensei gateway (default: local Ollama)",
     )
     parser.add_argument(
         "--min-accuracy",
@@ -388,6 +472,8 @@ def main() -> int:
         help="with --model, exit non-zero below this answer accuracy",
     )
     args = parser.parse_args()
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     data = evaluate()
 
@@ -416,16 +502,36 @@ def main() -> int:
 
     print(f"\n{data['claim']}")
 
+    if args.corpus in ("agent", "both"):
+        agent = evaluate_agent()
+        data["agent"] = agent
+        a = agent["aggregate"]
+        print(
+            f"\nAgent corpus (seed {agent['corpus']['seed']}): facts {a['facts_kept']}/"
+            f"{a['facts_total']} kept ({a['retention_pct']}%), "
+            f"byte-exact violations {a['byte_exact_violations']}"
+        )
+        for case in agent["cases"]:
+            if case["missing"] or case["byte_exact_ok"] is False:
+                print(f"  {case['name']}: {case['missing'] or 'changed a file read'}")
+
     if args.model:
         key = os.environ.get("OPENAI_API_KEY") or os.environ.get("SENSEI_API_KEY")
-        model_data = evaluate_with_model(args.model, args.base_url, key)
+        model_data = evaluate_with_model(args.model, args.base_url, key, args.corpus)
         data["model_eval"] = model_data
-        print(f"\nAnswer accuracy with {args.model}\n")
+        print(f"\nAnswer accuracy with {args.model} (original -> compressed)\n")
         for case in model_data["cases"]:
-            mark = "ok " if case.get("correct") else "MISS"
-            detail = case.get("error") or case.get("answer", "")
-            print(f"  [{mark}] {case['name']:<24} {detail[:60]}")
-        print(f"\n  {model_data['aggregate']['accuracy_pct']}% correct")
+            if "error" in case:
+                print(f"  [ERR  ] {case['name']:<40} {case['error'][:60]}")
+                continue
+            o = "ok" if case.get("original_correct") else "--"
+            c = "ok" if case.get("compressed_correct") else "--"
+            print(f"  [{o}>{c}] {case['name']:<40} {case.get('compressed', '')[:50]}")
+        m = model_data["aggregate"]
+        print(
+            f"\n  original {m['original_accuracy_pct']}% · compressed {m['accuracy_pct']}% · "
+            f"answers kept {m['answer_retention_pct']}%"
+        )
 
     if args.json:
         payload = json.dumps(data, indent=2)

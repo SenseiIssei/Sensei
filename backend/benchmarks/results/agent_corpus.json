@@ -1,0 +1,1316 @@
+{
+  "schema": 1,
+  "generated": "2026-10-16",
+  "tokenizer": "tiktoken/cl100k_base",
+  "corpus": {
+    "seed": 20261016,
+    "digest": "70503a47eb5b07762461c9f700a7a7066333781c4b053e1f69f17ee788aab440",
+    "samples": 42
+  },
+  "repeats": 1,
+  "python": "3.12",
+  "tools": {
+    "sensei": {
+      "version": "0.2.0+3680c8d",
+      "mode": "ContentRouter.compress(edit_target=True), as the gateway applies it to tool results",
+      "settings": {
+        "code_compression": "safe",
+        "strip_invisible": true
+      }
+    }
+  },
+  "headroom_published": {
+    "code_search": 21,
+    "sre_incident": 57,
+    "codebase_exploration": 42,
+    "issue_triage": 30,
+    "total": 41
+  },
+  "samples": [
+    {
+      "name": "grep:grep -rn (60 hits)",
+      "kind": "grep",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 1172,
+      "sensei": {
+        "tokens": 1172,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.235
+      }
+    },
+    {
+      "name": "grep:grep -rn (250 hits)",
+      "kind": "grep",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 4894,
+      "sensei": {
+        "tokens": 4894,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.246
+      }
+    },
+    {
+      "name": "grep:rg -C2 --heading",
+      "kind": "grep",
+      "group": "agent",
+      "tool": "Grep",
+      "byte_exact": false,
+      "tokens": 1083,
+      "sensei": {
+        "tokens": 943,
+        "saved_pct": 12.93,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 1,
+        "missing": [
+          "src/acme/auth/models.py"
+        ],
+        "exact_ok": null,
+        "ms_p50": 18.613
+      }
+    },
+    {
+      "name": "git_log:git log -n 40",
+      "kind": "git_log",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 3272,
+      "sensei": {
+        "tokens": 2818,
+        "saved_pct": 13.88,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 1,
+        "missing": [
+          "test(auth): drop python 3.10 support"
+        ],
+        "exact_ok": null,
+        "ms_p50": 25.717
+      }
+    },
+    {
+      "name": "git_log:git log --stat -n 25",
+      "kind": "git_log",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 4001,
+      "sensei": {
+        "tokens": 3571,
+        "saved_pct": 10.75,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 1,
+        "missing": [
+          "perf(notify): remove the legacy v1 orders endpoint"
+        ],
+        "exact_ok": null,
+        "ms_p50": 274.49
+      }
+    },
+    {
+      "name": "git_diff:git diff (3 files)",
+      "kind": "git_diff",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 668,
+      "sensei": {
+        "tokens": 668,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.11
+      }
+    },
+    {
+      "name": "git_diff:git diff (with lockfile)",
+      "kind": "git_diff",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 14872,
+      "sensei": {
+        "tokens": 14872,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.111
+      }
+    },
+    {
+      "name": "git_status:git status",
+      "kind": "git_status",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 388,
+      "sensei": {
+        "tokens": 342,
+        "saved_pct": 11.86,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 1,
+        "missing": [
+          "tests/billing/test_routes.py"
+        ],
+        "exact_ok": null,
+        "ms_p50": 2.643
+      }
+    },
+    {
+      "name": "test_pytest:pytest -q (1 failure)",
+      "kind": "test_pytest",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 880,
+      "sensei": {
+        "tokens": 734,
+        "saved_pct": 16.59,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 20.685
+      }
+    },
+    {
+      "name": "test_pytest:pytest -v (1 failure)",
+      "kind": "test_pytest",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 9025,
+      "sensei": {
+        "tokens": 8474,
+        "saved_pct": 6.11,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 140.788
+      }
+    },
+    {
+      "name": "test_js:vitest run (1 failure)",
+      "kind": "test_js",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 1059,
+      "sensei": {
+        "tokens": 1064,
+        "saved_pct": -0.47,
+        "grew": true,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 10.13
+      }
+    },
+    {
+      "name": "build_cargo:cargo build (E0308)",
+      "kind": "build_cargo",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 1032,
+      "sensei": {
+        "tokens": 949,
+        "saved_pct": 8.04,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 2,
+        "missing": [
+          "error[E0308]"
+        ],
+        "exact_ok": null,
+        "ms_p50": 55.662
+      }
+    },
+    {
+      "name": "build_ci:GitHub Actions log",
+      "kind": "build_ci",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 2968,
+      "sensei": {
+        "tokens": 1664,
+        "saved_pct": 43.94,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 1.803
+      }
+    },
+    {
+      "name": "pkg_install:pip install",
+      "kind": "pkg_install",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 1779,
+      "sensei": {
+        "tokens": 1778,
+        "saved_pct": 0.06,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 9.871
+      }
+    },
+    {
+      "name": "pkg_install:npm install",
+      "kind": "pkg_install",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 521,
+      "sensei": {
+        "tokens": 329,
+        "saved_pct": 36.85,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 3.752
+      }
+    },
+    {
+      "name": "listing:ls -la",
+      "kind": "listing",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 636,
+      "sensei": {
+        "tokens": 570,
+        "saved_pct": 10.38,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 2.701
+      }
+    },
+    {
+      "name": "listing:find -name",
+      "kind": "listing",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 1289,
+      "sensei": {
+        "tokens": 1139,
+        "saved_pct": 11.64,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 7.78
+      }
+    },
+    {
+      "name": "listing:tree",
+      "kind": "listing",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 426,
+      "sensei": {
+        "tokens": 381,
+        "saved_pct": 10.56,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 4.354
+      }
+    },
+    {
+      "name": "kubectl:kubectl get pods -A",
+      "kind": "kubectl",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 1743,
+      "sensei": {
+        "tokens": 1437,
+        "saved_pct": 17.56,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 226.349
+      }
+    },
+    {
+      "name": "json_api:gh api pulls (30)",
+      "kind": "json_api",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 17534,
+      "sensei": {
+        "tokens": 12819,
+        "saved_pct": 26.89,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 1.092
+      }
+    },
+    {
+      "name": "mcp:postgres query (150 rows)",
+      "kind": "mcp",
+      "group": "agent",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 11033,
+      "sensei": {
+        "tokens": 11033,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.103
+      }
+    },
+    {
+      "name": "mcp:linear search (40 issues)",
+      "kind": "mcp",
+      "group": "agent",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 6985,
+      "sensei": {
+        "tokens": 6985,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.063
+      }
+    },
+    {
+      "name": "web_page:docs page",
+      "kind": "web_page",
+      "group": "agent",
+      "tool": "WebFetch",
+      "byte_exact": false,
+      "tokens": 699,
+      "sensei": {
+        "tokens": 694,
+        "saved_pct": 0.72,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 5.919
+      }
+    },
+    {
+      "name": "stack_trace:spring boot exception",
+      "kind": "stack_trace",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 1387,
+      "sensei": {
+        "tokens": 1287,
+        "saved_pct": 7.21,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 1.133
+      }
+    },
+    {
+      "name": "stack_trace:node trace in JSON log",
+      "kind": "stack_trace",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 4977,
+      "sensei": {
+        "tokens": 4977,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.212
+      }
+    },
+    {
+      "name": "prose:ADR markdown",
+      "kind": "prose",
+      "group": "agent",
+      "tool": "Read",
+      "byte_exact": false,
+      "tokens": 595,
+      "sensei": {
+        "tokens": 538,
+        "saved_pct": 9.58,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 4.957
+      }
+    },
+    {
+      "name": "file_read:Read src/acme/catalog/client.py",
+      "kind": "file_read",
+      "group": "agent",
+      "tool": "Read",
+      "byte_exact": true,
+      "tokens": 2126,
+      "sensei": {
+        "tokens": 2126,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": true,
+        "ms_p50": 0.267
+      }
+    },
+    {
+      "name": "file_read:Read src/acme/catalog/service.py",
+      "kind": "file_read",
+      "group": "agent",
+      "tool": "Read",
+      "byte_exact": true,
+      "tokens": 1132,
+      "sensei": {
+        "tokens": 1132,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": true,
+        "ms_p50": 0.257
+      }
+    },
+    {
+      "name": "file_read:Read src/acme/catalog/validators.py",
+      "kind": "file_read",
+      "group": "agent",
+      "tool": "Read",
+      "byte_exact": true,
+      "tokens": 2134,
+      "sensei": {
+        "tokens": 2134,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": true,
+        "ms_p50": 0.275
+      }
+    },
+    {
+      "name": "file_read:Read web/src/pages/SearchBar.tsx",
+      "kind": "file_read",
+      "group": "agent",
+      "tool": "Read",
+      "byte_exact": true,
+      "tokens": 890,
+      "sensei": {
+        "tokens": 890,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": true,
+        "ms_p50": 0.154
+      }
+    },
+    {
+      "name": "cat_source:cat src/acme/search/tasks.py",
+      "kind": "cat_source",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": true,
+      "tokens": 934,
+      "sensei": {
+        "tokens": 934,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": true,
+        "ms_p50": 0.199
+      }
+    },
+    {
+      "name": "cat_source:cat web/package.json",
+      "kind": "cat_source",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": true,
+      "tokens": 306,
+      "sensei": {
+        "tokens": 306,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": true,
+        "ms_p50": 0.017
+      }
+    },
+    {
+      "name": "code_search:github_search_code",
+      "kind": "json_api",
+      "group": "headroom:code_search",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 17682,
+      "sensei": {
+        "tokens": 17682,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.238
+      }
+    },
+    {
+      "name": "sre_incident:search_logs",
+      "kind": "json_api",
+      "group": "headroom:sre_incident",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 24297,
+      "sensei": {
+        "tokens": 24297,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.281
+      }
+    },
+    {
+      "name": "sre_incident:database_query",
+      "kind": "json_api",
+      "group": "headroom:sre_incident",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 17867,
+      "sensei": {
+        "tokens": 17867,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.231
+      }
+    },
+    {
+      "name": "sre_incident:search_files",
+      "kind": "json_api",
+      "group": "headroom:sre_incident",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 13507,
+      "sensei": {
+        "tokens": 13507,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.139
+      }
+    },
+    {
+      "name": "codebase_exploration:filesystem_tree",
+      "kind": "json_api",
+      "group": "headroom:codebase_exploration",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 12081,
+      "sensei": {
+        "tokens": 12081,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.104
+      }
+    },
+    {
+      "name": "codebase_exploration:search_files",
+      "kind": "json_api",
+      "group": "headroom:codebase_exploration",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 18009,
+      "sensei": {
+        "tokens": 18009,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.258
+      }
+    },
+    {
+      "name": "codebase_exploration:github_search_code",
+      "kind": "json_api",
+      "group": "headroom:codebase_exploration",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 17696,
+      "sensei": {
+        "tokens": 17696,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.248
+      }
+    },
+    {
+      "name": "issue_triage:github_list_issues",
+      "kind": "json_api",
+      "group": "headroom:issue_triage",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 13127,
+      "sensei": {
+        "tokens": 13127,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.142
+      }
+    },
+    {
+      "name": "issue_triage:github_search_code",
+      "kind": "json_api",
+      "group": "headroom:issue_triage",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 13633,
+      "sensei": {
+        "tokens": 13633,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.153
+      }
+    },
+    {
+      "name": "issue_triage:search_logs",
+      "kind": "json_api",
+      "group": "headroom:issue_triage",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 16147,
+      "sensei": {
+        "tokens": 16147,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.162
+      }
+    }
+  ],
+  "summary": {
+    "sensei": {
+      "agent": {
+        "samples": 32,
+        "before": 102440,
+        "after": 93654,
+        "saved_pct": 8.58,
+        "facts_total": 62,
+        "facts_kept": 57,
+        "exact_violations": 0,
+        "grew": 1,
+        "latency_ms": {
+          "p50": 1.803,
+          "p95": 226.349
+        }
+      },
+      "by_kind": {
+        "grep": {
+          "samples": 3,
+          "before": 7149,
+          "after": 7009,
+          "saved_pct": 1.96,
+          "facts_total": 6,
+          "facts_kept": 5,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.246,
+            "p95": 18.613
+          }
+        },
+        "git_log": {
+          "samples": 2,
+          "before": 7273,
+          "after": 6389,
+          "saved_pct": 12.15,
+          "facts_total": 4,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 274.49,
+            "p95": 274.49
+          }
+        },
+        "git_diff": {
+          "samples": 2,
+          "before": 15540,
+          "after": 15540,
+          "saved_pct": 0.0,
+          "facts_total": 4,
+          "facts_kept": 4,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.111,
+            "p95": 0.111
+          }
+        },
+        "git_status": {
+          "samples": 1,
+          "before": 388,
+          "after": 342,
+          "saved_pct": 11.86,
+          "facts_total": 2,
+          "facts_kept": 1,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 2.643,
+            "p95": 2.643
+          }
+        },
+        "test_pytest": {
+          "samples": 2,
+          "before": 9905,
+          "after": 9208,
+          "saved_pct": 7.04,
+          "facts_total": 6,
+          "facts_kept": 6,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 140.788,
+            "p95": 140.788
+          }
+        },
+        "test_js": {
+          "samples": 1,
+          "before": 1059,
+          "after": 1064,
+          "saved_pct": -0.47,
+          "facts_total": 2,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 1,
+          "latency_ms": {
+            "p50": 10.13,
+            "p95": 10.13
+          }
+        },
+        "build_cargo": {
+          "samples": 1,
+          "before": 1032,
+          "after": 949,
+          "saved_pct": 8.04,
+          "facts_total": 3,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 55.662,
+            "p95": 55.662
+          }
+        },
+        "build_ci": {
+          "samples": 1,
+          "before": 2968,
+          "after": 1664,
+          "saved_pct": 43.94,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 1.803,
+            "p95": 1.803
+          }
+        },
+        "pkg_install": {
+          "samples": 2,
+          "before": 2300,
+          "after": 2107,
+          "saved_pct": 8.39,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 9.871,
+            "p95": 9.871
+          }
+        },
+        "listing": {
+          "samples": 3,
+          "before": 2351,
+          "after": 2090,
+          "saved_pct": 11.1,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 4.354,
+            "p95": 7.78
+          }
+        },
+        "kubectl": {
+          "samples": 1,
+          "before": 1743,
+          "after": 1437,
+          "saved_pct": 17.56,
+          "facts_total": 2,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 226.349,
+            "p95": 226.349
+          }
+        },
+        "json_api": {
+          "samples": 1,
+          "before": 17534,
+          "after": 12819,
+          "saved_pct": 26.89,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 1.092,
+            "p95": 1.092
+          }
+        },
+        "mcp": {
+          "samples": 2,
+          "before": 18018,
+          "after": 18018,
+          "saved_pct": 0.0,
+          "facts_total": 5,
+          "facts_kept": 5,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.103,
+            "p95": 0.103
+          }
+        },
+        "file_read": {
+          "samples": 4,
+          "before": 6282,
+          "after": 6282,
+          "saved_pct": 0.0,
+          "facts_total": 4,
+          "facts_kept": 4,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.257,
+            "p95": 0.275
+          }
+        },
+        "cat_source": {
+          "samples": 2,
+          "before": 1240,
+          "after": 1240,
+          "saved_pct": 0.0,
+          "facts_total": 2,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.199,
+            "p95": 0.199
+          }
+        },
+        "web_page": {
+          "samples": 1,
+          "before": 699,
+          "after": 694,
+          "saved_pct": 0.72,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 5.919,
+            "p95": 5.919
+          }
+        },
+        "stack_trace": {
+          "samples": 2,
+          "before": 6364,
+          "after": 6264,
+          "saved_pct": 1.57,
+          "facts_total": 5,
+          "facts_kept": 5,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 1.133,
+            "p95": 1.133
+          }
+        },
+        "prose": {
+          "samples": 1,
+          "before": 595,
+          "after": 538,
+          "saved_pct": 9.58,
+          "facts_total": 2,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 4.957,
+            "p95": 4.957
+          }
+        }
+      },
+      "headroom_scenarios": {
+        "code_search": {
+          "samples": 1,
+          "before": 17682,
+          "after": 17682,
+          "saved_pct": 0.0,
+          "facts_total": 2,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.238,
+            "p95": 0.238
+          }
+        },
+        "sre_incident": {
+          "samples": 3,
+          "before": 55671,
+          "after": 55671,
+          "saved_pct": 0.0,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.231,
+            "p95": 0.281
+          }
+        },
+        "codebase_exploration": {
+          "samples": 3,
+          "before": 47786,
+          "after": 47786,
+          "saved_pct": 0.0,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.248,
+            "p95": 0.258
+          }
+        },
+        "issue_triage": {
+          "samples": 3,
+          "before": 42907,
+          "after": 42907,
+          "saved_pct": 0.0,
+          "facts_total": 4,
+          "facts_kept": 4,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.153,
+            "p95": 0.162
+          }
+        },
+        "total": {
+          "samples": 10,
+          "before": 164046,
+          "after": 164046,
+          "saved_pct": 0.0,
+          "facts_total": 12,
+          "facts_kept": 12,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.231,
+            "p95": 0.281
+          }
+        }
+      },
+      "all": {
+        "samples": 42,
+        "before": 266486,
+        "after": 257700,
+        "saved_pct": 3.3,
+        "facts_total": 74,
+        "facts_kept": 69,
+        "exact_violations": 0,
+        "grew": 1,
+        "latency_ms": {
+          "p50": 0.275,
+          "p95": 140.788
+        }
+      },
+      "cost": {
+        "claude-opus-5-5": {
+          "model": "claude-opus-5-5",
+          "pricing": {
+            "model": "claude-opus-5-5",
+            "input_per_mtok": 4.0,
+            "output_per_mtok": 20.0,
+            "cache_write": 1.25,
+            "cache_read": 0.05
+          },
+          "shape": {
+            "system_tokens": 20000,
+            "user_tokens": 200,
+            "output_tokens": 350
+          },
+          "cached": {
+            "before": {
+              "cache_write": 0.6692,
+              "cache_read": 0.506289,
+              "uncached": 0.0,
+              "output": 0.231,
+              "total": 1.406489
+            },
+            "after": {
+              "cache_write": 0.62527,
+              "cache_read": 0.478237,
+              "uncached": 0.0,
+              "output": 0.231,
+              "total": 1.334507
+            },
+            "saved_usd": 0.071982,
+            "saved_pct": 5.12,
+            "input_saved_pct": 6.12
+          },
+          "uncached": {
+            "before": {
+              "cache_write": 0.0,
+              "cache_read": 0.0,
+              "uncached": 10.661148,
+              "output": 0.231,
+              "total": 10.892148
+            },
+            "after": {
+              "cache_write": 0.0,
+              "cache_read": 0.0,
+              "uncached": 10.064964,
+              "output": 0.231,
+              "total": 10.295964
+            },
+            "saved_usd": 0.596184,
+            "saved_pct": 5.47,
+            "input_saved_pct": 5.59
+          }
+        },
+        "claude-sonnet-5-5": {
+          "model": "claude-sonnet-5-5",
+          "pricing": {
+            "model": "claude-sonnet-5-5",
+            "input_per_mtok": 2.0,
+            "output_per_mtok": 10.0,
+            "cache_write": 1.25,
+            "cache_read": 0.05
+          },
+          "shape": {
+            "system_tokens": 20000,
+            "user_tokens": 200,
+            "output_tokens": 350
+          },
+          "cached": {
+            "before": {
+              "cache_write": 0.3346,
+              "cache_read": 0.253145,
+              "uncached": 0.0,
+              "output": 0.1155,
+              "total": 0.703245
+            },
+            "after": {
+              "cache_write": 0.312635,
+              "cache_read": 0.239119,
+              "uncached": 0.0,
+              "output": 0.1155,
+              "total": 0.667254
+            },
+            "saved_usd": 0.035991,
+            "saved_pct": 5.12,
+            "input_saved_pct": 6.12
+          },
+          "uncached": {
+            "before": {
+              "cache_write": 0.0,
+              "cache_read": 0.0,
+              "uncached": 5.330574,
+              "output": 0.1155,
+              "total": 5.446074
+            },
+            "after": {
+              "cache_write": 0.0,
+              "cache_read": 0.0,
+              "uncached": 5.032482,
+              "output": 0.1155,
+              "total": 5.147982
+            },
+            "saved_usd": 0.298092,
+            "saved_pct": 5.47,
+            "input_saved_pct": 5.59
+          }
+        },
+        "gpt-6.1-sol": {
+          "model": "gpt-6.1-sol",
+          "pricing": {
+            "model": "gpt-6.1-sol",
+            "input_per_mtok": 2.0,
+            "output_per_mtok": 10.0,
+            "cache_write": 1.0,
+            "cache_read": 0.05
+          },
+          "shape": {
+            "system_tokens": 20000,
+            "user_tokens": 200,
+            "output_tokens": 350
+          },
+          "cached": {
+            "before": {
+              "cache_write": 0.26768,
+              "cache_read": 0.253145,
+              "uncached": 0.0,
+              "output": 0.1155,
+              "total": 0.636325
+            },
+            "after": {
+              "cache_write": 0.250108,
+              "cache_read": 0.239119,
+              "uncached": 0.0,
+              "output": 0.1155,
+              "total": 0.604727
+            },
+            "saved_usd": 0.031598,
+            "saved_pct": 4.97,
+            "input_saved_pct": 6.07
+          },
+          "uncached": {
+            "before": {
+              "cache_write": 0.0,
+              "cache_read": 0.0,
+              "uncached": 5.330574,
+              "output": 0.1155,
+              "total": 5.446074
+            },
+            "after": {
+              "cache_write": 0.0,
+              "cache_read": 0.0,
+              "uncached": 5.032482,
+              "output": 0.1155,
+              "total": 5.147982
+            },
+            "saved_usd": 0.298092,
+            "saved_pct": 5.47,
+            "input_saved_pct": 5.59
+          }
+        }
+      }
+    }
+  }
+}

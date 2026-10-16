@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="314" viewBox="0 0 1200 314" role="img" aria-labelledby="t d">
+<title id="t">Sensei and Headroom on Headroom's benchmark scenarios</title>
+<desc id="d">Code search (100 results): sensei 0.0%; SRE incident debugging: sensei 0.0%; Codebase exploration: sensei 0.0%; GitHub issue triage: sensei 0.0%; All four: sensei 0.0%. Dashed lines mark the figures Headroom publishes.</desc>
+<style>
+  .h { font: 600 20px Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif; fill: #161a25; }
+  .s { font: 400 14px Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif; fill: #5f6478; }
+  .lbl { font: 500 14px Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif; fill: #161a25; }
+  .pct { font: 700 12px 'JetBrains Mono', 'Cascadia Mono', ui-monospace, Menlo, Consolas, monospace; fill: #161a25; opacity: 0; animation: show .4s ease forwards; }
+  .bar { transform-box: fill-box; transform-origin: left; transform: scaleX(0); animation: grow 1.1s cubic-bezier(.4,0,.2,1) forwards; }
+  .big { font: 700 72px Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif; fill: #8a5a0c; letter-spacing: -2px; }
+  .mid { font: 700 26px Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif; fill: #161a25; }
+  @keyframes grow { to { transform: scaleX(1); } }
+  @keyframes show { to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) {
+    .bar { animation: none; transform: none; }
+    .pct { animation: none; opacity: 1; }
+  }</style>
+<rect width="1200" height="314" rx="20" fill="#f6f7f9"/>
+<rect x="0.5" y="0.5" width="1199" height="313" rx="19.5" fill="none" stroke="#e0e2ea"/>
+<text x="40" y="56" class="h">Head to head on Headroom's own scenarios</text>
+<text x="40" y="80" class="s">Rebuilt from Headroom's published proof table · both tools on identical input · dashed: the figure Headroom publishes</text>
+<rect x="40" y="102" width="12" height="12" rx="3" fill="#4d62e5"/><text x="60" y="112" class="s">Sensei 0.2.0</text>
+<text x="232" y="141" text-anchor="end" class="lbl">Code search (100 results)</text><rect x="250" y="132" width="600" height="10" rx="4" fill="#f1f3f7"/><text class="pct" style="animation-delay:0.60s" x="258.0" y="141">0.0%</text><text x="232" y="167" text-anchor="end" class="lbl">SRE incident debugging</text><rect x="250" y="158" width="600" height="10" rx="4" fill="#f1f3f7"/><text class="pct" style="animation-delay:0.65s" x="258.0" y="167">0.0%</text><text x="232" y="193" text-anchor="end" class="lbl">Codebase exploration</text><rect x="250" y="184" width="600" height="10" rx="4" fill="#f1f3f7"/><text class="pct" style="animation-delay:0.70s" x="258.0" y="193">0.0%</text><text x="232" y="219" text-anchor="end" class="lbl">GitHub issue triage</text><rect x="250" y="210" width="600" height="10" rx="4" fill="#f1f3f7"/><text class="pct" style="animation-delay:0.75s" x="258.0" y="219">0.0%</text><text x="232" y="245" text-anchor="end" class="lbl">All four</text><rect x="250" y="236" width="600" height="10" rx="4" fill="#f1f3f7"/><text class="pct" style="animation-delay:0.80s" x="258.0" y="245">0.0%</text>
+<line x1="376.0" y1="128" x2="376.0" y2="146" stroke="#5f6478" stroke-width="2" stroke-dasharray="3 3"/><line x1="592.0" y1="154" x2="592.0" y2="172" stroke="#5f6478" stroke-width="2" stroke-dasharray="3 3"/><line x1="502.0" y1="180" x2="502.0" y2="198" stroke="#5f6478" stroke-width="2" stroke-dasharray="3 3"/><line x1="430.0" y1="206" x2="430.0" y2="224" stroke="#5f6478" stroke-width="2" stroke-dasharray="3 3"/><line x1="496.0" y1="232" x2="496.0" y2="250" stroke="#5f6478" stroke-width="2" stroke-dasharray="3 3"/>
+<text x="40" y="292" class="s">Reproduce: cd backend &amp;&amp; python -m benchmarks.agent_bench --headroom · measured 2026-10-16</text>
+</svg>
