@@ -16,6 +16,7 @@ indication that 158 are missing.
 from __future__ import annotations
 
 import random
+import re
 
 import pytest
 
@@ -80,8 +81,7 @@ class TestWhenItIsAskedFor:
 
         out = ContentRouter(enable_caching=False).compress(doc).compressed
 
-        assert "sentences removed by Sensei" in out
-        assert "ccr_id" in out
+        assert re.search(r"\[sensei: \d+ sentences omitted\]", out)
         assert out.count(".") < doc.count(".")
 
     def test_the_original_is_still_retrievable(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -96,3 +96,5 @@ class TestWhenItIsAskedFor:
 
         assert result.ccr_id is not None
         assert result.original == doc
+        # The marker names the id the original is stored under.
+        assert f"; retrieve ccr={result.ccr_id}]" in result.compressed

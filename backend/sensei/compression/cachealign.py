@@ -65,9 +65,10 @@ class CacheAligner:
         cache_key = self._compute_key(messages)
 
         if cache_key in self._prefix_cache:
-            # Move to end (LRU)
+            # Move to end (LRU). A copy, so a caller that edits the list it got
+            # back cannot change what the next caller gets.
             self._prefix_cache.move_to_end(cache_key)
-            return self._prefix_cache[cache_key]
+            return [dict(m) for m in self._prefix_cache[cache_key]]
 
         aligned = self._align_messages(messages)
 
@@ -76,7 +77,7 @@ class CacheAligner:
         if len(self._prefix_cache) > _MAX_PREFIX_CACHE:
             self._prefix_cache.popitem(last=False)
 
-        return aligned
+        return [dict(m) for m in aligned]
 
     def _align_messages(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
         """Apply alignment transformations."""
@@ -120,10 +121,20 @@ class CacheAligner:
         return result
 
     def _compute_key(self, messages: list[dict[str, str]]) -> str:
-        """Compute a cache key from message structure."""
-        parts = []
+        """A cache key that identifies the messages, not just their shape.
+
+        This was ``role:len(content)`` per message, so two different
+        conversations whose messages happened to have the same lengths shared
+        a key — and the second one was answered with the first one's aligned
+        messages. The key now covers every field of every message.
+        """
+        h = hashlib.sha256()
         for msg in messages:
-            role = msg.get("role", "")
-            content_len = len(msg.get("content") or "")
-            parts.append(f"{role}:{content_len}")
-        return hashlib.md5("|".join(parts).encode(), usedforsecurity=False).hexdigest()
+            for k in sorted(msg):
+                v = msg[k]
+                h.update(k.encode("utf-8", "surrogatepass"))
+                h.update(b"\x1f")
+                h.update((v if isinstance(v, str) else repr(v)).encode("utf-8", "surrogatepass"))
+                h.update(b"\x1e")
+            h.update(b"\x1d")
+        return h.hexdigest()

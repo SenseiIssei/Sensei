@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from typing import ClassVar
 
+from sensei.compression.markers import Context
 from sensei.config import settings
 
 # Optional Rust accelerator (rust/sensei_core). Byte-compatible with the Python
@@ -117,13 +118,20 @@ class TextCompressor:
                 self.PHRASE_REPLACEMENTS.items(), key=lambda kv: len(kv[0]), reverse=True
             )
         ]
+        # `\s*,?\s*\bword\b` retried the whitespace run from every offset inside
+        # it, and `\s*` against `\s*` backtracked within each attempt: cubic on
+        # a line of aligned columns (`ss -ltnp`, a table) — 600 seconds for 2 KB
+        # in the pure-Python path. A leftmost match never starts inside a
+        # whitespace run (one character earlier would match too, and a previous
+        # match always ends on a non-space), so skipping those starts and making
+        # the quantifiers possessive changes the time, not the result.
         self._fillers = [
-            re.compile(rf"\s*,?\s*\b{re.escape(f)}\b\s*,?\s*", re.IGNORECASE)
+            re.compile(rf"(?:(?<!\s)|(?!\s))\s*+,?\s*+\b{re.escape(f)}\b\s*+,?\s*+", re.IGNORECASE)
             for f in sorted(self.FILLER, key=len, reverse=True)
         ]
         self._boilerplate = [re.compile(p, re.IGNORECASE) for p in self.BOILERPLATE]
 
-    def compress(self, text: str) -> str:
+    def compress(self, text: str, ctx: Context | None = None) -> str:
         """Compress prose text."""
         # Fast path: Rust accelerator (byte-identical output) when available.
         # Truncation is applied afterwards rather than inside it, so the setting
@@ -131,7 +139,7 @@ class TextCompressor:
         # the wheel is present, and a flag it cannot see would be a flag that
         # does nothing on every installed copy.
         if _core is not None:
-            return self._truncate_paragraphs(_core.compress_text(text))
+            return self._truncate_paragraphs(_core.compress_text(text), ctx)
 
         # 1. Strip boilerplate references.
         for pat in self._boilerplate:
@@ -164,7 +172,7 @@ class TextCompressor:
         # made a trailing space into an empty final "sentence", so the two paths
         # disagreed on the count by one and on whether a last sentence survived.
         # The parity test parametrised over the setting caught both.
-        return self._truncate_paragraphs(text.strip())
+        return self._truncate_paragraphs(text.strip(), ctx)
 
     def _cleanup(self, text: str) -> str:
         # Written for linear time: this runs on untrusted text (crawled pages,
@@ -191,7 +199,7 @@ class TextCompressor:
             deduped.append(line)
         return "\n".join(deduped)
 
-    def _truncate_paragraphs(self, text: str) -> str:
+    def _truncate_paragraphs(self, text: str, ctx: Context | None = None) -> str:
         """Drop the middle of over-long lines. Off unless asked for.
 
         This is not compression, it is deletion, and it is the only thing in
@@ -224,17 +232,22 @@ class TextCompressor:
             sentences = re.split(r"(?<=[.!?])\s+", line)
             if len(sentences) > 3:
                 dropped = len(sentences) - 2
-                result.append(
-                    f"{sentences[0]} [... {dropped} sentences removed by Sensei; "
-                    f"the full text is retrievable by ccr_id ...] {sentences[-1]}"
-                )
-            else:
-                cut = len(line) - self.MAX_PARAGRAPH
-                result.append(
-                    f"{line[: self.MAX_PARAGRAPH]}"
-                    f"[... {cut} characters removed by Sensei; "
+                gap = (
+                    ctx.mark(f"{dropped} sentences omitted", dropped)
+                    if ctx is not None
+                    else f"[... {dropped} sentences removed by Sensei; "
                     f"the full text is retrievable by ccr_id ...]"
                 )
+                result.append(f"{sentences[0]} {gap} {sentences[-1]}")
+            else:
+                cut = len(line) - self.MAX_PARAGRAPH
+                gap = (
+                    ctx.mark(f"{cut} characters omitted", 1)
+                    if ctx is not None
+                    else f"[... {cut} characters removed by Sensei; "
+                    f"the full text is retrievable by ccr_id ...]"
+                )
+                result.append(f"{line[: self.MAX_PARAGRAPH]}{gap}")
         return "\n".join(result)
 
     def _fix_caps(self, text: str) -> str:

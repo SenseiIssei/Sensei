@@ -37,9 +37,16 @@ class CCRStore:
         compressed: str,
         content_type: str = "text",
         metadata: dict[str, Any] | None = None,
+        ccr_id: str | None = None,
     ) -> str:
-        """Store an original and return a CCR ID for retrieval."""
-        ccr_id = str(uuid.uuid4())
+        """Store an original and return a CCR ID for retrieval.
+
+        ``ccr_id`` is the id a marker in ``compressed`` already points at (the
+        router derives it from the original's hash, so the same input always
+        compresses to the same bytes). Storing the same original again under
+        the same id just refreshes the entry.
+        """
+        ccr_id = ccr_id or str(uuid.uuid4())
         entry = {
             "id": ccr_id,
             "original": original,

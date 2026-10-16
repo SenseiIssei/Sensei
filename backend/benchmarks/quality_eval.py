@@ -45,6 +45,7 @@ import re
 import sys
 from dataclasses import dataclass, field
 
+from benchmarks import agent_cases
 from sensei.compression.router import ContentRouter, ContentType
 
 # ─── Corpus ──────────────────────────────────────────────────────────────────
@@ -64,6 +65,10 @@ class Case:
     question: str = ""
     answer: str = ""
     force_type: ContentType | None = None
+    # Compress as a tool result (the gateway's path for agent traffic) and
+    # with what the model is looking for, when the case has one.
+    edit_target: bool = False
+    query: str = ""
 
 
 def _api_response() -> str:
@@ -214,6 +219,12 @@ CORPUS: tuple[Case, ...] = (
 )
 
 
+# Coding-agent tool output: grep, git, test runners, diffs, listings, API
+# arrays, fetched pages. Kept in their own module so the payload builders do
+# not crowd this file.
+CORPUS = CORPUS + agent_cases.build(Case)
+
+
 # ─── Fact retention ──────────────────────────────────────────────────────────
 
 
@@ -247,7 +258,12 @@ def evaluate(router: ContentRouter | None = None) -> dict:
     results: list[CaseResult] = []
 
     for case in CORPUS:
-        compressed = router.compress(case.content, force_type=case.force_type)
+        compressed = router.compress(
+            case.content,
+            force_type=case.force_type,
+            edit_target=case.edit_target,
+            query=case.query,
+        )
         haystack = _normalise(compressed.compressed)
         missing = [f for f in case.facts if _normalise(f) not in haystack]
         results.append(
@@ -392,18 +408,18 @@ def main() -> int:
     data = evaluate()
 
     print("Fact retention after compression\n")
-    print(f"{'case':<24}{'type':>7}{'kept':>10}{'retained':>10}{'smaller':>10}")
-    print("-" * 61)
+    print(f"{'case':<28}{'type':>8}{'kept':>10}{'retained':>10}{'smaller':>10}")
+    print("-" * 66)
     for case in data["cases"]:
         print(
-            f"{case['name']:<24}{case['type']:>7}"
+            f"{case['name']:<28}{case['type']:>8}"
             f"{case['facts_kept']}/{case['facts_total']:<8}"
             f"{case['retention_pct']:>9.0f}%{case['size_reduction_pct']:>9.0f}%"
         )
     agg = data["aggregate"]
-    print("-" * 61)
+    print("-" * 66)
     print(
-        f"{'AGGREGATE':<24}{'':>7}{agg['facts_kept']}/{agg['facts_total']:<8}"
+        f"{'AGGREGATE':<28}{'':>8}{agg['facts_kept']}/{agg['facts_total']:<8}"
         f"{agg['retention_pct']:>9.0f}%{agg['size_reduction_pct']:>9.0f}%"
     )
 
