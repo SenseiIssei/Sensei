@@ -352,6 +352,23 @@ class TestSmartCrusher:
         SmartCrusher().compress(json.dumps(rows), c)
         assert not c.lossy
 
+    def test_issue_list_with_unsorted_dates_is_records_not_a_stream(self):
+        """Issues share titles, states and assignees from small pools, which
+        makes them look repetitive — but each is a thing asked about by id."""
+        titles = ["Fix race in token refresh", "Paginate the invoice list", "Drop py3.10"]
+        rows = [
+            {
+                "identifier": f"SHOP-{1200 + i}",
+                "title": titles[i % 3],
+                "state": {"name": "Todo"},
+                "createdAt": f"2026-{1 + (i * 7) % 12:02d}-{1 + (i * 5) % 28:02d}T10:00:00Z",
+            }
+            for i in range(60)
+        ]
+        c = ctx()
+        out = SmartCrusher().compress(json.dumps({"issues": {"nodes": rows}}), c)
+        assert not c.lossy and "SHOP-1231" in out
+
     def test_number_and_string_arrays(self):
         c = ctx()
         out = json.loads(SmartCrusher().compress(json.dumps([*range(400), 99999]), c))
