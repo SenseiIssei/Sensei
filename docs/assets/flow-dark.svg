@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="t d">
 <title id="t">How Sensei sits between your tool and the model</title>
-<desc id="d">Your AI tool sends about 50,000 tokens to Sensei on your machine; Sensei sends about 10,000 to the model; the answer comes back unchanged.</desc>
+<desc id="d">On the benchmark corpus your AI tool sends 102,440 tokens of tool output to Sensei on your machine; Sensei sends 63,645 to the model; the answer comes back unchanged.</desc>
 <style>
   .card { fill: #1a1d21; stroke: #2b2d30; }
   .mid { fill: #0d0f10; stroke: #a6b0f2; stroke-width: 1.5; }
@@ -27,7 +27,7 @@
 <text x="64" y="112" class="h">Your AI tool</text>
 <text x="64" y="138" class="s">Claude Code · Codex · Cursor</text>
 <text x="64" y="160" class="s">Aider · Cline · Zed · …</text>
-<text x="64" y="192" class="n" fill="#686b6e">50,000 tokens</text>
+<text x="64" y="192" class="n" fill="#686b6e">102,440 tokens</text>
 
 <rect class="mid" x="475" y="50" width="250" height="180" rx="16"/>
 <g transform="translate(503 82) scale(0.36)">
@@ -44,7 +44,7 @@
 <text x="934" y="112" class="h">The model</text>
 <text x="934" y="138" class="s">Anthropic · OpenAI · Gemini</text>
 <text x="934" y="160" class="s">or local: Ollama, llama.cpp</text>
-<text x="934" y="192" class="n" fill="#ffd47d">10,000 tokens</text>
+<text x="934" y="192" class="n" fill="#ffd47d">63,645 tokens</text>
 
 <defs>
   <clipPath id="laneL"><rect x="0" y="-4" width="185" height="96"/></clipPath>

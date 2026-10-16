@@ -1,0 +1,2252 @@
+{
+  "schema": 1,
+  "generated": "2026-10-16",
+  "tokenizer": "tiktoken/cl100k_base",
+  "corpus": {
+    "seed": 20261016,
+    "digest": "70503a47eb5b07762461c9f700a7a7066333781c4b053e1f69f17ee788aab440",
+    "samples": 42
+  },
+  "repeats": 5,
+  "python": "3.12",
+  "tools": {
+    "sensei": {
+      "version": "0.2.0+2acf192",
+      "mode": "ContentRouter.compress(edit_target=True), as the gateway applies it to tool results",
+      "settings": {
+        "code_compression": "safe",
+        "strip_invisible": true
+      }
+    },
+    "headroom": {
+      "version": "0.41.0",
+      "mode": "headroom.compress() on an OpenAI-format tool message, CompressConfig(protect_recent=0)",
+      "model": "claude-sonnet-4-5-20250929"
+    }
+  },
+  "headroom_published": {
+    "code_search": 21,
+    "sre_incident": 57,
+    "codebase_exploration": 42,
+    "issue_triage": 30,
+    "total": 41
+  },
+  "samples": [
+    {
+      "name": "grep:grep -rn (60 hits)",
+      "kind": "grep",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 1172,
+      "sensei": {
+        "tokens": 842,
+        "saved_pct": 28.16,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.521
+      },
+      "headroom": {
+        "tokens": 842,
+        "saved_pct": 28.16,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.795
+      }
+    },
+    {
+      "name": "grep:grep -rn (250 hits)",
+      "kind": "grep",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 4894,
+      "sensei": {
+        "tokens": 450,
+        "saved_pct": 90.81,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 2.034
+      },
+      "headroom": {
+        "tokens": 2957,
+        "saved_pct": 39.58,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 1.541
+      }
+    },
+    {
+      "name": "grep:rg -C2 --heading",
+      "kind": "grep",
+      "group": "agent",
+      "tool": "Grep",
+      "byte_exact": false,
+      "tokens": 1083,
+      "sensei": {
+        "tokens": 1083,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.548
+      },
+      "headroom": {
+        "tokens": 1083,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 2.822
+      }
+    },
+    {
+      "name": "git_log:git log -n 40",
+      "kind": "git_log",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 3272,
+      "sensei": {
+        "tokens": 3038,
+        "saved_pct": 7.15,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 3.187
+      },
+      "headroom": {
+        "tokens": 3272,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 2.884
+      }
+    },
+    {
+      "name": "git_log:git log --stat -n 25",
+      "kind": "git_log",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 4001,
+      "sensei": {
+        "tokens": 3855,
+        "saved_pct": 3.65,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 6.938
+      },
+      "headroom": {
+        "tokens": 4001,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 6.43
+      }
+    },
+    {
+      "name": "git_diff:git diff (3 files)",
+      "kind": "git_diff",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 668,
+      "sensei": {
+        "tokens": 668,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.044
+      },
+      "headroom": {
+        "tokens": 668,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.409
+      }
+    },
+    {
+      "name": "git_diff:git diff (with lockfile)",
+      "kind": "git_diff",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 14872,
+      "sensei": {
+        "tokens": 563,
+        "saved_pct": 96.21,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.57
+      },
+      "headroom": {
+        "tokens": 14816,
+        "saved_pct": 0.38,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.863
+      }
+    },
+    {
+      "name": "git_status:git status",
+      "kind": "git_status",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 388,
+      "sensei": {
+        "tokens": 306,
+        "saved_pct": 21.13,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.108
+      },
+      "headroom": {
+        "tokens": 388,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.725
+      }
+    },
+    {
+      "name": "test_pytest:pytest -q (1 failure)",
+      "kind": "test_pytest",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 880,
+      "sensei": {
+        "tokens": 828,
+        "saved_pct": 5.91,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 2.617
+      },
+      "headroom": {
+        "tokens": 880,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.369
+      }
+    },
+    {
+      "name": "test_pytest:pytest -v (1 failure)",
+      "kind": "test_pytest",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 9025,
+      "sensei": {
+        "tokens": 973,
+        "saved_pct": 89.22,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 4.84
+      },
+      "headroom": {
+        "tokens": 9025,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 5.047
+      }
+    },
+    {
+      "name": "test_js:vitest run (1 failure)",
+      "kind": "test_js",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 1059,
+      "sensei": {
+        "tokens": 567,
+        "saved_pct": 46.46,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 5.947
+      },
+      "headroom": {
+        "tokens": 1059,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.407
+      }
+    },
+    {
+      "name": "build_cargo:cargo build (E0308)",
+      "kind": "build_cargo",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 1032,
+      "sensei": {
+        "tokens": 324,
+        "saved_pct": 68.6,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 1.255
+      },
+      "headroom": {
+        "tokens": 1032,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.377
+      }
+    },
+    {
+      "name": "build_ci:GitHub Actions log",
+      "kind": "build_ci",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 2968,
+      "sensei": {
+        "tokens": 1261,
+        "saved_pct": 57.51,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 4.811
+      },
+      "headroom": {
+        "tokens": 274,
+        "saved_pct": 90.77,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 2.84
+      }
+    },
+    {
+      "name": "pkg_install:pip install",
+      "kind": "pkg_install",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 1779,
+      "sensei": {
+        "tokens": 1779,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 1.053
+      },
+      "headroom": {
+        "tokens": 1779,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 2.526
+      }
+    },
+    {
+      "name": "pkg_install:npm install",
+      "kind": "pkg_install",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 521,
+      "sensei": {
+        "tokens": 521,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.793
+      },
+      "headroom": {
+        "tokens": 480,
+        "saved_pct": 7.87,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 1.054
+      }
+    },
+    {
+      "name": "listing:ls -la",
+      "kind": "listing",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 636,
+      "sensei": {
+        "tokens": 533,
+        "saved_pct": 16.19,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.293
+      },
+      "headroom": {
+        "tokens": 636,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 1.203
+      }
+    },
+    {
+      "name": "listing:find -name",
+      "kind": "listing",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 1289,
+      "sensei": {
+        "tokens": 1289,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.92
+      },
+      "headroom": {
+        "tokens": 1289,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 5.444
+      }
+    },
+    {
+      "name": "listing:tree",
+      "kind": "listing",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 426,
+      "sensei": {
+        "tokens": 426,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 1.698
+      },
+      "headroom": {
+        "tokens": 426,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 3.133
+      }
+    },
+    {
+      "name": "kubectl:kubectl get pods -A",
+      "kind": "kubectl",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 1743,
+      "sensei": {
+        "tokens": 1743,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 1.205
+      },
+      "headroom": {
+        "tokens": 1555,
+        "saved_pct": 10.79,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 3.306
+      }
+    },
+    {
+      "name": "json_api:gh api pulls (30)",
+      "kind": "json_api",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 17534,
+      "sensei": {
+        "tokens": 17534,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.161
+      },
+      "headroom": {
+        "tokens": 12707,
+        "saved_pct": 27.53,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 4.514
+      }
+    },
+    {
+      "name": "mcp:postgres query (150 rows)",
+      "kind": "mcp",
+      "group": "agent",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 11033,
+      "sensei": {
+        "tokens": 5501,
+        "saved_pct": 50.14,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 6.258
+      },
+      "headroom": {
+        "tokens": 5501,
+        "saved_pct": 50.14,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 1.846
+      }
+    },
+    {
+      "name": "mcp:linear search (40 issues)",
+      "kind": "mcp",
+      "group": "agent",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 6985,
+      "sensei": {
+        "tokens": 4483,
+        "saved_pct": 35.82,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 2.487
+      },
+      "headroom": {
+        "tokens": 4073,
+        "saved_pct": 41.69,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 1.432
+      }
+    },
+    {
+      "name": "web_page:docs page",
+      "kind": "web_page",
+      "group": "agent",
+      "tool": "WebFetch",
+      "byte_exact": false,
+      "tokens": 699,
+      "sensei": {
+        "tokens": 699,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 2.058
+      },
+      "headroom": {
+        "tokens": 699,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.346
+      }
+    },
+    {
+      "name": "stack_trace:spring boot exception",
+      "kind": "stack_trace",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 1387,
+      "sensei": {
+        "tokens": 1285,
+        "saved_pct": 7.35,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 10.02
+      },
+      "headroom": {
+        "tokens": 1387,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 3,
+        "facts_kept": 3,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.748
+      }
+    },
+    {
+      "name": "stack_trace:node trace in JSON log",
+      "kind": "stack_trace",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": false,
+      "tokens": 4977,
+      "sensei": {
+        "tokens": 4977,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 1.239
+      },
+      "headroom": {
+        "tokens": 4977,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 1.567
+      }
+    },
+    {
+      "name": "prose:ADR markdown",
+      "kind": "prose",
+      "group": "agent",
+      "tool": "Read",
+      "byte_exact": false,
+      "tokens": 595,
+      "sensei": {
+        "tokens": 595,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 0.67
+      },
+      "headroom": {
+        "tokens": 595,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 1.471
+      }
+    },
+    {
+      "name": "file_read:Read src/acme/catalog/client.py",
+      "kind": "file_read",
+      "group": "agent",
+      "tool": "Read",
+      "byte_exact": true,
+      "tokens": 2126,
+      "sensei": {
+        "tokens": 2126,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": true,
+        "ms_p50": 1.319
+      },
+      "headroom": {
+        "tokens": 2126,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": true,
+        "ms_p50": 0.513
+      }
+    },
+    {
+      "name": "file_read:Read src/acme/catalog/service.py",
+      "kind": "file_read",
+      "group": "agent",
+      "tool": "Read",
+      "byte_exact": true,
+      "tokens": 1132,
+      "sensei": {
+        "tokens": 1132,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": true,
+        "ms_p50": 0.922
+      },
+      "headroom": {
+        "tokens": 1132,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": true,
+        "ms_p50": 3.553
+      }
+    },
+    {
+      "name": "file_read:Read src/acme/catalog/validators.py",
+      "kind": "file_read",
+      "group": "agent",
+      "tool": "Read",
+      "byte_exact": true,
+      "tokens": 2134,
+      "sensei": {
+        "tokens": 2134,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": true,
+        "ms_p50": 1.222
+      },
+      "headroom": {
+        "tokens": 2134,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": true,
+        "ms_p50": 3.896
+      }
+    },
+    {
+      "name": "file_read:Read web/src/pages/SearchBar.tsx",
+      "kind": "file_read",
+      "group": "agent",
+      "tool": "Read",
+      "byte_exact": true,
+      "tokens": 890,
+      "sensei": {
+        "tokens": 890,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": true,
+        "ms_p50": 0.657
+      },
+      "headroom": {
+        "tokens": 890,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": true,
+        "ms_p50": 2.34
+      }
+    },
+    {
+      "name": "cat_source:cat src/acme/search/tasks.py",
+      "kind": "cat_source",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": true,
+      "tokens": 934,
+      "sensei": {
+        "tokens": 934,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": true,
+        "ms_p50": 1.079
+      },
+      "headroom": {
+        "tokens": 934,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": true,
+        "ms_p50": 0.338
+      }
+    },
+    {
+      "name": "cat_source:cat web/package.json",
+      "kind": "cat_source",
+      "group": "agent",
+      "tool": "Bash",
+      "byte_exact": true,
+      "tokens": 306,
+      "sensei": {
+        "tokens": 306,
+        "saved_pct": 0.0,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": true,
+        "ms_p50": 0.009
+      },
+      "headroom": {
+        "tokens": 234,
+        "saved_pct": 23.53,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": false,
+        "ms_p50": 0.314
+      }
+    },
+    {
+      "name": "code_search:github_search_code",
+      "kind": "json_api",
+      "group": "headroom:code_search",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 17682,
+      "sensei": {
+        "tokens": 13780,
+        "saved_pct": 22.07,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 4.941
+      },
+      "headroom": {
+        "tokens": 14161,
+        "saved_pct": 19.91,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 4.392
+      }
+    },
+    {
+      "name": "sre_incident:search_logs",
+      "kind": "json_api",
+      "group": "headroom:sre_incident",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 24297,
+      "sensei": {
+        "tokens": 3899,
+        "saved_pct": 83.95,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 25.444
+      },
+      "headroom": {
+        "tokens": 14294,
+        "saved_pct": 41.17,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 4.953
+      }
+    },
+    {
+      "name": "sre_incident:database_query",
+      "kind": "json_api",
+      "group": "headroom:sre_incident",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 17867,
+      "sensei": {
+        "tokens": 8852,
+        "saved_pct": 50.46,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 7.556
+      },
+      "headroom": {
+        "tokens": 8654,
+        "saved_pct": 51.56,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 3.709
+      }
+    },
+    {
+      "name": "sre_incident:search_files",
+      "kind": "json_api",
+      "group": "headroom:sre_incident",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 13507,
+      "sensei": {
+        "tokens": 8727,
+        "saved_pct": 35.39,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 8.362
+      },
+      "headroom": {
+        "tokens": 1103,
+        "saved_pct": 91.83,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 0,
+        "missing": [
+          "src/services/payment_processor.py"
+        ],
+        "exact_ok": null,
+        "ms_p50": 3.141
+      }
+    },
+    {
+      "name": "codebase_exploration:filesystem_tree",
+      "kind": "json_api",
+      "group": "headroom:codebase_exploration",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 12081,
+      "sensei": {
+        "tokens": 9601,
+        "saved_pct": 20.53,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 1.201
+      },
+      "headroom": {
+        "tokens": 9561,
+        "saved_pct": 20.86,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 2.501
+      }
+    },
+    {
+      "name": "codebase_exploration:search_files",
+      "kind": "json_api",
+      "group": "headroom:codebase_exploration",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 18009,
+      "sensei": {
+        "tokens": 11629,
+        "saved_pct": 35.43,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 5.155
+      },
+      "headroom": {
+        "tokens": 1103,
+        "saved_pct": 93.88,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 0,
+        "missing": [
+          "src/middleware/auth_middleware.py"
+        ],
+        "exact_ok": null,
+        "ms_p50": 5.306
+      }
+    },
+    {
+      "name": "codebase_exploration:github_search_code",
+      "kind": "json_api",
+      "group": "headroom:codebase_exploration",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 17696,
+      "sensei": {
+        "tokens": 13796,
+        "saved_pct": 22.04,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 5.367
+      },
+      "headroom": {
+        "tokens": 14172,
+        "saved_pct": 19.91,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 4.345
+      }
+    },
+    {
+      "name": "issue_triage:github_list_issues",
+      "kind": "json_api",
+      "group": "headroom:issue_triage",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 13127,
+      "sensei": {
+        "tokens": 5604,
+        "saved_pct": 57.31,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 3.55
+      },
+      "headroom": {
+        "tokens": 9586,
+        "saved_pct": 26.97,
+        "grew": false,
+        "facts_total": 2,
+        "facts_kept": 2,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 2.912
+      }
+    },
+    {
+      "name": "issue_triage:github_search_code",
+      "kind": "json_api",
+      "group": "headroom:issue_triage",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 13633,
+      "sensei": {
+        "tokens": 10507,
+        "saved_pct": 22.93,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 3.821
+      },
+      "headroom": {
+        "tokens": 10817,
+        "saved_pct": 20.66,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 3.733
+      }
+    },
+    {
+      "name": "issue_triage:search_logs",
+      "kind": "json_api",
+      "group": "headroom:issue_triage",
+      "tool": "mcp",
+      "byte_exact": false,
+      "tokens": 16147,
+      "sensei": {
+        "tokens": 3355,
+        "saved_pct": 79.22,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 21.519
+      },
+      "headroom": {
+        "tokens": 9484,
+        "saved_pct": 41.26,
+        "grew": false,
+        "facts_total": 1,
+        "facts_kept": 1,
+        "missing": [],
+        "exact_ok": null,
+        "ms_p50": 3.024
+      }
+    }
+  ],
+  "summary": {
+    "sensei": {
+      "agent": {
+        "samples": 32,
+        "before": 102440,
+        "after": 63645,
+        "saved_pct": 37.87,
+        "facts_total": 62,
+        "facts_kept": 62,
+        "exact_violations": 0,
+        "grew": 0,
+        "latency_ms": {
+          "p50": 1.215,
+          "p95": 7.312
+        }
+      },
+      "by_kind": {
+        "grep": {
+          "samples": 3,
+          "before": 7149,
+          "after": 2375,
+          "saved_pct": 66.78,
+          "facts_total": 6,
+          "facts_kept": 6,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.591,
+            "p95": 3.591
+          }
+        },
+        "git_log": {
+          "samples": 2,
+          "before": 7273,
+          "after": 6893,
+          "saved_pct": 5.22,
+          "facts_total": 4,
+          "facts_kept": 4,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 4.51,
+            "p95": 7.718
+          }
+        },
+        "git_diff": {
+          "samples": 2,
+          "before": 15540,
+          "after": 1231,
+          "saved_pct": 92.08,
+          "facts_total": 4,
+          "facts_kept": 4,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.089,
+            "p95": 0.635
+          }
+        },
+        "git_status": {
+          "samples": 1,
+          "before": 388,
+          "after": 306,
+          "saved_pct": 21.13,
+          "facts_total": 2,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.108,
+            "p95": 0.131
+          }
+        },
+        "test_pytest": {
+          "samples": 2,
+          "before": 9905,
+          "after": 1801,
+          "saved_pct": 81.82,
+          "facts_total": 6,
+          "facts_kept": 6,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 3.568,
+            "p95": 6.079
+          }
+        },
+        "test_js": {
+          "samples": 1,
+          "before": 1059,
+          "after": 567,
+          "saved_pct": 46.46,
+          "facts_total": 2,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 5.947,
+            "p95": 12.44
+          }
+        },
+        "build_cargo": {
+          "samples": 1,
+          "before": 1032,
+          "after": 324,
+          "saved_pct": 68.6,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 1.255,
+            "p95": 1.918
+          }
+        },
+        "build_ci": {
+          "samples": 1,
+          "before": 2968,
+          "after": 1261,
+          "saved_pct": 57.51,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 4.811,
+            "p95": 5.444
+          }
+        },
+        "pkg_install": {
+          "samples": 2,
+          "before": 2300,
+          "after": 2300,
+          "saved_pct": 0.0,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 1.026,
+            "p95": 1.162
+          }
+        },
+        "listing": {
+          "samples": 3,
+          "before": 2351,
+          "after": 2248,
+          "saved_pct": 4.38,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.92,
+            "p95": 1.873
+          }
+        },
+        "kubectl": {
+          "samples": 1,
+          "before": 1743,
+          "after": 1743,
+          "saved_pct": 0.0,
+          "facts_total": 2,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 1.205,
+            "p95": 1.277
+          }
+        },
+        "json_api": {
+          "samples": 1,
+          "before": 17534,
+          "after": 17534,
+          "saved_pct": 0.0,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.161,
+            "p95": 0.23
+          }
+        },
+        "mcp": {
+          "samples": 2,
+          "before": 18018,
+          "after": 9984,
+          "saved_pct": 44.59,
+          "facts_total": 5,
+          "facts_kept": 5,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 3.878,
+            "p95": 7.967
+          }
+        },
+        "file_read": {
+          "samples": 4,
+          "before": 6282,
+          "after": 6282,
+          "saved_pct": 0.0,
+          "facts_total": 4,
+          "facts_kept": 4,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 1.037,
+            "p95": 1.415
+          }
+        },
+        "cat_source": {
+          "samples": 2,
+          "before": 1240,
+          "after": 1240,
+          "saved_pct": 0.0,
+          "facts_total": 2,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.07,
+            "p95": 43.98
+          }
+        },
+        "web_page": {
+          "samples": 1,
+          "before": 699,
+          "after": 699,
+          "saved_pct": 0.0,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 2.058,
+            "p95": 2.277
+          }
+        },
+        "stack_trace": {
+          "samples": 2,
+          "before": 6364,
+          "after": 6262,
+          "saved_pct": 1.6,
+          "facts_total": 5,
+          "facts_kept": 5,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 1.869,
+            "p95": 17.538
+          }
+        },
+        "prose": {
+          "samples": 1,
+          "before": 595,
+          "after": 595,
+          "saved_pct": 0.0,
+          "facts_total": 2,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.67,
+            "p95": 2.404
+          }
+        }
+      },
+      "headroom_scenarios": {
+        "code_search": {
+          "samples": 1,
+          "before": 17682,
+          "after": 13780,
+          "saved_pct": 22.07,
+          "facts_total": 2,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 4.941,
+            "p95": 7.805
+          }
+        },
+        "sre_incident": {
+          "samples": 3,
+          "before": 55671,
+          "after": 21478,
+          "saved_pct": 61.42,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 11.108,
+            "p95": 64.81
+          }
+        },
+        "codebase_exploration": {
+          "samples": 3,
+          "before": 47786,
+          "after": 35026,
+          "saved_pct": 26.7,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 5.155,
+            "p95": 11.58
+          }
+        },
+        "issue_triage": {
+          "samples": 3,
+          "before": 42907,
+          "after": 19466,
+          "saved_pct": 54.63,
+          "facts_total": 4,
+          "facts_kept": 4,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 4.051,
+            "p95": 22.021
+          }
+        },
+        "total": {
+          "samples": 10,
+          "before": 164046,
+          "after": 89750,
+          "saved_pct": 45.29,
+          "facts_total": 12,
+          "facts_kept": 12,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 5.622,
+            "p95": 26.185
+          }
+        }
+      },
+      "all": {
+        "samples": 42,
+        "before": 266486,
+        "after": 153395,
+        "saved_pct": 42.44,
+        "facts_total": 74,
+        "facts_kept": 74,
+        "exact_violations": 0,
+        "grew": 0,
+        "latency_ms": {
+          "p50": 1.869,
+          "p95": 21.137
+        }
+      },
+      "cost": {
+        "claude-opus-5-5": {
+          "model": "claude-opus-5-5",
+          "pricing": {
+            "model": "claude-opus-5-5",
+            "input_per_mtok": 4.0,
+            "output_per_mtok": 20.0,
+            "cache_write": 1.25,
+            "cache_read": 0.05
+          },
+          "shape": {
+            "system_tokens": 20000,
+            "user_tokens": 200,
+            "output_tokens": 350
+          },
+          "cached": {
+            "before": {
+              "cache_write": 0.6692,
+              "cache_read": 0.506289,
+              "uncached": 0.0,
+              "output": 0.231,
+              "total": 1.406489
+            },
+            "after": {
+              "cache_write": 0.475225,
+              "cache_read": 0.338822,
+              "uncached": 0.0,
+              "output": 0.231,
+              "total": 1.045047
+            },
+            "saved_usd": 0.361443,
+            "saved_pct": 25.7,
+            "input_saved_pct": 30.75
+          },
+          "uncached": {
+            "before": {
+              "cache_write": 0.0,
+              "cache_read": 0.0,
+              "uncached": 10.661148,
+              "output": 0.231,
+              "total": 10.892148
+            },
+            "after": {
+              "cache_write": 0.0,
+              "cache_read": 0.0,
+              "uncached": 7.156616,
+              "output": 0.231,
+              "total": 7.387616
+            },
+            "saved_usd": 3.504532,
+            "saved_pct": 32.17,
+            "input_saved_pct": 32.87
+          }
+        },
+        "claude-sonnet-5-5": {
+          "model": "claude-sonnet-5-5",
+          "pricing": {
+            "model": "claude-sonnet-5-5",
+            "input_per_mtok": 2.0,
+            "output_per_mtok": 10.0,
+            "cache_write": 1.25,
+            "cache_read": 0.05
+          },
+          "shape": {
+            "system_tokens": 20000,
+            "user_tokens": 200,
+            "output_tokens": 350
+          },
+          "cached": {
+            "before": {
+              "cache_write": 0.3346,
+              "cache_read": 0.253145,
+              "uncached": 0.0,
+              "output": 0.1155,
+              "total": 0.703245
+            },
+            "after": {
+              "cache_write": 0.237612,
+              "cache_read": 0.169411,
+              "uncached": 0.0,
+              "output": 0.1155,
+              "total": 0.522523
+            },
+            "saved_usd": 0.180721,
+            "saved_pct": 25.7,
+            "input_saved_pct": 30.75
+          },
+          "uncached": {
+            "before": {
+              "cache_write": 0.0,
+              "cache_read": 0.0,
+              "uncached": 5.330574,
+              "output": 0.1155,
+              "total": 5.446074
+            },
+            "after": {
+              "cache_write": 0.0,
+              "cache_read": 0.0,
+              "uncached": 3.578308,
+              "output": 0.1155,
+              "total": 3.693808
+            },
+            "saved_usd": 1.752266,
+            "saved_pct": 32.17,
+            "input_saved_pct": 32.87
+          }
+        },
+        "gpt-6.1-sol": {
+          "model": "gpt-6.1-sol",
+          "pricing": {
+            "model": "gpt-6.1-sol",
+            "input_per_mtok": 2.0,
+            "output_per_mtok": 10.0,
+            "cache_write": 1.0,
+            "cache_read": 0.05
+          },
+          "shape": {
+            "system_tokens": 20000,
+            "user_tokens": 200,
+            "output_tokens": 350
+          },
+          "cached": {
+            "before": {
+              "cache_write": 0.26768,
+              "cache_read": 0.253145,
+              "uncached": 0.0,
+              "output": 0.1155,
+              "total": 0.636325
+            },
+            "after": {
+              "cache_write": 0.19009,
+              "cache_read": 0.169411,
+              "uncached": 0.0,
+              "output": 0.1155,
+              "total": 0.475001
+            },
+            "saved_usd": 0.161324,
+            "saved_pct": 25.35,
+            "input_saved_pct": 30.97
+          },
+          "uncached": {
+            "before": {
+              "cache_write": 0.0,
+              "cache_read": 0.0,
+              "uncached": 5.330574,
+              "output": 0.1155,
+              "total": 5.446074
+            },
+            "after": {
+              "cache_write": 0.0,
+              "cache_read": 0.0,
+              "uncached": 3.578308,
+              "output": 0.1155,
+              "total": 3.693808
+            },
+            "saved_usd": 1.752266,
+            "saved_pct": 32.17,
+            "input_saved_pct": 32.87
+          }
+        }
+      }
+    },
+    "headroom": {
+      "agent": {
+        "samples": 32,
+        "before": 102440,
+        "after": 83851,
+        "saved_pct": 18.15,
+        "facts_total": 62,
+        "facts_kept": 62,
+        "exact_violations": 1,
+        "grew": 0,
+        "latency_ms": {
+          "p50": 1.757,
+          "p95": 35.679
+        }
+      },
+      "by_kind": {
+        "grep": {
+          "samples": 3,
+          "before": 7149,
+          "after": 4882,
+          "saved_pct": 31.71,
+          "facts_total": 6,
+          "facts_kept": 6,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 1.541,
+            "p95": 31.533
+          }
+        },
+        "git_log": {
+          "samples": 2,
+          "before": 7273,
+          "after": 7273,
+          "saved_pct": 0.0,
+          "facts_total": 4,
+          "facts_kept": 4,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 5.335,
+            "p95": 35.679
+          }
+        },
+        "git_diff": {
+          "samples": 2,
+          "before": 15540,
+          "after": 15484,
+          "saved_pct": 0.36,
+          "facts_total": 4,
+          "facts_kept": 4,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.581,
+            "p95": 46.957
+          }
+        },
+        "git_status": {
+          "samples": 1,
+          "before": 388,
+          "after": 388,
+          "saved_pct": 0.0,
+          "facts_total": 2,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.725,
+            "p95": 26.596
+          }
+        },
+        "test_pytest": {
+          "samples": 2,
+          "before": 9905,
+          "after": 9905,
+          "saved_pct": 0.0,
+          "facts_total": 6,
+          "facts_kept": 6,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.826,
+            "p95": 28.25
+          }
+        },
+        "test_js": {
+          "samples": 1,
+          "before": 1059,
+          "after": 1059,
+          "saved_pct": 0.0,
+          "facts_total": 2,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.407,
+            "p95": 2.05
+          }
+        },
+        "build_cargo": {
+          "samples": 1,
+          "before": 1032,
+          "after": 1032,
+          "saved_pct": 0.0,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.377,
+            "p95": 0.724
+          }
+        },
+        "build_ci": {
+          "samples": 1,
+          "before": 2968,
+          "after": 274,
+          "saved_pct": 90.77,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 2.84,
+            "p95": 81.29
+          }
+        },
+        "pkg_install": {
+          "samples": 2,
+          "before": 2300,
+          "after": 2259,
+          "saved_pct": 1.78,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 2.316,
+            "p95": 39.797
+          }
+        },
+        "listing": {
+          "samples": 3,
+          "before": 2351,
+          "after": 2351,
+          "saved_pct": 0.0,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 3.331,
+            "p95": 26.186
+          }
+        },
+        "kubectl": {
+          "samples": 1,
+          "before": 1743,
+          "after": 1555,
+          "saved_pct": 10.79,
+          "facts_total": 2,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 3.306,
+            "p95": 94.592
+          }
+        },
+        "json_api": {
+          "samples": 1,
+          "before": 17534,
+          "after": 12707,
+          "saved_pct": 27.53,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 4.514,
+            "p95": 67.348
+          }
+        },
+        "mcp": {
+          "samples": 2,
+          "before": 18018,
+          "after": 9574,
+          "saved_pct": 46.86,
+          "facts_total": 5,
+          "facts_kept": 5,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 1.748,
+            "p95": 42.872
+          }
+        },
+        "file_read": {
+          "samples": 4,
+          "before": 6282,
+          "after": 6282,
+          "saved_pct": 0.0,
+          "facts_total": 4,
+          "facts_kept": 4,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 2.597,
+            "p95": 23.48
+          }
+        },
+        "cat_source": {
+          "samples": 2,
+          "before": 1240,
+          "after": 1168,
+          "saved_pct": 5.81,
+          "facts_total": 2,
+          "facts_kept": 2,
+          "exact_violations": 1,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.326,
+            "p95": 7.281
+          }
+        },
+        "web_page": {
+          "samples": 1,
+          "before": 699,
+          "after": 699,
+          "saved_pct": 0.0,
+          "facts_total": 3,
+          "facts_kept": 3,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 0.346,
+            "p95": 0.602
+          }
+        },
+        "stack_trace": {
+          "samples": 2,
+          "before": 6364,
+          "after": 6364,
+          "saved_pct": 0.0,
+          "facts_total": 5,
+          "facts_kept": 5,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 1.409,
+            "p95": 92.088
+          }
+        },
+        "prose": {
+          "samples": 1,
+          "before": 595,
+          "after": 595,
+          "saved_pct": 0.0,
+          "facts_total": 2,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 1.471,
+            "p95": 13.05
+          }
+        }
+      },
+      "headroom_scenarios": {
+        "code_search": {
+          "samples": 1,
+          "before": 17682,
+          "after": 14161,
+          "saved_pct": 19.91,
+          "facts_total": 2,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 4.392,
+            "p95": 57.949
+          }
+        },
+        "sre_incident": {
+          "samples": 3,
+          "before": 55671,
+          "after": 24051,
+          "saved_pct": 56.8,
+          "facts_total": 3,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 4.238,
+            "p95": 84.867
+          }
+        },
+        "codebase_exploration": {
+          "samples": 3,
+          "before": 47786,
+          "after": 24836,
+          "saved_pct": 48.03,
+          "facts_total": 3,
+          "facts_kept": 2,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 4.242,
+            "p95": 61.393
+          }
+        },
+        "issue_triage": {
+          "samples": 3,
+          "before": 42907,
+          "after": 29887,
+          "saved_pct": 30.34,
+          "facts_total": 4,
+          "facts_kept": 4,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 3.024,
+            "p95": 43.752
+          }
+        },
+        "total": {
+          "samples": 10,
+          "before": 164046,
+          "after": 92935,
+          "saved_pct": 43.35,
+          "facts_total": 12,
+          "facts_kept": 10,
+          "exact_violations": 0,
+          "grew": 0,
+          "latency_ms": {
+            "p50": 3.855,
+            "p95": 59.96
+          }
+        }
+      },
+      "all": {
+        "samples": 42,
+        "before": 266486,
+        "after": 176786,
+        "saved_pct": 33.66,
+        "facts_total": 74,
+        "facts_kept": 72,
+        "exact_violations": 1,
+        "grew": 0,
+        "latency_ms": {
+          "p50": 2.659,
+          "p95": 46.957
+        }
+      },
+      "cost": {
+        "claude-opus-5-5": {
+          "model": "claude-opus-5-5",
+          "pricing": {
+            "model": "claude-opus-5-5",
+            "input_per_mtok": 4.0,
+            "output_per_mtok": 20.0,
+            "cache_write": 1.25,
+            "cache_read": 0.05
+          },
+          "shape": {
+            "system_tokens": 20000,
+            "user_tokens": 200,
+            "output_tokens": 350
+          },
+          "cached": {
+            "before": {
+              "cache_write": 0.6692,
+              "cache_read": 0.506289,
+              "uncached": 0.0,
+              "output": 0.231,
+              "total": 1.406489
+            },
+            "after": {
+              "cache_write": 0.576255,
+              "cache_read": 0.451897,
+              "uncached": 0.0,
+              "output": 0.231,
+              "total": 1.259152
+            },
+            "saved_usd": 0.147338,
+            "saved_pct": 10.48,
+            "input_saved_pct": 12.53
+          },
+          "uncached": {
+            "before": {
+              "cache_write": 0.0,
+              "cache_read": 0.0,
+              "uncached": 10.661148,
+              "output": 0.231,
+              "total": 10.892148
+            },
+            "after": {
+              "cache_write": 0.0,
+              "cache_read": 0.0,
+              "uncached": 9.49894,
+              "output": 0.231,
+              "total": 9.72994
+            },
+            "saved_usd": 1.162208,
+            "saved_pct": 10.67,
+            "input_saved_pct": 10.9
+          }
+        },
+        "claude-sonnet-5-5": {
+          "model": "claude-sonnet-5-5",
+          "pricing": {
+            "model": "claude-sonnet-5-5",
+            "input_per_mtok": 2.0,
+            "output_per_mtok": 10.0,
+            "cache_write": 1.25,
+            "cache_read": 0.05
+          },
+          "shape": {
+            "system_tokens": 20000,
+            "user_tokens": 200,
+            "output_tokens": 350
+          },
+          "cached": {
+            "before": {
+              "cache_write": 0.3346,
+              "cache_read": 0.253145,
+              "uncached": 0.0,
+              "output": 0.1155,
+              "total": 0.703245
+            },
+            "after": {
+              "cache_write": 0.288127,
+              "cache_read": 0.225948,
+              "uncached": 0.0,
+              "output": 0.1155,
+              "total": 0.629576
+            },
+            "saved_usd": 0.073669,
+            "saved_pct": 10.48,
+            "input_saved_pct": 12.53
+          },
+          "uncached": {
+            "before": {
+              "cache_write": 0.0,
+              "cache_read": 0.0,
+              "uncached": 5.330574,
+              "output": 0.1155,
+              "total": 5.446074
+            },
+            "after": {
+              "cache_write": 0.0,
+              "cache_read": 0.0,
+              "uncached": 4.74947,
+              "output": 0.1155,
+              "total": 4.86497
+            },
+            "saved_usd": 0.581104,
+            "saved_pct": 10.67,
+            "input_saved_pct": 10.9
+          }
+        },
+        "gpt-6.1-sol": {
+          "model": "gpt-6.1-sol",
+          "pricing": {
+            "model": "gpt-6.1-sol",
+            "input_per_mtok": 2.0,
+            "output_per_mtok": 10.0,
+            "cache_write": 1.0,
+            "cache_read": 0.05
+          },
+          "shape": {
+            "system_tokens": 20000,
+            "user_tokens": 200,
+            "output_tokens": 350
+          },
+          "cached": {
+            "before": {
+              "cache_write": 0.26768,
+              "cache_read": 0.253145,
+              "uncached": 0.0,
+              "output": 0.1155,
+              "total": 0.636325
+            },
+            "after": {
+              "cache_write": 0.230502,
+              "cache_read": 0.225948,
+              "uncached": 0.0,
+              "output": 0.1155,
+              "total": 0.57195
+            },
+            "saved_usd": 0.064374,
+            "saved_pct": 10.12,
+            "input_saved_pct": 12.36
+          },
+          "uncached": {
+            "before": {
+              "cache_write": 0.0,
+              "cache_read": 0.0,
+              "uncached": 5.330574,
+              "output": 0.1155,
+              "total": 5.446074
+            },
+            "after": {
+              "cache_write": 0.0,
+              "cache_read": 0.0,
+              "uncached": 4.74947,
+              "output": 0.1155,
+              "total": 4.86497
+            },
+            "saved_usd": 0.581104,
+            "saved_pct": 10.67,
+            "input_saved_pct": 10.9
+          }
+        }
+      }
+    }
+  }
+}

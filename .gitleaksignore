@@ -1,0 +1,4 @@
+# One fingerprint, not a path: a test fixture string ("zebracorn_private_7f3a") in an
+# earlier commit of the benchmarks PR, renamed since. History is not rewritten, so
+# the finding stays in that commit and is acknowledged here, exactly and only there.
+cb9c37272490d9412153bb1958c98cdb97e8dc26:backend/tests/test_benchmarks.py:generic-api-key:222

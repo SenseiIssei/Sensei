@@ -1,8 +1,11 @@
-"""Representative compression benchmark for Sensei.
+"""The micro benchmark: six hand-written samples, kept as a regression guard.
 
-Measures REAL token savings (via tiktoken) across the kinds of content an AI
-agent actually sees: JSON tool outputs, build/test logs, stack traces, source
-code, and prose. Run:
+This used to produce the README's headline (79%). Six small samples written to
+exercise each compressor say little about a real agent session, so the README
+now reports the seeded agent corpus and real-session replays instead
+(``python -m benchmarks.refresh``; see docs/benchmarks.md). What this file still
+does well is notice when a compressor stops doing what it did — cheaply, and
+with real tiktoken counts. Run:
 
     PYTHONPATH=backend python backend/benchmarks/compression_benchmark.py
 

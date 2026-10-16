@@ -1,7 +1,8 @@
 name: Nightly
 
-# Sensei's headline claim is "79% real token savings". That number is only
-# trustworthy if something checks it every day against the actual code.
+# Every number in the README comes from backend/benchmarks/results/*.json. Those
+# numbers are only trustworthy if something re-measures them every day against
+# the actual code and fails when the code no longer earns them.
 
 on:
   schedule:
@@ -13,6 +14,9 @@ on:
       - "backend/sensei/compression/**"
       - "backend/benchmarks/**"
       - "rust/sensei_core/**"
+      # The README table and graphics must match the results they claim.
+      - "README.md"
+      - "docs/assets/**"
 
 permissions:
   contents: read
@@ -50,19 +54,33 @@ jobs:
           maturin build --release --out wheels --manifest-path rust/sensei_core/Cargo.toml
           pip install wheels/*.whl
 
-      # The floor is deliberately below the current 79%: it catches real
-      # regressions without failing on tokenizer or corpus jitter.
-      - name: Run the benchmark with a regression floor
+      # The six-sample micro corpus: not a claim about anybody's bill any more,
+      # but a cheap guard that the compressors still do what they did.
+      - name: Run the micro benchmark with a regression floor
         working-directory: backend
         run: |
           python benchmarks/compression_benchmark.py \
             --json ../benchmark-${{ matrix.accelerator && 'rust' || 'python' }}.json \
             --min-aggregate 75
 
+      # The seeded agent corpus, against the committed results the README is
+      # drawn from. Fails when savings drop by more than a point, when a fact
+      # that used to survive is lost, or when a file read stops being
+      # byte-exact. A PR that improves compression re-runs `benchmarks.refresh`
+      # and commits the new results, and this then holds the improvement.
+      - name: Check the agent corpus against the committed results
+        working-directory: backend
+        run: |
+          python -m benchmarks.agent_bench \
+            --check benchmarks/results/agent_corpus.json --max-drop 1 --repeats 3 \
+            --out ../agent-${{ matrix.accelerator && 'rust' || 'python' }}.json
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: benchmark-${{ matrix.accelerator && 'rust' || 'python' }}
-          path: benchmark-*.json
+          path: |
+            benchmark-*.json
+            agent-*.json
           retention-days: 90
 
   # Shrinking text and preserving meaning are different claims, and until this
@@ -97,6 +115,11 @@ jobs:
       - name: Check that invisible characters are still being removed
         working-directory: backend
         run: python benchmarks/invisible_benchmark.py --min-overhead 10
+      # Nobody types a benchmark number into the README: it is rendered from the
+      # results files, and this fails if README.md or an SVG has drifted from them.
+      - name: README table and graphics match the committed results
+        working-directory: backend
+        run: python -m benchmarks.refresh --check
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -130,6 +153,18 @@ jobs:
                       print(f"  {a['name']}: python={a} rust={b}")
               sys.exit(1)
           print(f"Byte-parity confirmed. Aggregate: {py['aggregate']['saved_pct']}%")
+
+          # Same for the agent corpus: token counts per sample must agree.
+          ap = pathlib.Path("results/agent-python.json")
+          ar = pathlib.Path("results/agent-rust.json")
+          if ap.exists() and ar.exists():
+              a = {r["name"]: r["sensei"]["tokens"] for r in json.loads(ap.read_text())["samples"]}
+              b = {r["name"]: r["sensei"]["tokens"] for r in json.loads(ar.read_text())["samples"]}
+              diff = sorted(k for k in a if a[k] != b.get(k))
+              if diff:
+                  print("::error::Rust and Python disagree on the agent corpus:", ", ".join(diff))
+                  sys.exit(1)
+              print("Agent corpus parity confirmed.")
           PY
 
   # Publish the numbers instead of asserting them.
@@ -167,6 +202,7 @@ jobs:
 
           py = load("benchmark-python.json")
           rs = load("benchmark-rust.json")
+          agent = load("agent-python.json")
           quality = load("quality.json")
           if py is None:
               raise SystemExit("benchmark-python.json missing — nothing to publish")
@@ -184,6 +220,16 @@ jobs:
               "retention_pct": quality["aggregate"]["retention_pct"] if quality else None,
               "metric": py.get("metric"),
           }
+          if agent:
+              s = agent["summary"]["sensei"]
+              row.update({
+                  "agent_saved_pct": s["agent"]["saved_pct"],
+                  "agent_facts_kept": s["all"]["facts_kept"],
+                  "agent_facts_total": s["all"]["facts_total"],
+                  "headroom_scenarios_saved_pct": s["headroom_scenarios"]["total"]["saved_pct"],
+                  "latency_p95_ms": s["all"]["latency_ms"]["p95"],
+                  "corpus_digest": agent["corpus"]["digest"][:12],
+              })
           pathlib.Path("row.json").write_text(json.dumps(row))
           print(json.dumps(row, indent=2))
           PY
@@ -223,6 +269,37 @@ jobs:
           # The worktree is a detached HEAD (both branches above), so push the
           # commit by ref rather than by a local branch name that may not exist.
           git push origin HEAD:gh-pages
+
+  # Headroom on the same corpus, the same way the committed head-to-head was
+  # measured. Informational: Headroom's numbers are not ours to gate on, and a
+  # new Headroom release must not fail Sensei's nightly. It lives in a throwaway
+  # venv and never becomes a dependency of this repository.
+  headroom:
+    name: head-to-head with Headroom (informational)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: pip install -e ./backend
+      - name: Install Headroom out of tree
+        working-directory: backend
+        env:
+          SENSEI_BENCH_HOME: ${{ runner.temp }}/sensei-bench
+        run: python -m benchmarks.headroom_env
+      - name: Run both on the agent corpus
+        working-directory: backend
+        env:
+          SENSEI_BENCH_HOME: ${{ runner.temp }}/sensei-bench
+        run: python -m benchmarks.agent_bench --headroom --repeats 3 --out ../headroom.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: headroom
+          path: headroom.json
+          retention-days: 90
 
   # Dependencies move even when we don't. Catch breakage from upstream releases
   # here, at 3am, instead of in someone's PR.
