@@ -31,10 +31,8 @@ how much was used, and how to raise it.
 
 from __future__ import annotations
 
-import hmac
 import json
 import logging
-import secrets
 import threading
 import time
 from collections import OrderedDict, deque
@@ -121,14 +119,11 @@ def cacheable(payload: dict[str, Any]) -> bool:
     return n in (None, 1)
 
 
-# Per-process key: a credential's tag cannot be recomputed outside this
-# process, and nothing about it survives a restart (the cache does not either).
-_CREDENTIAL_KEY = secrets.token_bytes(32)
-
-
 def credential_tag(auth: str) -> str:
     """Which credential a cached answer belongs to, without keeping the credential."""
-    return hmac.new(_CREDENTIAL_KEY, auth.encode("utf-8"), "sha256").hexdigest()
+    from sensei.gateway.state import state
+
+    return state.credential_tag(auth)
 
 
 class ResponseCache:

@@ -17,12 +17,13 @@ disk) the same API works from memory only.
 
 This file holds original tool output — the same kind of content the CCR store
 already keeps on disk — and nothing else: no prompts beyond those results, no
-keys (credentials are only ever an HMAC under a random key stored here).
+keys (credentials are only ever an scrypt tag, salted with a random secret
+stored here).
 """
 
 from __future__ import annotations
 
-import hmac
+import hashlib
 import json
 import logging
 import secrets
@@ -33,7 +34,8 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
-from sensei.config import SENSEI_HOME, settings
+from sensei import config as config_mod
+from sensei.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +65,7 @@ class GatewayState:
         self._broken = False
         self._memory: OrderedDict[tuple[str, str, str], tuple[float, str]] = OrderedDict()
         self._secret: bytes | None = None
+        self._tags: dict[tuple[bytes, str], str] = {}
 
     @property
     def path(self) -> Path:
@@ -70,7 +73,7 @@ class GatewayState:
             return self._path
         if settings.gateway_state_db:
             return Path(settings.gateway_state_db).expanduser()
-        return SENSEI_HOME / "gateway-state.db"
+        return config_mod.SENSEI_HOME / "gateway-state.db"
 
     def _connect(self) -> sqlite3.Connection | None:
         if not settings.gateway_state_persist or self._broken:
@@ -96,12 +99,27 @@ class GatewayState:
     # ---- credential tags ---------------------------------------------------
 
     def credential_tag(self, credential: str) -> str:
-        """A stable, keyed tag for a credential. The credential is not stored."""
+        """A stable tag for a credential. The credential itself is never stored.
+
+        scrypt, salted with a random secret kept in this database: a tag on
+        disk cannot be turned back into a key, even by trying likely ones.
+        Memoised, so the cost is paid once per credential per process.
+        """
         with self._lock:
             if self._secret is None:
                 self._secret = self._load_secret()
-            key = self._secret
-        return hmac.new(key, credential.encode("utf-8"), "sha256").hexdigest()[:32]
+            salt = self._secret
+            known = self._tags.get((salt, credential))
+        if known is not None:
+            return known
+        tag = hashlib.scrypt(
+            credential.encode("utf-8"), salt=salt, n=2**14, r=8, p=1, dklen=16
+        ).hex()
+        with self._lock:
+            self._tags[(salt, credential)] = tag
+            while len(self._tags) > 64:
+                self._tags.pop(next(iter(self._tags)))
+        return tag
 
     def _load_secret(self) -> bytes:
         conn = self._connect()
