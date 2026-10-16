@@ -22,7 +22,8 @@ import time
 import pytest
 
 from sensei.compression.gitcomp import GitCompressor, _field
-from sensei.compression.logcomp import LogCompressor
+from sensei.compression.listing import _is_tree
+from sensei.compression.logcomp import LogCompressor, is_percent, pytest_progress
 from sensei.compression.router import ContentRouter, _is_test_line, _wordish
 from sensei.compression.textcrusher import split_sentences
 
@@ -83,6 +84,28 @@ def test_test_line_matches_the_old_regex() -> None:
         assert _is_test_line(s) == bool(old.match(s)), repr(s)
 
 
+def test_pytest_rows_match_the_old_regexes() -> None:
+    """router.py:162 and logcomp's dot rows: `[.FEsxX]+\\s*\\[\\s*\\d+%\\]`."""
+    row = re.compile(r"[.FEsxX]+\s*\[\s*\d+%\]")
+    dots = re.compile(r"\.+\s*(?:\[\s*\d+%\])?")
+    pct = re.compile(r"\[\s*\d+%\]")
+    alphabet = [".", "F", "E", "s", "x", " ", "  ", "[", "]", "%", "4", "40", "%]", "a", "\t"]
+    for s in _random(alphabet, max_len=10):
+        assert pytest_progress(s, ".FEsxX") == bool(row.fullmatch(s)), repr(s)
+        assert pytest_progress(s, ".", percent_optional=True) == bool(dots.fullmatch(s)), repr(s)
+        assert is_percent(s) == bool(pct.fullmatch(s)), repr(s)
+
+
+def test_tree_rows_and_dot_rows_match_the_old_regexes() -> None:
+    tree = re.compile(r"^[ \t│├└─|`\\+-]*[├└|`+\\][─-]{2}")
+    dot_row = re.compile(r"^\.+\s*\[\s*\d+%\]$")
+    alphabet = ["│", "├", "└", "─", "-", "|", "`", "+", "\\", " ", "a", ".", "[", " 4", "%]"]
+    for s in _random(alphabet, max_len=8):
+        assert _is_tree(s) == bool(tree.match(s)), repr(s)
+        if dot_row.match(s):
+            assert LogCompressor.is_noise(s), repr(s)
+
+
 def test_wordish_matches_the_old_regex() -> None:
     old = re.compile(r"[A-Za-z][a-z'-]+[,.;:!?]?$")
     alphabet = ["A", "a", "z", "'", "-", ",", ".", "!", "1", "_", "É", "Q"]
@@ -121,6 +144,7 @@ def test_git_fields_match_the_old_regexes() -> None:
         "Date:" + " " * 40000 + "!",
         "test " + "x" * 50000,
         "x" * 50000 + ".py" + " ." * 1000,
+        "t.py " + "." * 50000 + " [",
         "=" + " passed" * 5000 + " x",
         "word." + " " * 40000 + "lower",
         "<p>a" + " \t" * 20000 + "x</p>",

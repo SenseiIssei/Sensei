@@ -11,6 +11,31 @@ from sensei.compression.markers import Context, plural
 # accelerator that returns different bytes is not an accelerator.
 
 
+def is_percent(s: str) -> bool:
+    """`[ 40%]`: a bracket, optional spaces, digits, a percent sign, a bracket."""
+    if len(s) < 4 or s[0] != "[" or not s.endswith("%]"):
+        return False
+    digits = s[1:-2].lstrip()
+    return digits.isascii() and digits.isdigit()
+
+
+def pytest_progress(rest: str, marks: str, *, percent_optional: bool = False) -> bool:
+    r"""A pytest progress row after the file name: `....F.. [ 40%]`.
+
+    A scan rather than `[.FEsxX]+\s*\[\s*\d+%\]`, which CodeQL rates
+    polynomial on a long run of dots.
+    """
+    i = 0
+    while i < len(rest) and rest[i] in marks:
+        i += 1
+    if i == 0:
+        return False
+    tail = rest[i:].lstrip()
+    if not tail:
+        return percent_optional
+    return is_percent(tail)
+
+
 class LogCompressor:
     """Compress log / build / test output by keeping what matters.
 
@@ -54,8 +79,7 @@ class LogCompressor:
     # recognised by `is_noise` with plain string checks, because `\S+::\S+`
     # and `\S.* \.\.\.` backtrack quadratically on a 40 KB minified line.
     NOISE = re.compile(
-        r"^(?:\.+\s*\[\s*\d+%\]$"
-        r"|\s*[✓✔√]\s"  # jest / vitest / mocha
+        r"^(?:\s*[✓✔√]\s"  # jest / vitest / mocha
         r"|=== RUN\s|--- PASS:|PASS$|ok\s+\S+\s+(?:[\d.]+s|\(cached\))$"  # go test
         r"|\s*(?:Compiling|Checking|Fresh|Downloaded|Downloading|Fetching|Updating|Locking|Adding|"
         r"Unpacking|Blocking|Documenting|Installing|Collecting|Building wheel|Using cached|"
@@ -65,13 +89,14 @@ class LogCompressor:
         r"|\s*[~^]+\s*$"  # Python 3.11+ caret underlines
         r")"
     )
-    _PCT = re.compile(r"\[\s*\d+%\]")
-    _PYTEST_DOTS = re.compile(r"\.+\s*(?:\[\s*\d+%\])?")
 
     @classmethod
     def is_noise(cls, line: str) -> bool:
         """Progress output: never signal, even for a test named `test_error`."""
         if cls.NOISE.match(line):
+            return True
+        # pytest progress without a file name: `........ [ 40%]`
+        if line.startswith(".") and pytest_progress(line, "."):
             return True
         # cargo: `test path::name ... ok`
         if (
@@ -87,9 +112,9 @@ class LogCompressor:
         # pytest -v: `tests/a.py::test_x PASSED [ 10%]`
         if "::" in head and rest.startswith("PASSED"):
             tail = rest[6:].strip()
-            return not tail or cls._PCT.fullmatch(tail) is not None
+            return not tail or is_percent(tail)
         # pytest progress row without failures: `tests/a.py ....... [ 40%]`
-        return head.endswith(".py") and cls._PYTEST_DOTS.fullmatch(rest) is not None
+        return head.endswith(".py") and pytest_progress(rest, ".", percent_optional=True)
 
     @classmethod
     def is_frame(cls, line: str) -> bool:

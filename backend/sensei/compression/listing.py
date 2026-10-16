@@ -20,7 +20,28 @@ _LS_LONG = re.compile(
 _PATH_LINE = re.compile(
     r"^(?:[A-Za-z]:[\\/]|\.{0,2}[\\/]|~[\\/])?[\w.@+\-~ ()\[\],&#$%!']+(?:[\\/][\w.@+\-~ ()\[\],&#$%!']*)+$"
 )
-_TREE = re.compile(r"^[\s│├└─|`\\+-]*[├└|`+\\][─-]{2}")
+_TREE_PREFIX = frozenset(" \t\r\f\v│├└─|`\\+-")
+_TREE_BRANCH = frozenset("├└|`+\\")
+_TREE_DASH = frozenset("─-")
+
+
+def _is_tree(line: str) -> bool:
+    """A `tree` row: guides (`│   `), then a branch (`├──`, `` `-- ``, `+--`).
+
+    A scan rather than `^[guides]*[branch][dash]{2}`, where the branch and
+    dash characters are also guide characters and the pattern backtracks.
+    """
+    for i, ch in enumerate(line):
+        if (
+            ch in _TREE_BRANCH
+            and line[i + 1 : i + 2] in _TREE_DASH
+            and line[i + 2 : i + 3] in _TREE_DASH
+        ):
+            return True
+        if ch not in _TREE_PREFIX:
+            return False
+    return False
+
 
 MAX_PER_DIR = 40
 LOSSY_MIN_LINES = 400
@@ -30,7 +51,7 @@ def detect(text: str) -> bool:
     lines = [ln for ln in text.split("\n", 200)[:200] if ln.strip()]
     if len(lines) < 6:
         return False
-    tree = sum(1 for ln in lines if _TREE.match(ln))
+    tree = sum(1 for ln in lines if _is_tree(ln))
     if tree >= len(lines) * 0.5:
         return True
     long_ls = sum(1 for ln in lines if _LS_LONG.match(ln) or ln.startswith("total "))
@@ -53,7 +74,7 @@ class ListingCompressor:
         if any(_LS_LONG.match(ln) for ln in text.split("\n", 20)[:20]):
             return self._ls_long(text)
         lines = text.split("\n")
-        if sum(1 for ln in lines if _TREE.match(ln)) >= len(lines) * 0.5:
+        if sum(1 for ln in lines if _is_tree(ln)) >= len(lines) * 0.5:
             return self._cap_plain(lines, ctx) if len(lines) > LOSSY_MIN_LINES else text
         # A plain list of paths read as a tool result may be a file
         # (.gitignore, CODEOWNERS, a manifest): it stays byte-exact. `ls -l`

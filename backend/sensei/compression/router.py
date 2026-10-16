@@ -28,7 +28,7 @@ from sensei.compression.disasm import detect as _detect_disasm
 from sensei.compression.gitcomp import GitCompressor
 from sensei.compression.htmlcomp import HTMLCompressor
 from sensei.compression.listing import ListingCompressor
-from sensei.compression.logcomp import LogCompressor
+from sensei.compression.logcomp import LogCompressor, pytest_progress
 from sensei.compression.markers import Context, ccr_id_for, has_marker
 from sensei.compression.search import SearchCompressor
 from sensei.compression.smartcrusher import SmartCrusher
@@ -135,7 +135,6 @@ def _detect_logs(text: str) -> bool:
 
 
 _TEST_START = re.compile(r"^(?:\s*(?:FAIL|PASS)\s+\S|running \d+ tests?$|--- FAIL:)")
-_PYTEST_ROW = re.compile(r"[.FEsxX]+\s*\[\s*\d+%\]")
 _PYTEST_BANNER = (
     "test session starts",
     "FAILURES",
@@ -159,7 +158,7 @@ def _is_test_line(line: str) -> bool:
     ):
         return True
     head, sep, rest = line.partition(" ")
-    if sep and head.endswith(".py") and _PYTEST_ROW.fullmatch(rest):
+    if sep and head.endswith(".py") and pytest_progress(rest, ".FEsxX"):
         return True
     # pytest banners: `===== 1 failed, 2 passed in 3.1s =====`
     return (
