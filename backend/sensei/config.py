@@ -333,6 +333,71 @@ class Settings(BaseSettings):
     fallback_base_url: str = "http://localhost:11434"
     fallback_model: str = ""  # empty → ollama_model
 
+    # ── Cache-aware gateway (sensei/gateway/*) ──────────────────────────────
+    # Live zone: per conversation, replay what was forwarded last turn byte for
+    # byte and compress only the messages that are new. Keeps the provider's
+    # prompt cache warm and the history append-only (which Claude's preserved
+    # thinking checks). The store is in memory only and holds no more than
+    # gateway_live_zone_max_mb of forwarded messages.
+    gateway_live_zone: bool = True
+    gateway_live_zone_ttl_seconds: int = 7200
+    gateway_live_zone_max_sessions: int = 256
+    gateway_live_zone_max_mb: int = 256
+    # The provider cache lifetime assumed for miss attribution when a request
+    # does not say (`cache_control.ttl: "1h"` is honoured).
+    gateway_cache_ttl_seconds: int = 300
+    # Inject `sensei_retrieve` so the model can fetch the exact original behind
+    # a compression marker; the gateway answers the call itself.
+    gateway_retrieve_tool: bool = True
+    # Answer the call inside the gateway and hide the extra round from the
+    # client. Off by default: the client then sees the call, answers "no such
+    # tool", and the gateway puts the original into that result on the next
+    # request — one more round trip, nothing hidden that has to be recreated.
+    # Never used when the response carries thinking or reasoning.
+    gateway_retrieve_intercept: bool = False
+    gateway_retrieve_max_rounds: int = 3
+    gateway_retrieve_max_chars: int = 60_000
+    gateway_retrieve_in_streams: bool = True
+    # What a retrieve was answered with, and hidden exchanges, per conversation
+    # and credential — on disk, so a restart forwards the same history. Holds
+    # original tool output (like the CCR store); empty path = ~/.sensei.
+    gateway_state_persist: bool = True
+    gateway_state_db: str = ""
+    gateway_state_ttl_hours: int = 168
+    # Lossy blocks saving fewer tokens than this get no retrieve marker.
+    gateway_ccr_min_saved_tokens: int = 50
+    # Tool definitions: strip JSON-schema annotations the model never needs
+    # ($schema, $comment, examples, title, …). Always safe.
+    gateway_tool_schema_compaction: bool = True
+    # Opt-in: shorten tool descriptions to this many chars (0 = off).
+    gateway_tool_description_max_chars: int = 0
+    # Opt-in: Anthropic tool search (defer_loading) for first-party Anthropic
+    # requests with at least gateway_tool_search_min_tools tools.
+    gateway_tool_search: bool = False
+    gateway_tool_search_min_tools: int = 12
+    # Cross-turn: a new tool result that repeats an earlier one is replaced by
+    # a reference to it. Only ever applied to new messages.
+    gateway_dedup: bool = True
+    gateway_dedup_min_lines: int = 4
+    gateway_dedup_min_chars: int = 200
+    # A Read result superseded by an Edit of the same file becomes a stub —
+    # only where the history is not cached and carries no thinking blocks.
+    gateway_stale_reads: bool = True
+    # Claude subscription (OAuth) requests keep their tools exactly as sent.
+    gateway_oauth_tool_changes: bool = False
+    # Opt-in: rule-based model router, JSON list of
+    # {"to_model": ..., "max_input_tokens": N, "require_no_tools": bool,
+    #  "from_models": [...], "tool_results_only": bool}.
+    gateway_model_router: str = ""
+    # Opt-in: exact response cache for non-streaming temperature-0 requests.
+    gateway_response_cache: bool = False
+    gateway_response_cache_ttl_seconds: int = 3600
+    gateway_response_cache_max_entries: int = 512
+    # Opt-in: per-tool token budgets, "Claude Code=5000000,Codex=2000000",
+    # over a rolling window. Over budget → 429 with a message saying so.
+    gateway_tool_budgets: str = ""
+    gateway_tool_budget_window_hours: float = 24.0
+
     # Memory
     memory_enabled: bool = True
     memory_dir: str = ".sensei_memory"

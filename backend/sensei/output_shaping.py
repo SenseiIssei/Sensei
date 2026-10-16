@@ -16,6 +16,13 @@ So the instruction is appended to the **last user message** instead — the fres
 bytes at the end of the conversation, which were never part of the cached prefix
 and change every turn anyway. Same effect on the model, no effect on the cache.
 
+Through the gateway (``sensei/gateway/pipeline.py``) it goes one step further:
+the instruction is its own block (Anthropic) or message (Chat, Responses) after
+the new turn's content, and the live zone replays it on every later request.
+Adding it and then dropping it next turn would be a history edit: a cache miss
+for that turn's tokens, and on current Claude models a changed prefix for every
+thinking block produced after it. Kept, it is a few cached tokens per turn.
+
 ## Why there is a holdout
 
 An intervention that changes model behaviour cannot be measured by turning it on
@@ -33,6 +40,7 @@ Off by default: this changes what the model writes, and that is the user's call.
 
 from __future__ import annotations
 
+import hashlib
 import math
 import random
 from typing import Any
@@ -68,6 +76,20 @@ def assign(rng: random.Random | None = None) -> bool:
     if holdout <= 0.0:
         return True
     return (rng or random).random() >= holdout
+
+
+def assign_for(key: str) -> bool:
+    """Deterministic assignment for one message, from a hash of it.
+
+    The gateway decides per message rather than per request so that the same
+    history comes out the same after a restart (the instruction stays where it
+    was). Message hashes are effectively random, so the arms stay comparable.
+    """
+    if not settings.output_shaper:
+        return False
+    holdout = min(max(settings.output_holdout, 0.0), 1.0)
+    bucket = int(hashlib.sha256(key.encode("utf-8")).hexdigest()[:8], 16) / 0xFFFFFFFF
+    return bucket >= holdout
 
 
 def shape_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
