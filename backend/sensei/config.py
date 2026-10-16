@@ -334,9 +334,21 @@ class Settings(BaseSettings):
     # Inject `sensei_retrieve` so the model can fetch the exact original behind
     # a compression marker; the gateway answers the call itself.
     gateway_retrieve_tool: bool = True
+    # Answer the call inside the gateway and hide the extra round from the
+    # client. Off by default: the client then sees the call, answers "no such
+    # tool", and the gateway puts the original into that result on the next
+    # request — one more round trip, nothing hidden that has to be recreated.
+    # Never used when the response carries thinking or reasoning.
+    gateway_retrieve_intercept: bool = False
     gateway_retrieve_max_rounds: int = 3
     gateway_retrieve_max_chars: int = 60_000
     gateway_retrieve_in_streams: bool = True
+    # What a retrieve was answered with, and hidden exchanges, per conversation
+    # and credential — on disk, so a restart forwards the same history. Holds
+    # original tool output (like the CCR store); empty path = ~/.sensei.
+    gateway_state_persist: bool = True
+    gateway_state_db: str = ""
+    gateway_state_ttl_hours: int = 168
     # Lossy blocks saving fewer tokens than this get no retrieve marker.
     gateway_ccr_min_saved_tokens: int = 50
     # Tool definitions: strip JSON-schema annotations the model never needs

@@ -625,7 +625,8 @@ async def _forward(
             shaped=shaped,
             cache_event=prepared.cause if prepared is not None else "",
         )
-        extras.budget_meter.add(tool or "unknown", int(savings.get("prompt_tokens_after") or 0))
+        if settings.gateway_tool_budgets.strip():
+            extras.budget_meter.add(tool or "unknown", int(savings.get("prompt_tokens_after") or 0))
         if meta is not None:
             from sensei.audit import get_audit_log
 
@@ -674,13 +675,25 @@ async def _forward(
         )
 
     retriever: Retriever | None = None
-    if prepared is not None and prepared.inject and not from_fallback:
+    if (
+        prepared is not None
+        and prepared.inject
+        and settings.gateway_retrieve_intercept
+        and not from_fallback
+    ):
 
         async def send_more(next_payload: dict[str, Any]) -> httpx.Response | None:
             more, _ = await _send(base_url, path, next_payload, up_headers)
             return more
 
-        retriever = Retriever(api, payload, send_more)
+        retriever = Retriever(
+            api,
+            payload,
+            send_more,
+            policy=_hidden_policy,
+            scope=prepared.scope,
+            prefix=prepared.prefix,
+        )
 
     if stream and "event-stream" in content_type:
         return StreamingResponse(
@@ -746,6 +759,11 @@ async def _relay(
             ledger.set_usage(row_id, usage)
             ledger.set_retrieve_rounds(row_id, retriever.rounds)
             _observe(prepared, usage)
+            # A client that hangs up mid-splice must not leave a follow-up
+            # request's connection open.
+            await retriever.aclose()
+            with anyio.CancelScope(shield=True):
+                await upstream.aclose()
         return
 
     sniffer = UsageSniffer()
@@ -766,6 +784,12 @@ async def _relay(
         _observe(prepared, usage)
         with anyio.CancelScope(shield=True):
             await upstream.aclose()
+
+
+def _hidden_policy(payload: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+    """Redaction and the block-list for a follow-up the gateway sends itself."""
+    payload, _, reason = _apply_policy(payload)
+    return payload, reason
 
 
 def _apply_policy(payload: dict[str, Any]) -> tuple[dict[str, Any], int, str | None]:
@@ -885,7 +909,9 @@ async def chat_completions(request: Request) -> Any:
     if refused := _over_budget(tool, "openai"):
         return refused
 
-    prepared = pipeline.prepare("openai", body, compress_text=_compress_text)
+    prepared = pipeline.prepare(
+        "openai", body, compress_text=_compress_text, credential=_incoming_bearer(request) or ""
+    )
     savings = prepared.savings
 
     provider = APIModelProvider()
@@ -951,7 +977,10 @@ async def responses(request: Request) -> Any:
 
     if isinstance(body.get("input"), list):
         prepared: pipeline.Prepared | None = pipeline.prepare(
-            "responses", body, compress_text=_compress_text
+            "responses",
+            body,
+            compress_text=_compress_text,
+            credential=_incoming_bearer(request) or "",
         )
         payload, savings = prepared.payload, prepared.savings
     else:
@@ -1021,7 +1050,12 @@ async def responses_action(action: str, request: Request) -> Any:
     provider = APIModelProvider()
     if isinstance(body.get("input"), list):
         prepared = pipeline.prepare(
-            "responses", body, compress_text=_compress_text, commit=False, shape=False
+            "responses",
+            body,
+            compress_text=_compress_text,
+            commit=False,
+            shape=False,
+            credential=_incoming_bearer(request) or "",
         )
         payload, savings = prepared.payload, prepared.savings
     else:
@@ -1084,6 +1118,10 @@ def _anthropic_no_key(savings: dict[str, Any]) -> JSONResponse:
     )
 
 
+def _anthropic_credential(request: Request) -> str:
+    return request.headers.get("x-api-key") or request.headers.get("authorization") or ""
+
+
 def _first_party_anthropic() -> bool:
     """Tool search is a first-party feature; a proxy or a cloud host may not have it."""
     host = urlsplit(settings.anthropic_api_base_url).hostname or ""
@@ -1114,6 +1152,7 @@ async def messages_anthropic(request: Request) -> Any:
         compress_text=_compress_text,
         oauth=oauth,
         first_party=_first_party_anthropic(),
+        credential=_anthropic_credential(request),
     )
     savings = prepared.savings
     if up_headers is None:
@@ -1182,6 +1221,7 @@ async def count_tokens_anthropic(request: Request) -> Any:
         first_party=False,
         commit=False,
         shape=False,
+        credential=_anthropic_credential(request),
     )
     savings = prepared.savings
     if up_headers is None:

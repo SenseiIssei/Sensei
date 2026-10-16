@@ -332,6 +332,7 @@ def run(paths: list[str], max_turns: int, prefix_tokens: int, ttl: float) -> dic
     # Nothing from a replay may land in the user's own ledger, audit log or
     # CCR directory.
     settings.savings_persist = False
+    settings.gateway_state_persist = False
     settings.audit_enabled = False
     settings.redaction_enabled = False
     settings.output_shaper = False

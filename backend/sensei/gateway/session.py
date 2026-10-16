@@ -170,6 +170,7 @@ class Plan:
     size: int
     frozen: int = 0
     previous_cached: int | None = None
+    api: str = ""
     sticky: dict[str, Any] = field(default_factory=dict)
 
 
@@ -179,17 +180,24 @@ def lineage_key(api: str, system: Any, first: Any, flags: str = "") -> str:
     return digest([api, flags, system_s, first_s])
 
 
-def _has_thinking(message: Any) -> bool:
-    content = message.get("content") if isinstance(message, dict) else None
+THINKING_TYPES = ("thinking", "redacted_thinking", "reasoning")
+
+
+def has_thinking(message: Any) -> bool:
+    """Signed or encrypted model reasoning: Anthropic thinking, Responses reasoning."""
+    if not isinstance(message, dict):
+        return False
+    if message.get("type") == "reasoning":
+        return True
+    content = message.get("content")
     return isinstance(content, list) and any(
-        isinstance(b, dict) and b.get("type") in ("thinking", "redacted_thinking") for b in content
+        isinstance(b, dict) and b.get("type") in THINKING_TYPES for b in content
     )
 
 
 class LiveZone:
     def __init__(self) -> None:
         self._entries: OrderedDict[str, Entry] = OrderedDict()
-        self._expansions: OrderedDict[str, list[dict[str, Any]]] = OrderedDict()
         self._size = 0
         self._lock = threading.Lock()
         self.causes: Counter[str] = Counter()
@@ -260,6 +268,7 @@ class LiveZone:
             size=size,
             previous_cached=previous,
             sticky=sticky,
+            api=api,
         )
         plan.frozen = self._frozen(plan, messages)
         return plan
@@ -269,19 +278,24 @@ class LiveZone:
         """Messages before this index must not be rewritten after the fact.
 
         Replayed messages are frozen when the provider is caching them or when
-        thinking binds them; everything before the last thinking block is bound
-        regardless; and on a cold start, the client's own cache breakpoints say
-        how far the provider may already hold this prefix.
+        thinking binds them; everything up to the last thinking block is bound
+        regardless; the client's own cache breakpoints say how far the provider
+        may already hold this prefix, the marked message included. With no
+        record at all, only Anthropic says whether it caches (it reports cache
+        writes) — OpenAI caches silently for up to a day, so there nothing old
+        is touched.
         """
+        if plan.cause == "cold_start" and plan.api != "anthropic":
+            return len(messages)
         frozen = plan.reuse
-        thinking_at = max((i for i, m in enumerate(messages) if _has_thinking(m)), default=-1)
+        thinking_at = max((i for i, m in enumerate(messages) if has_thinking(m)), default=-1)
         marked_at = max((i for i, m in enumerate(plan.marks) if m), default=-1)
         uncached = plan.previous_cached == 0 and marked_at < 0
         if uncached and thinking_at < 0:
             # The provider reported caching nothing last turn and nothing asks
             # for it now: rewriting the old turns costs nothing.
             frozen = 0
-        frozen = max(frozen, thinking_at + 1, marked_at)
+        frozen = max(frozen, thinking_at + 1, marked_at + 1)
         return min(frozen, len(messages))
 
     # ---- committing --------------------------------------------------------
@@ -322,19 +336,6 @@ class LiveZone:
             if entry is not None:
                 entry.cached_tokens = max(0, cache_read) + max(0, cache_write)
 
-    # ---- hidden retrieve rounds -------------------------------------------
-
-    def remember_expansion(self, fingerprint: str, messages: list[dict[str, Any]]) -> None:
-        with self._lock:
-            self._expansions[fingerprint] = messages
-            self._expansions.move_to_end(fingerprint)
-            while len(self._expansions) > 512:
-                self._expansions.popitem(last=False)
-
-    def expansion(self, fingerprint: str) -> list[dict[str, Any]] | None:
-        with self._lock:
-            return self._expansions.get(fingerprint)
-
     # ---- housekeeping ------------------------------------------------------
 
     def _expire(self, now: float) -> None:
@@ -353,7 +354,6 @@ class LiveZone:
     def clear(self) -> None:
         with self._lock:
             self._entries.clear()
-            self._expansions.clear()
             self._size = 0
             self.causes.clear()
             self.replayed_messages = 0

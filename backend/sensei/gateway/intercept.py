@@ -1,27 +1,30 @@
-"""Answering ``sensei_retrieve`` inside the gateway.
+"""Answering ``sensei_retrieve`` inside the gateway — opt-in.
 
-When the model calls the retrieve tool — and only that tool — the gateway
-resolves the call from the CCR store, appends the exchange to the request and
-asks the provider again. The client receives one response, as if the model had
-remembered the original all along. Rounds are capped by
-``gateway_retrieve_max_rounds``.
+**The default** (``gateway_retrieve_intercept=false``) hides nothing: the call
+goes to the client, the client answers an unknown tool with an error result,
+and on the next request the gateway swaps that result for the real original
+(see :mod:`.pipeline`). The swap is stored per conversation (:mod:`.state`), so
+every later request forwards the same text, across restarts too. One extra
+round trip, and the history the provider sees is exactly the one it produced.
 
-**When it cannot be hidden** — the model called a client tool in the same turn,
-the round cap was hit, the follow-up request failed, or the format is a stream
-we do not splice (Responses) — the call goes to the client unchanged. Clients
-answer an unknown tool with an error result, and on the next request the
-gateway swaps that result for the real original (see :mod:`.pipeline`), so the
-model still gets what it asked for, one turn later.
+**With interception on**, when the model calls the retrieve tool — and only
+that tool — the gateway resolves the call, appends the exchange to the request
+and asks the provider again; the client receives one response. Rounds are
+capped by ``gateway_retrieve_max_rounds``. Follow-ups go through redaction and
+the block-list like any request.
+
+**When it is never hidden**: the model called a client tool in the same turn
+(before or after ours), the response carries thinking or reasoning (it is bound
+to the prefix that produced it), the round cap was hit, policy refused the
+follow-up, the follow-up failed, or the format is a stream we do not splice
+(Responses). The call then goes to the client as above.
 
 **What the client stores, and what the provider sees next turn.** The client
-records the merged message it was shown. Sent back like that, the history would
-differ from the one the provider actually produced: on Claude, a thinking block
-records the exact prefix that produced it, so the hidden exchange has to be
-there. The gateway therefore remembers, per merged message, the real sequence
-(assistant call, tool result, assistant answer) and puts it back in place on
-the next request. Thinking blocks from the follow-up rounds are left out of the
-merged message, so even if that memory is gone (a restart) the client's copy
-never carries a block whose prefix it cannot reproduce.
+records the merged message it was shown. The gateway files the real sequence
+(assistant call, tool result, assistant answer) under the conversation, the
+credential and the exact history before it, on disk, and puts it back in place
+on the next request — so a reply that happens to look the same elsewhere is
+never expanded.
 
 **Usage.** The ledger records every round, because every round is billed. The
 response the client sees keeps the final round's input figures — what the
@@ -43,13 +46,16 @@ import httpx
 
 from sensei.config import settings
 from sensei.gateway import ccr
-from sensei.gateway.session import digest, live_zone
+from sensei.gateway.session import THINKING_TYPES, digest
+from sensei.gateway.state import state
 from sensei.usage import Usage, UsageSniffer, from_response
 
 logger = logging.getLogger(__name__)
 
 Send = Callable[[dict[str, Any]], Awaitable[httpx.Response | None]]
-THINKING = ("thinking", "redacted_thinking")
+# (payload) -> (payload as it may be sent, reason it may not)
+Policy = Callable[[dict[str, Any]], tuple[dict[str, Any], str | None]]
+THINKING = THINKING_TYPES
 
 
 def add_usage(total: Usage, part: Usage) -> None:
@@ -93,6 +99,15 @@ def fingerprint(api: str, message: Any) -> str | None:
         ids = [c.get("id", "") for c in message.get("tool_calls") or [] if isinstance(c, dict)]
         return digest(["o", message.get("content") or "", ids])
     return None
+
+
+def expansion_key(prefix: str, fp: str) -> str:
+    """Where an expansion is filed: the history before it, plus the message.
+
+    The history digest makes it positional: the same "Done." at two places in
+    one conversation, or in two conversations, are different keys.
+    """
+    return digest([prefix, fp])
 
 
 # ── SSE plumbing ────────────────────────────────────────────────────────────
@@ -202,13 +217,38 @@ def _same_id(raw: bytes, data: Any, first_id: str | None) -> bytes:
 class Retriever:
     """One request's retrieve interception."""
 
-    def __init__(self, api: str, payload: dict[str, Any], send: Send) -> None:
+    def __init__(
+        self,
+        api: str,
+        payload: dict[str, Any],
+        send: Send,
+        *,
+        policy: Policy | None = None,
+        scope: str = "",
+        prefix: str = "",
+    ) -> None:
         self.api = api
         self.payload = payload
         self.send = send
+        self.policy = policy
+        # Expansions are only ever found again inside the same conversation,
+        # for the same credential, after the same history.
+        self.scope = scope
+        self.prefix = prefix
         self.rounds = 0
         self.usage = Usage()
         self._live_sniff: UsageSniffer | None = None
+        self._open: list[httpx.Response] = []
+
+    async def aclose(self) -> None:
+        """Close every upstream response this request opened, whatever happened."""
+        for resp in self._open:
+            with anyio.CancelScope(shield=True):
+                try:
+                    await resp.aclose()
+                except Exception as exc:
+                    logger.debug("follow-up response did not close cleanly: %s", exc)
+        self._open.clear()
 
     def usage_so_far(self) -> Usage:
         total = copy.copy(self.usage)
@@ -224,6 +264,25 @@ class Retriever:
         if stream and self.api == "openai" and "stream_options" in self.payload:
             out["stream_options"] = self.payload["stream_options"]
         return out
+
+    def _round(
+        self, hidden: list[dict[str, Any]], *, stream: bool
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]] | None:
+        """The follow-up request, through redaction and the block-list.
+
+        Returns it with the hidden messages as they will actually be sent (and
+        remembered), or None when policy refuses it; the call then goes to the
+        client instead.
+        """
+        payload = self._next_payload(hidden, stream=stream)
+        if self.policy is not None:
+            payload, reason = self.policy(payload)
+            if reason:
+                logger.info("Not answering sensei_retrieve server-side: %s", reason)
+                return None
+        key = "input" if self.api == "responses" else "messages"
+        base = len(self.payload.get(key, []))
+        return payload, list(payload.get(key, []))[base:]
 
     async def _send_json(self, payload: dict[str, Any]) -> dict[str, Any] | None:
         resp = await self.send(payload)
@@ -263,6 +322,8 @@ class Retriever:
             ours = [b for b in uses if b.get("name") == ccr.TOOL_NAME]
             if not ours or len(ours) != len(uses) or current.get("stop_reason") != "tool_use":
                 break
+            if any(isinstance(b, dict) and b.get("type") in THINKING for b in content):
+                break  # thinking binds the prefix that produced it: never hide one
             round_hidden = [
                 {"role": "assistant", "content": content},
                 {
@@ -277,13 +338,12 @@ class Retriever:
                     ],
                 },
             ]
-            following = await self._send_json(
-                self._next_payload(hidden + round_hidden, stream=False)
-            )
-            if following is None:
+            prepared = self._round(hidden + round_hidden, stream=False)
+            following = await self._send_json(prepared[0]) if prepared else None
+            if following is None or prepared is None:
                 break
             visible.extend(self._visible_blocks(content))
-            hidden.extend(round_hidden)
+            hidden = prepared[1]
             add_usage(self.usage, from_response(following))
             current = following
             self.rounds += 1
@@ -331,6 +391,8 @@ class Retriever:
             ours = [c for c in calls if (c.get("function") or {}).get("name") == ccr.TOOL_NAME]
             if not ours or len(ours) != len(calls) or choice.get("finish_reason") != "tool_calls":
                 break
+            if message.get("reasoning_content") or message.get("reasoning"):
+                break
             round_hidden = [
                 {k: v for k, v in message.items() if k in ("role", "content", "tool_calls")},
                 *(
@@ -342,13 +404,12 @@ class Retriever:
                     for c in ours
                 ),
             ]
-            following = await self._send_json(
-                self._next_payload(hidden + round_hidden, stream=False)
-            )
-            if following is None or not following.get("choices"):
+            prepared = self._round(hidden + round_hidden, stream=False)
+            following = await self._send_json(prepared[0]) if prepared else None
+            if following is None or prepared is None or not following.get("choices"):
                 break
             text += message.get("content") or ""
-            hidden.extend(round_hidden)
+            hidden = prepared[1]
             add_usage(self.usage, from_response(following))
             current = following
             self.rounds += 1
@@ -387,6 +448,10 @@ class Retriever:
             ]
             if not ours or len(ours) != len(calls):
                 break
+            # A reasoning item belongs with the call that follows it; the
+            # merged output could not keep one without the other.
+            if any(o.get("type") == "reasoning" for o in output):
+                break
             round_hidden = [
                 *({k: v for k, v in o.items() if k != "status"} for o in output),
                 *(
@@ -398,13 +463,12 @@ class Retriever:
                     for o in ours
                 ),
             ]
-            following = await self._send_json(
-                self._next_payload(hidden + round_hidden, stream=False)
-            )
-            if following is None:
+            prepared = self._round(hidden + round_hidden, stream=False)
+            following = await self._send_json(prepared[0]) if prepared else None
+            if following is None or prepared is None:
                 break
             visible.extend(o for o in output if o not in ours)
-            hidden.extend(round_hidden)
+            hidden = prepared[1]
             add_usage(self.usage, from_response(following))
             current = following
             self.rounds += 1
@@ -418,16 +482,17 @@ class Retriever:
         return merged
 
     def _remember(self, visible: dict[str, Any], real: list[dict[str, Any]]) -> None:
-        key = fingerprint(self.api, visible)
-        if key is not None:
-            live_zone.remember_expansion(key, real)
+        fp = fingerprint(self.api, visible)
+        if fp is not None and self.scope:
+            state.put(self.scope, "expansion", expansion_key(self.prefix, fp), real)
 
     # ---- streams -----------------------------------------------------------
 
-    async def _open_stream(self, hidden: list[dict[str, Any]]) -> httpx.Response | None:
-        resp = await self.send(self._next_payload(hidden, stream=True))
+    async def _open_stream(self, payload: dict[str, Any]) -> httpx.Response | None:
+        resp = await self.send(payload)
         if resp is None:
             return None
+        self._open.append(resp)
         if resp.status_code != 200 or "event-stream" not in resp.headers.get("content-type", ""):
             await resp.aclose()
             return None
@@ -485,7 +550,7 @@ class Retriever:
             skipped: set[int] = set()
             held: list[tuple[int | None, bytes, str, Any]] = []
             tail: list[tuple[bytes, str, Any]] = []
-            holding = mixed = False
+            holding = foreign = thought = False
             stop_reason = None
 
             async for raw, name, data in self._events(resp):
@@ -509,6 +574,12 @@ class Retriever:
                     blocks[idx] = copy.deepcopy(block)
                     order.append(idx)
                     btype = block.get("type")
+                    if btype in THINKING:
+                        thought = True
+                    elif btype in ("tool_use", "server_tool_use") and (
+                        block.get("name") != ccr.TOOL_NAME
+                    ):
+                        foreign = True  # a client tool, before or after ours
                     if btype == "tool_use" and block.get("name") == ccr.TOOL_NAME:
                         ours.add(idx)
                         holding = True
@@ -518,8 +589,6 @@ class Retriever:
                         skipped.add(idx)
                         continue
                     if holding:
-                        if btype in ("tool_use", "server_tool_use"):
-                            mixed = True
                         held.append((idx, raw, name, data))
                         continue
                     mapping[idx] = next_client
@@ -555,7 +624,8 @@ class Retriever:
             following = None
             if (
                 ours
-                and not mixed
+                and not foreign
+                and not thought
                 and stop_reason == "tool_use"
                 and self.rounds < settings.gateway_retrieve_max_rounds
             ):
@@ -574,9 +644,11 @@ class Retriever:
                         ],
                     },
                 ]
-                following = await self._open_stream(hidden + round_hidden)
-                if following is not None:
-                    hidden.extend(round_hidden)
+                prepared = self._round(hidden + round_hidden, stream=True)
+                if prepared is not None:
+                    following = await self._open_stream(prepared[0])
+                    if following is not None:
+                        hidden = prepared[1]
 
             for idx, raw, name, data in held:
                 if idx is None:
@@ -622,7 +694,7 @@ class Retriever:
         while resp is not None:
             calls: dict[int, dict[str, Any]] = {}
             ours: set[int] = set()
-            client_tools = holding = False
+            client_tools = holding = thought = False
             held: list[tuple[bytes, Any]] = []
             tail: list[tuple[bytes, Any]] = []
             text = ""
@@ -654,6 +726,8 @@ class Retriever:
                     elif entry["name"]:
                         client_tools = True
                 text += delta.get("content") or ""
+                if delta.get("reasoning_content") or delta.get("reasoning"):
+                    thought = True
                 if choice.get("finish_reason"):
                     finish = choice["finish_reason"]
                     tail.append((raw, data))
@@ -667,6 +741,7 @@ class Retriever:
             if (
                 ours
                 and not client_tools
+                and not thought
                 and finish == "tool_calls"
                 and self.rounds < settings.gateway_retrieve_max_rounds
             ):
@@ -693,9 +768,11 @@ class Retriever:
                         for c in ours_calls
                     ),
                 ]
-                following = await self._open_stream(hidden + round_hidden)
-                if following is not None:
-                    hidden.extend(round_hidden)
+                prepared = self._round(hidden + round_hidden, stream=True)
+                if prepared is not None:
+                    following = await self._open_stream(prepared[0])
+                    if following is not None:
+                        hidden = prepared[1]
 
             for raw, data in held:
                 delta = ((data.get("choices") or [{}])[0] or {}).get("delta") or {}

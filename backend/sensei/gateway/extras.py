@@ -218,11 +218,25 @@ class BudgetMeter:
                 events.popleft()
             return sum(n for _, n in events)
 
+    # Tool names come from a client-controlled header; cap how many are kept.
+    MAX_TOOLS = 256
+
     def add(self, tool: str, tokens: int) -> None:
-        if tokens <= 0:
+        if tokens <= 0 or not budgets():
             return
+        now = clock()
+        window = self._window()
         with self._lock:
-            self._events.setdefault(tool.lower(), deque()).append((clock(), tokens))
+            events = self._events.setdefault(tool.lower(), deque())
+            events.append((now, tokens))
+            while events and now - events[0][0] > window:
+                events.popleft()
+            if len(self._events) > self.MAX_TOOLS:
+                stale = [k for k, v in self._events.items() if not v or now - v[-1][0] > window]
+                for k in stale:
+                    del self._events[k]
+                while len(self._events) > self.MAX_TOOLS:
+                    del self._events[next(iter(self._events))]
 
     def clear(self) -> None:
         with self._lock:

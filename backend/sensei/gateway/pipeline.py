@@ -29,8 +29,16 @@ from typing import Any
 from sensei import output_shaping
 from sensei.config import settings
 from sensei.gateway import ccr, dedup, tools, wire
-from sensei.gateway.intercept import fingerprint
-from sensei.gateway.session import Plan, apply_cache_control, canon, lineage_key, live_zone
+from sensei.gateway.intercept import expansion_key, fingerprint
+from sensei.gateway.session import (
+    Plan,
+    apply_cache_control,
+    canon,
+    digest,
+    lineage_key,
+    live_zone,
+)
+from sensei.gateway.state import state
 
 # (text, before, after, saved, blocks)
 CompressText = Callable[..., tuple[Any, int, int, int, int]]
@@ -50,6 +58,10 @@ class Prepared:
     shaped: int = -1
     plan: Plan | None = None
     info: dict[str, Any] = field(default_factory=dict)
+    # Conversation + credential, and the history digest a hidden exchange
+    # appended to this request would be filed under.
+    scope: str = ""
+    prefix: str = ""
 
 
 class _Tally:
@@ -256,9 +268,17 @@ def _shape(api: str, msg: Any) -> list[Any] | None:
             return [{**msg, "content": [*content, {"type": "text", "text": text}]}]
         return None
     if api == "openai":
-        if msg.get("role") not in ("user", "tool", "function"):
+        # Inside the user's own message: a system message mid-conversation
+        # breaks strict chat templates (Mistral, several vLLM ones), and a
+        # tool result is not the place for an instruction.
+        if msg.get("role") != "user":
             return None
-        return [msg, {"role": "system", "content": text}]
+        content = msg.get("content")
+        if isinstance(content, str):
+            return [{**msg, "content": f"{content}\n\n{text}"}]
+        if isinstance(content, list):
+            return [{**msg, "content": [*content, {"type": "text", "text": text}]}]
+        return None
     if _is_assistant(api, msg):
         return None
     return [msg, {"type": "message", "role": "developer", "content": text}]
@@ -273,6 +293,7 @@ def prepare(
     first_party: bool = False,
     commit: bool = True,
     shape: bool = True,
+    credential: str = "",
 ) -> Prepared:
     """Build the payload to forward. ``commit=False`` is a dry run (count_tokens)."""
     payload = dict(body)
@@ -301,6 +322,7 @@ def prepare(
         system_material = body.get("instructions")
         first = messages[0] if messages else None
     key = lineage_key(api, system_material, first, flags=f"r{int(inject)}")
+    scope = digest([key, state.credential_tag(credential)])
 
     live = (
         settings.gateway_live_zone
@@ -314,6 +336,8 @@ def prepare(
         plan = live_zone.plan(api=api, key="", head=head, messages=messages, body=body)
         plan.reuse, plan.groups, plan.cause = 0, [], "off"
     stripped = plan.stripped
+    if body.get("cache_control"):  # automatic caching: the provider holds it all
+        plan.frozen = len(stripped)
 
     builder = _Builder(api, compress_text, ccr_on=inject)
     index = dedup.DedupIndex(settings.gateway_dedup_min_lines, settings.gateway_dedup_min_chars)
@@ -333,6 +357,11 @@ def prepare(
 
     shaped = -1
     last = len(stripped) - 1
+
+    def is_tail(i: int) -> bool:
+        """The newest message of its turn: what was last when it was new."""
+        return i == last or _is_assistant(api, stripped[i + 1])
+
     groups: list[list[Any]] = []
     expanded: set[int] = set()
     counts: list[Counts] = []
@@ -345,9 +374,13 @@ def prepare(
             tally = _Tally()
             group = None
             if _is_assistant(api, msg):
-                fp = fingerprint(api, msg)
-                real = live_zone.expansion(fp) if fp else None
-                if real is not None:
+                fp = fingerprint(api, msg) if settings.gateway_retrieve_intercept else None
+                real = (
+                    state.get(scope, "expansion", expansion_key(digest(plan.hashes[:i]), fp))
+                    if fp
+                    else None
+                )
+                if isinstance(real, list) and real:
                     group = copy.deepcopy(real)
                     expanded.add(i)
                 else:
@@ -358,12 +391,13 @@ def prepare(
                 if answered:
                     new = msg
                     for t in answered:
-                        new = wire.set_path(new, t.path, ccr.resolve(retrieve_args[t.call_id]))
+                        new = wire.set_path(new, t.path, _answer(scope, t.call_id, retrieve_args))
                     group = [new]
                 else:
-                    # `gateway_preserve_cache`: only the newest message is
-                    # compressed; with the live zone it then stays compressed.
-                    keep = settings.gateway_preserve_cache and i != last
+                    # `gateway_preserve_cache`: only what was the newest message
+                    # when it was sent is compressed. Decided per message, so a
+                    # restart reproduces it.
+                    keep = settings.gateway_preserve_cache and not is_tail(i)
                     new = msg if keep else builder.message(msg, tally)
                     if settings.gateway_dedup and not keep:
                         for t in wire.tool_texts(api, new):
@@ -377,17 +411,21 @@ def prepare(
                                 tally.add(0, -saved, saved, 0)
                                 deduped += saved
                     group = [new]
-                    if i == last and shape and settings.output_shaper:
-                        shaped = int(output_shaping.assign())
-                        if shaped:
-                            shaped_group = _shape(api, new)
-                            if shaped_group is None:
-                                shaped = -1
-                            else:
+                    if is_tail(i) and shape and settings.output_shaper:
+                        # Per message, from its own hash: the same message is
+                        # shaped the same way on every request and after a
+                        # restart, and the arms stay randomised.
+                        arm = int(output_shaping.assign_for(plan.hashes[i]))
+                        shaped_group = _shape(api, new) if arm else [new]
+                        if shaped_group is not None:
+                            if i == last:
+                                shaped = arm
+                            if arm:
                                 group = shaped_group
                                 cost = len(output_shaping.instruction()) // 4
                                 tally.add(0, cost, -cost, 0)
-                                info["shaper_instruction_tokens"] = cost
+                                if i == last:
+                                    info["shaper_instruction_tokens"] = cost
             count = tally.counts()
         for fm in group:
             for t in wire.tool_texts(api, fm):
@@ -464,7 +502,23 @@ def prepare(
         shaped=shaped,
         plan=plan if live else None,
         info=info,
+        scope=scope,
+        prefix=digest(plan.hashes),
     )
+
+
+def _answer(scope: str, call_id: str, retrieve_args: dict[str, dict[str, Any]]) -> str:
+    """What a client-visible retrieve call is answered with, fixed once chosen.
+
+    Stored the first time, so every later request forwards the same text even
+    after the original has left the CCR store or Sensei has restarted.
+    """
+    known = state.get(scope, "answer", call_id)
+    if isinstance(known, str):
+        return known
+    text = ccr.resolve(retrieve_args[call_id])
+    state.put(scope, "answer", call_id, text)
+    return text
 
 
 def _compress_system(builder: _Builder, system: Any, tally: _Tally) -> Any:

@@ -25,6 +25,7 @@ from sensei import savings as savings_mod
 from sensei.config import settings
 from sensei.gateway import ccr, extras, session, tools
 from sensei.gateway.session import canon, live_zone, strip_cache_control
+from sensei.gateway.state import state
 from sensei.main import app
 from sensei.routers import gateway
 
@@ -102,6 +103,9 @@ def upstream(monkeypatch: pytest.MonkeyPatch, tmp_path):
         "savings_db": str(tmp_path / "ledger.db"),
         "gateway_live_zone": True,
         "gateway_retrieve_tool": True,
+        "gateway_retrieve_intercept": False,
+        "gateway_state_persist": True,
+        "gateway_state_db": str(tmp_path / "gateway-state.db"),
         "gateway_tool_schema_compaction": True,
         "gateway_tool_search": False,
         "gateway_dedup": True,
@@ -119,11 +123,18 @@ def upstream(monkeypatch: pytest.MonkeyPatch, tmp_path):
     savings_mod.get_savings_tracker().ledger.clear()
     live_zone.clear()
     ccr.store.clear()
+    state.close()
+    state.clear()
     extras.response_cache.clear()
     extras.budget_meter.clear()
     yield sent, handlers
     savings_mod.reset_savings_tracker()
     live_zone.clear()
+
+
+@pytest.fixture
+def intercept(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "gateway_retrieve_intercept", True)
 
 
 @pytest.fixture
@@ -371,7 +382,7 @@ class TestRetrieve:
         assert "tools" not in body
         assert not ccr.MARKER_RE.search(canon(body))
 
-    def test_call_is_answered_server_side(self, client, upstream):
+    def test_call_is_answered_server_side(self, client, upstream, intercept):
         sent, handlers = upstream
         replies = []
 
@@ -491,7 +502,7 @@ class TestRetrieve:
         assert results[0]["content"] == _rows()
         assert results[1]["content"] == "a.txt"
 
-    def test_streamed_call_is_spliced_out(self, client, upstream):
+    def test_streamed_call_is_spliced_out(self, client, upstream, intercept):
         _, handlers = upstream
         cid = ccr.ccr_id(_rows())
 
@@ -622,7 +633,7 @@ class TestRetrieve:
         assert delta["usage"]["output_tokens"] == 7
         assert calls[1]["messages"][-1]["content"][0]["content"] == _rows()
 
-    def test_chat_completions_round_trip(self, client, upstream, monkeypatch):
+    def test_chat_completions_round_trip(self, client, upstream, intercept, monkeypatch):
         monkeypatch.setattr(settings, "api_provider", "openai")
         sent, handlers = upstream
         cid = ccr.ccr_id(_rows())
@@ -708,7 +719,7 @@ class TestRetrieve:
         assert data["usage"]["completion_tokens"] == 5
         assert "title" not in _body(sent[0])["tools"][0]["function"]["parameters"]
 
-    def test_responses_round_trip(self, client, upstream, monkeypatch):
+    def test_responses_round_trip(self, client, upstream, intercept, monkeypatch):
         monkeypatch.setattr(settings, "api_provider", "openai")
         _, handlers = upstream
         cid = ccr.ccr_id(_rows())
@@ -1115,7 +1126,7 @@ def test_plain_streams_pass_byte_for_byte(client, upstream):
     assert resp.content == raw
 
 
-def test_chat_stream_is_spliced(client, upstream, monkeypatch):
+def test_chat_stream_is_spliced(client, upstream, intercept, monkeypatch):
     monkeypatch.setattr(settings, "api_provider", "openai")
     _, handlers = upstream
     cid = ccr.ccr_id(_rows())
@@ -1205,7 +1216,9 @@ def test_chat_stream_is_spliced(client, upstream, monkeypatch):
     assert calls[1]["messages"][-1]["content"] == _rows()
 
 
-def test_follow_up_thinking_is_kept_out_of_the_visible_message(client, upstream):
+def test_a_response_with_thinking_is_never_hidden(client, upstream, intercept):
+    """Thinking is bound to the prefix that produced it, so a round that
+    thinks goes to the client as it came: no follow-up, nothing merged."""
     _, handlers = upstream
     cid = ccr.ccr_id(_rows())
     replies = [
@@ -1240,10 +1253,9 @@ def test_follow_up_thinking_is_kept_out_of_the_visible_message(client, upstream)
     data = client.post(
         "/v1/messages", json={"model": "m", "tools": TOOLS, "messages": msgs}, headers=KEY
     ).json()
-    assert [(b["type"], b.get("signature")) for b in data["content"]] == [
-        ("thinking", "s1"),
-        ("text", None),
-    ]
+    assert [b["type"] for b in data["content"]] == ["thinking", "tool_use"]
+    assert data["content"][1]["name"] == ccr.TOOL_NAME
+    assert len(replies) == 1  # no follow-up was sent
 
 
 class TestLinearTime:
