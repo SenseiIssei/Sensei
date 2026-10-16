@@ -20,6 +20,7 @@ from sensei.routers.conversations import init_conversations_deps
 from sensei.routers.gateway import init_gateway_deps
 from sensei.routers.stats import init_stats_deps
 from sensei.security.auth import AuthMiddleware
+from sensei.security.csrf import OriginGuard
 from sensei.security.rate_limit import rate_limiter
 from sensei.security.sessions import SessionManager
 
@@ -164,6 +165,9 @@ app.add_middleware(
 # Auth middleware
 app.add_middleware(AuthMiddleware)
 
+# Refuse cross-site state changes on /api (a web page POSTing to loopback).
+app.add_middleware(OriginGuard)
+
 
 # Rate limiting middleware
 @app.middleware("http")
@@ -210,6 +214,7 @@ from sensei.routers.chat import router as chat_router
 from sensei.routers.conversations import router as conversations_router
 from sensei.routers.extract import router as extract_router
 from sensei.routers.gateway import router as gateway_router
+from sensei.routers.hooks import router as hooks_router
 from sensei.routers.maintenance import router as maintenance_router
 from sensei.routers.models import router as models_router
 from sensei.routers.rag import router as rag_router
@@ -237,6 +242,8 @@ app.include_router(webhook_router, prefix="/api")
 # OpenAI-compatible compression gateway — mounted at the root so clients can use
 # http://<host>:<port>/v1 as a drop-in OpenAI base URL.
 app.include_router(gateway_router)
+# Tool-output hooks (Claude Code, Copilot CLI, Gemini CLI, Cursor, plugins).
+app.include_router(hooks_router)
 
 
 @app.get("/")

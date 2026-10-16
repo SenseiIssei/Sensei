@@ -101,8 +101,25 @@ Name: "{userstartup}\{#AppName}"; Filename: "{app}\senseiw.exe"; Parameters: "tr
 ; Wiring happens before the first launch so the tools are already routed when
 ; the server comes up. `--dry-run` is not offered here: the checkbox above is
 ; the consent, and `setup-tools --undo` is the way back.
-Filename: "{app}\sensei.exe"; Parameters: "setup-tools"; WorkingDir: "{app}"; \
+;
+; `--from-installer` respects an earlier "Disconnect everything" and an earlier
+; per-tool disconnect: `sensei update` re-runs this installer silently with the
+; tasks it remembers, and that must not undo a decision made since.
+Filename: "{app}\sensei.exe"; Parameters: "setup-tools --from-installer"; WorkingDir: "{app}"; \
   StatusMsg: "Connecting your AI tools..."; Flags: runhidden waituntilterminated; Tasks: wiretools
+; Unticked, the answer has to outlive the installer. The tray started below
+; runs a background scan that connects newly found tools, and without this it
+; connected all of them thirty seconds after being told not to. Before the tray
+; starts, so there is no window in which it can.
+;
+; Someone unticking the box in the wizard has just said no, and that overrides
+; an earlier yes. A silent run is `sensei update` replaying the tasks it
+; remembers, and must not override a "Connect everything" chosen since, so
+; only that run uses `--if-unset`.
+Filename: "{app}\sensei.exe"; Parameters: "setup-tools --auto off"; WorkingDir: "{app}"; \
+  Flags: runhidden waituntilterminated; Tasks: not wiretools; Check: not WizardSilent
+Filename: "{app}\sensei.exe"; Parameters: "setup-tools --auto off --if-unset"; WorkingDir: "{app}"; \
+  Flags: runhidden waituntilterminated; Tasks: not wiretools; Check: WizardSilent
 Filename: "{app}\senseiw.exe"; WorkingDir: "{app}"; \
   Description: "Start Sensei now"; Flags: nowait postinstall skipifsilent
 ; A silent run is an update from `sensei update`: bring the tray back.
@@ -118,7 +135,9 @@ Filename: "{app}\sensei.exe"; Parameters: "autostart off"; WorkingDir: "{app}"; 
   RunOnceId: "AutostartOff"; Flags: runhidden waituntilterminated
 ; Put the other tools back before removing the binary they point at. Runs first
 ; because after the files are gone there is nothing left to run it with.
-Filename: "{app}\sensei.exe"; Parameters: "setup-tools --undo"; WorkingDir: "{app}"; \
+; `--forget`: uninstalling is not a decision about any one tool, so a later
+; reinstall should connect them again rather than remember them as refused.
+Filename: "{app}\sensei.exe"; Parameters: "setup-tools --undo --forget"; WorkingDir: "{app}"; \
   RunOnceId: "UnwireTools"; Flags: runhidden waituntilterminated
 
 [UninstallDelete]
