@@ -1244,3 +1244,41 @@ def test_follow_up_thinking_is_kept_out_of_the_visible_message(client, upstream)
         ("thinking", "s1"),
         ("text", None),
     ]
+
+
+class TestLinearTime:
+    """Tool descriptions and tool output come from servers Sensei does not
+    control; nothing that scans them may backtrack."""
+
+    def test_sentence_split_matches_the_regex_it_replaced(self):
+        import random
+        import re
+
+        oracle = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9`\"'(\[])")
+        rng = random.Random(20261016)
+        alphabet = "ab A9.!? \n\t('`\"["
+        for _ in range(4000):
+            s = "".join(rng.choice(alphabet) for _ in range(rng.randint(0, 40)))
+            assert tools.split_sentences(s) == oracle.split(s), repr(s)
+            assert tools.split_sentences(s, 1) == oracle.split(s, maxsplit=1), repr(s)
+
+    PAYLOADS = {  # noqa: RUF012
+        "dot-then-spaces": lambda: "." + " " * 200_000,
+        "dot-space-runs": lambda: ". " * 100_000,
+        "mixed-whitespace": lambda: "a." + "\t \n" * 70_000 + "a",
+        "open-markers": lambda: "[sensei: " * 50_000,
+        "unclosed-marker": lambda: "[sensei: " + "x" * 200_000 + "; retrieve ccr=",
+    }
+
+    @pytest.mark.parametrize("kind", sorted(PAYLOADS))
+    def test_pathological_input_is_fast(self, kind):
+        import time
+
+        payload = self.PAYLOADS[kind]()
+
+        started = time.perf_counter()
+        tools.first_sentence(payload)
+        tools.shorten_description(payload, 100)
+        ccr.has_marker(payload)
+        ccr.MARKER_RE.findall(payload)
+        assert time.perf_counter() - started < 1.0

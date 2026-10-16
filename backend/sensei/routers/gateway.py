@@ -28,6 +28,7 @@ import logging
 import random
 import time
 from typing import Any
+from urllib.parse import urlsplit
 
 import anyio
 import httpx
@@ -1084,7 +1085,9 @@ def _anthropic_no_key(savings: dict[str, Any]) -> JSONResponse:
 
 
 def _first_party_anthropic() -> bool:
-    return "api.anthropic.com" in settings.anthropic_api_base_url
+    """Tool search is a first-party feature; a proxy or a cloud host may not have it."""
+    host = urlsplit(settings.anthropic_api_base_url).hostname or ""
+    return host.lower() == "api.anthropic.com"
 
 
 @router.post("/v1/messages")

@@ -55,6 +55,12 @@ def canon(value: Any) -> str:
 
 
 def digest(value: Any) -> str:
+    """A content fingerprint: keys lineages and replayed messages, nothing more.
+
+    Never applied to a credential — the response cache tags those with a keyed
+    HMAC (``extras.credential_tag``). Fast on purpose: it runs on every message
+    of every request, and its only job is telling two byte strings apart.
+    """
     return hashlib.blake2b(
         canon(value).encode("utf-8", "surrogatepass"), digest_size=16
     ).hexdigest()

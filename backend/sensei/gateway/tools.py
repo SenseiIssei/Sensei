@@ -30,7 +30,6 @@ None of this touches a Claude-subscription (OAuth) request unless
 
 from __future__ import annotations
 
-import re
 import threading
 from collections import OrderedDict
 from typing import Any
@@ -90,14 +89,40 @@ def compact_schema(schema: Any, *, shorten: bool = False) -> Any:
     return out
 
 
-_SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9`\"'(\[])")
+_SENTENCE_START = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789`\"'([")
+
+
+def split_sentences(text: str, maxsplit: int = 0) -> list[str]:
+    """Split after ``.``/``!``/``?`` plus whitespace, before a capital or digit.
+
+    A single left-to-right scan rather than a regex: tool descriptions come
+    from whatever MCP server the client attached, and a backtracking pattern
+    over a long whitespace run is a way to stall the gateway.
+    """
+    parts: list[str] = []
+    start = i = 0
+    n = len(text)
+    while i < n:
+        if text[i] in ".!?" and i + 1 < n and text[i + 1].isspace():
+            j = i + 1
+            while j < n and text[j].isspace():
+                j += 1
+            if j < n and text[j] in _SENTENCE_START:
+                parts.append(text[start : i + 1])
+                start = j
+                if maxsplit and len(parts) >= maxsplit:
+                    break
+            i = j
+            continue
+        i += 1
+    parts.append(text[start:])
+    return parts
 
 
 def first_sentence(text: str) -> str:
     text = text.strip()
     para = text.split("\n\n", 1)[0].strip()
-    parts = _SENTENCE_END.split(para, maxsplit=1)
-    return parts[0].strip() if parts else para
+    return split_sentences(para, maxsplit=1)[0].strip()
 
 
 def shorten_description(text: str, max_chars: int) -> str:
@@ -106,7 +131,7 @@ def shorten_description(text: str, max_chars: int) -> str:
     if len(para) <= max_chars:
         return para
     out = ""
-    for sentence in _SENTENCE_END.split(para):
+    for sentence in split_sentences(para):
         candidate = f"{out} {sentence}".strip()
         if len(candidate) > max_chars:
             break
