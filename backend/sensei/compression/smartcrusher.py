@@ -454,6 +454,15 @@ class SmartCrusher:
             if up >= (len(stamps) - 1) * 0.9 or up <= (len(stamps) - 1) * 0.1:
                 ordered = True
         if not ordered:
+            # A unique, human-readable key (SHOP-1231, a username, a path) is
+            # what people ask about; a uuid or a hash is not.
+            for v in dense.values():
+                if (
+                    len(set(v)) == len(v)
+                    and sum(1 for x in v if _LETTER.search(x) and not _HEXISH.fullmatch(x))
+                    >= len(v) * 0.9
+                ):
+                    return True
             shapes = {_shape(json.dumps(r, sort_keys=True, ensure_ascii=False)) for r in rows}
             return len(shapes) >= n * 0.1
         for v in dense.values():
@@ -528,6 +537,8 @@ _MISSING = _Missing()
 
 _SHAPE_NUM = re.compile(r"\d+(?:\.\d+)?")
 _TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2})?")
+_LETTER = re.compile(r"[A-Za-z]")
+_HEXISH = re.compile(r"[0-9a-fA-F-]{8,}")
 _SHAPE_HEX = re.compile(r"\b[0-9a-f]{8,}\b|\b[0-9a-f-]{36}\b")
 
 
