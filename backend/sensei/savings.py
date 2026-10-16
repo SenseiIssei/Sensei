@@ -65,6 +65,12 @@ _MIGRATIONS: tuple[tuple[str, str], ...] = (
     ("prompt_billed", "ALTER TABLE events ADD COLUMN prompt_billed INTEGER NOT NULL DEFAULT 0"),
     ("cache_read", "ALTER TABLE events ADD COLUMN cache_read INTEGER NOT NULL DEFAULT 0"),
     ("cache_write", "ALTER TABLE events ADD COLUMN cache_write INTEGER NOT NULL DEFAULT 0"),
+    # What the gateway's live zone made of the request: `hit` (append-only,
+    # replayed), `cold_start`, `ttl` or `prefix_change` (why the provider's
+    # cache could not be fully reused), `off`, or '' for rows that predate it.
+    ("cache_event", "ALTER TABLE events ADD COLUMN cache_event TEXT NOT NULL DEFAULT ''"),
+    # Hidden sensei_retrieve rounds the gateway answered for this request.
+    ("retrieve_rounds", "ALTER TABLE events ADD COLUMN retrieve_rounds INTEGER NOT NULL DEFAULT 0"),
 )
 
 DAY = 86_400.0
@@ -127,6 +133,7 @@ class SavingsLedger:
         model: str = "",
         output_tokens: int = 0,
         shaped: int = -1,
+        cache_event: str = "",
     ) -> int | None:
         """Record one request. Returns the row id so a later response can fill
         in the output-token count, which is not known when the request starts.
@@ -141,8 +148,8 @@ class SavingsLedger:
                 cursor = conn.execute(
                     "INSERT INTO events"
                     " (ts, tool, provider, model, before, after, saved, blocks,"
-                    "  output_tokens, shaped)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "  output_tokens, shaped, cache_event)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         time.time(),
                         tool[:64],
@@ -154,6 +161,7 @@ class SavingsLedger:
                         _int(savings.get("blocks_compressed")),
                         _int(output_tokens),
                         int(shaped),
+                        cache_event[:32],
                     ),
                 )
                 conn.commit()
@@ -183,6 +191,55 @@ class SavingsLedger:
                 conn.commit()
             except sqlite3.Error as exc:
                 logger.warning("Could not record usage: %s", exc)
+
+    def set_retrieve_rounds(self, row_id: int | None, rounds: int) -> None:
+        if row_id is None or not settings.savings_persist or rounds <= 0:
+            return
+        with self._lock:
+            conn = self._connect()
+            if conn is None:
+                return
+            try:
+                conn.execute(
+                    "UPDATE events SET retrieve_rounds = ? WHERE rowid = ?", (int(rounds), row_id)
+                )
+                conn.commit()
+            except sqlite3.Error as exc:
+                logger.warning("Could not record retrieve rounds: %s", exc)
+
+    def cache_events(self, since: float | None = None) -> dict[str, Any]:
+        """Requests by live-zone outcome, with what the provider billed for each.
+
+        The point is attribution: a low cache hit rate is only actionable once
+        it is clear whether it comes from idle gaps (``ttl``), from the client
+        rewriting history (``prefix_change``) or from new conversations.
+        """
+        rows = self._query(
+            "SELECT cache_event, COUNT(*), COALESCE(SUM(prompt_billed),0),"
+            " COALESCE(SUM(cache_read),0), COALESCE(SUM(cache_write),0),"
+            " COALESCE(SUM(retrieve_rounds),0)"
+            " FROM events WHERE ts >= ? AND cache_event != '' GROUP BY cache_event",
+            (since or 0.0,),
+        )
+        return {
+            str(r[0]): {
+                "requests": _int(r[1]),
+                "prompt_tokens_billed": _int(r[2]),
+                "cache_read_tokens": _int(r[3]),
+                "cache_write_tokens": _int(r[4]),
+                "retrieve_rounds": _int(r[5]),
+            }
+            for r in rows
+        }
+
+    def tool_tokens_since(self, tool: str, since: float) -> int:
+        """Prompt tokens a tool sent since ``since``: billed where known."""
+        rows = self._query(
+            "SELECT COALESCE(SUM(CASE WHEN prompt_billed > 0 THEN prompt_billed ELSE after END),0)"
+            " FROM events WHERE ts >= ? AND tool = ?",
+            (since, tool[:64]),
+        )
+        return _int(rows[0][0]) if rows else 0
 
     def output_arms(self, model: str | None = None) -> tuple[list[int], list[int]]:
         """Output-token counts for (shaped, control).
@@ -428,6 +485,7 @@ class SavingsTracker:
         provider: str = "",
         model: str = "",
         shaped: int = -1,
+        cache_event: str = "",
     ) -> int | None:
         """Fold one request's savings dict (from the gateway) into the totals.
 
@@ -440,7 +498,14 @@ class SavingsTracker:
             self.tokens_after += _int(savings.get("prompt_tokens_after"))
             self.tokens_saved += _int(savings.get("tokens_saved"))
             self.blocks_compressed += _int(savings.get("blocks_compressed"))
-        return self.ledger.append(savings, tool=tool, provider=provider, model=model, shaped=shaped)
+        return self.ledger.append(
+            savings,
+            tool=tool,
+            provider=provider,
+            model=model,
+            shaped=shaped,
+            cache_event=cache_event,
+        )
 
     def output_effect(self) -> dict[str, Any]:
         """Did shaping actually shorten the answers? With an interval."""

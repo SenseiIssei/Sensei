@@ -90,6 +90,10 @@ def test_nothing_but_counters_is_stored(ledger: SavingsLedger) -> None:
         "prompt_billed",
         "cache_read",
         "cache_write",
+        # The live zone's outcome, one of a fixed set of labels, and a count of
+        # hidden retrieve rounds.
+        "cache_event",
+        "retrieve_rounds",
     }
 
 
