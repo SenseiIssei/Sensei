@@ -54,9 +54,15 @@ def test_a_config_file_read_by_an_agent_stays_byte_exact():
 
 
 def test_api_output_arrays_still_compress_as_tool_results():
-    rows = json.dumps([{"id": i, "name": f"n{i}", "ok": True} for i in range(30)], indent=2)
-    r = ContentRouter(enable_caching=False).compress(rows, edit_target=True)
-    assert len(r.compressed) < len(rows)
+    """One-line JSON is an API or MCP response and compresses. Pretty-printed
+    JSON read as a tool result may be a fixture or data file on disk that the
+    model edits next, so it stays byte-exact, arrays included."""
+    data = [{"id": i, "name": f"n{i}", "ok": True} for i in range(30)]
+    router = ContentRouter(enable_caching=False)
+    api = json.dumps(data)
+    assert len(router.compress(api, edit_target=True).compressed) < len(api)
+    on_disk = json.dumps(data, indent=2)
+    assert router.compress(on_disk, edit_target=True).compressed == on_disk
 
 
 def test_protected_content_keeps_invisible_characters():

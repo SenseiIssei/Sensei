@@ -248,6 +248,21 @@ class Settings(BaseSettings):
     #   aggressive  also rewrite code in tool results and fold long import
     #               blocks. More savings; agents' exact-match edits can fail.
     code_compression: Literal["safe", "aggressive"] = "safe"
+
+    # ── Compression pipeline (compression/*; owned by the compression work) ──
+    # Lossy steps: search-result caps, log and test-output noise, row sampling
+    # in large JSON arrays, minified-line and base64 elision, HTML extraction.
+    # Every cut leaves `[sensei: <what>; retrieve ccr=<id>]` in place, and the
+    # original is in the CCR store under that id. Off keeps only transforms
+    # that lose nothing (folds, grouping, tables, minification).
+    compression_lossy: bool = True
+    # Long prose in tool results.
+    #   rules       rewrite verbose phrasing, never drop a sentence (TextCompressor)
+    #   extractive  keep whole sentences by relevance to the user's question and
+    #               mark the dropped ones (TextCrusher), then the rules pass
+    compression_prose: Literal["rules", "extractive"] = "rules"
+    # ── end compression pipeline ──
+
     ccr_ttl_hours: int = 24
     ccr_cache_dir: str = ".sensei_cache"
     # Ask the model for terser answers. Output tokens cost roughly 4-5x input
