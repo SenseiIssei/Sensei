@@ -1,83 +1,45 @@
 <div align="center">
 
-<img src="frontend/public/sensei.svg" width="88" height="88" alt="" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
+  <img src="docs/assets/hero-light.svg" alt="Sensei — your AI coding tools, using a fraction of the tokens" width="100%">
+</picture>
 
-# Sensei
-
-### Your AI coding tools, using a fraction of the tokens.
-
-A free, self-hosted gateway that compresses what Claude Code, Codex, Cursor and
-friends send to the model — before it leaves your machine.
+<br>
 
 [![CI](https://github.com/SenseiIssei/Sensei/actions/workflows/ci.yml/badge.svg)](https://github.com/SenseiIssei/Sensei/actions/workflows/ci.yml)
 [![Security](https://github.com/SenseiIssei/Sensei/actions/workflows/security.yml/badge.svg)](https://github.com/SenseiIssei/Sensei/actions/workflows/security.yml)
-[![Release](https://img.shields.io/github/v/release/SenseiIssei/Sensei?color=7989ec)](https://github.com/SenseiIssei/Sensei/releases/latest)
+[![Release](https://img.shields.io/github/v/release/SenseiIssei/Sensei?color=7989ec&label=release)](https://github.com/SenseiIssei/Sensei/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-4ac97e)](LICENSE)
-[![Python 3.11–3.14](https://img.shields.io/badge/python-3.11%20–%203.14-3776AB)](https://python.org)
+[![Python 3.11–3.14](https://img.shields.io/badge/python-3.11%20–%203.14-7989ec)](https://python.org)
+[![Platforms](https://img.shields.io/badge/Windows%20·%20macOS%20·%20Linux-supported-9b9c9e)](#install-in-one-line)
 
-**Windows · macOS · Linux** — one command to install, no Python needed.
-
-<img src="docs/screenshots/overview-dark.png" alt="Sensei's overview: 148.7k tokens saved across 70 requests from Claude Code, Codex, Cursor, Aider and Cline, with the prompt-cache hit rate and per-tool breakdown" width="860">
+**[Install](#install-in-one-line)** · **[See it](#see-it)** · **[Numbers](#how-much-smaller)** · **[Features](#what-you-get)** · **[MCP](#mcp-sensei-as-a-server-and-as-a-proxy)** · **[For the nerds](#-for-the-nerds)**
 
 </div>
 
----
+<br>
 
-## The idea in one picture
+Sensei is a **free, self-hosted gateway** that sits between your AI coding
+tools and the model. Before a prompt leaves your machine it squeezes out the
+padding — JSON blobs, build logs, file listings, disassembly — so the model gets
+everything it needs and you stop paying for the rest.
 
-AI coding tools send a lot of text to the model. Most of it is repetitive —
-file listings, build logs, JSON blobs, disassembly. You pay for every character.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/flow-dark.svg">
+  <img src="docs/assets/flow-light.svg" alt="Your AI tool sends 50,000 tokens to Sensei on your machine; Sensei sends 10,000 to the model; the answer comes back unchanged" width="100%">
+</picture>
 
-Sensei sits in the middle and squeezes that text down before it's sent. The
-model still gets everything it needs; you stop paying for the padding.
-
-```mermaid
-flowchart LR
-    A["🧑‍💻 Your AI tool<br/><sub>Claude Code, Codex, Cursor…</sub>"]
-    B["Sensei<br/><sub>runs on your machine</sub>"]
-    C["☁️ The model<br/><sub>Anthropic, OpenAI, Gemini, or local</sub>"]
-
-    A -- "50,000 tokens" --> B
-    B -- "10,000 tokens" --> C
-    C -- "answer" --> B
-    B -- "answer" --> A
-
-    style B fill:#4d62e5,stroke:#a6b0f2,color:#fff
-```
-
-**Nothing changes about how you work.** Same tools, same sign-in, same answers.
-Just a smaller bill.
+**Nothing changes about how you work.** Same tools, same sign-in — subscriptions
+included — same answers. Just a smaller bill.
 
 ---
 
-## How much smaller?
+## Install in one line
 
-Measured, not estimated — reproduce it with one command
-(see [For the nerds](#-for-the-nerds)):
-
-```mermaid
-xychart-beta
-    title "Tokens removed, by kind of content"
-    x-axis ["Build logs", "JSON output", "Search results", "Stack traces", "Prose", "Code"]
-    y-axis "% removed" 0 --> 100
-    bar [88, 79, 69, 55, 44, 42]
-```
-
-**Across a realistic mix: 79% fewer tokens**, with every fact an agent needs
-still present (checked nightly at a floor of 100%). Disassembly listings from
-objdump, radare2 or Ghidra lose 42–56%.
-
-For JSON and logs — where coding agents spend most of their budget — nothing is
-lost: Sensei restructures the text rather than summarising it. Code an agent
-has *read from disk* is left byte-exact, because it may edit that code next by
-exact string match.
-
----
-
-## Get started
-
-**1. Install** — downloads the binary for your machine and checks it against the
-release's `SHA256SUMS` before installing.
+No Python needed. The installer downloads the binary for your machine, checks
+it against the release's `SHA256SUMS`, and offers to start Sensei at login and
+to connect the AI tools it finds.
 
 ```bash
 # macOS / Linux
@@ -85,15 +47,14 @@ curl -fsSL https://raw.githubusercontent.com/SenseiIssei/Sensei/main/install.sh 
 ```
 
 ```powershell
-# Windows (per-user, no administrator prompt)
+# Windows — per-user, no administrator prompt
 irm https://raw.githubusercontent.com/SenseiIssei/Sensei/main/install.ps1 | iex
 ```
 
-The installer offers to start Sensei when you log in and to connect the AI
-tools it finds — every file it touches is shown first and backed up.
+Then open <http://localhost:7000/app/>. That's it.
 
 <details>
-<summary>Other ways in</summary>
+<summary><b>Other ways in</b> — single files, pip, source, Docker</summary>
 
 - **A single file**, from [the latest release](https://github.com/SenseiIssei/Sensei/releases/latest):
   `sensei-setup-*.exe` (Windows installer), `.dmg` (macOS), `.AppImage` /
@@ -108,60 +69,126 @@ explain the OS warnings and how to verify a download with `sha256sum` or Sigstor
 
 </details>
 
-**2. Start it**
+<details>
+<summary><b>Connect your tools, start at login, stay current</b></summary>
 
 ```bash
-sensei tray    # in the background, with a tray icon (what autostart uses)
-sensei up      # or in a terminal
-```
-
-Open <http://localhost:7000/app/>. That's the dashboard above.
-
-**3. Point your tools at it**
-
-```bash
-sensei setup-tools
-```
-
-Sensei finds the AI tools already on your machine — Claude Code, Claude
-Desktop, Codex, Cursor, Windsurf, Cline, Roo, Kilo, Zed, Continue, Gemini CLI,
-opencode, Aider — and routes them through the gateway. Each keeps its own
-sign-in, subscriptions included. `sensei setup-tools --undo` puts everything
-back; `sensei doctor --verify` sends a real request through to prove it works.
-
-For a tool you launch from a terminal there is also the zero-config version:
-
-```bash
-sensei wrap claude      # or codex, aider, opencode, goose, crush, …
-```
-
-**4. Keep it running and current**
-
-```bash
+sensei setup-tools      # route Claude Code, Codex, Cursor, … through Sensei
+sensei setup-tools --undo
+sensei wrap claude      # or: one tool, one terminal, no config at all
 sensei autostart on     # start at login — Windows, macOS and Linux
-sensei update           # install the latest release
+sensei update           # install the latest release (checksum-verified)
+sensei doctor --verify  # send a real request through and report what came back
 ```
+
+`setup-tools` finds Claude Code, Claude Desktop, Codex, Cursor, Windsurf, Cline,
+Roo, Kilo, Zed, Continue, Gemini CLI, opencode and Aider, shows exactly which
+files it will touch, backs every one up, and `--undo` puts them all back. Each
+tool keeps its own sign-in.
+
+</details>
 
 ---
 
-## What it looks like
+## See it
 
 Calm on purpose: quiet surfaces, one accent colour, and gold only for the number
 the page is about. Light and dark, following your system.
 
+<div align="center">
+<img src="docs/assets/tour.gif" alt="A tour of Sensei: the overview in dark and light, connections, settings and the first-run setup" width="100%">
+</div>
+
+<details>
+<summary><b>Full-size screenshots</b></summary>
+
 <table>
 <tr>
+<td width="50%"><img src="docs/screenshots/overview-dark.png" alt="The overview in the dark theme"></td>
 <td width="50%"><img src="docs/screenshots/overview-light.png" alt="The overview in the light theme"></td>
-<td width="50%"><img src="docs/screenshots/connections-dark.png" alt="Connections: which AI tools on this machine are routed through Sensei, and the gateway addresses"></td>
 </tr>
 <tr>
+<td><img src="docs/screenshots/connections-dark.png" alt="Connections: which AI tools on this machine are routed through Sensei"></td>
 <td><img src="docs/screenshots/settings-light.png" alt="Settings: theme, the chat's own model, updates and autostart"></td>
-<td><img src="docs/screenshots/chat-light.png" alt="First-run setup for Sensei's own chat: run a model locally or paste a key"></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/chat-light.png" alt="First-run setup for Sensei's own chat"></td>
+<td align="center"><img src="docs/screenshots/mobile-dark.png" alt="The overview at phone width" width="60%"></td>
 </tr>
 </table>
 
 <sub>Real traffic through the gateway against a local stub provider — the
 compression numbers are measured; see [how these were taken](docs/screenshots/README.md).</sub>
+
+</details>
+
+---
+
+## How much smaller?
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmark-dark.svg">
+  <img src="docs/assets/benchmark-light.svg" alt="Tokens removed: build logs 88%, JSON tool output 79%, search results 69%, stack traces 55%, prose 44%, code 42%; 79% overall with 100% of facts kept" width="100%">
+</picture>
+
+Measured, not estimated — real `tiktoken` counts, reproducible with one command
+(see [For the nerds](#-for-the-nerds)). Every fact an agent needs must survive
+compression; nightly CI enforces that at a floor of **100%**. Disassembly from
+objdump, radare2 or Ghidra loses 42–56%.
+
+For JSON and logs — where coding agents spend most of their budget — nothing is
+lost: Sensei restructures the text instead of summarising it. Code an agent has
+*read from disk* stays byte-exact, because it may edit that code next by exact
+string match.
+
+---
+
+## What you get
+
+<table>
+<tr>
+<td width="50%" valign="top">
+<img src="docs/assets/icons/compress.svg" width="40" alt=""><br>
+<b>Compression before it's sent</b><br>
+JSON becomes tables, logs are triaged, comments go, disassembly loses its byte
+columns. Every original stays retrievable by id.
+</td>
+<td width="50%" valign="top">
+<img src="docs/assets/icons/tools.svg" width="40" alt=""><br>
+<b>Works with the tools you have</b><br>
+OpenAI Chat, OpenAI Responses (Codex) and Anthropic Messages, including
+<code>count_tokens</code>. One command wires 13 tools; one undoes it.
+</td>
+</tr>
+<tr>
+<td valign="top">
+<img src="docs/assets/icons/private.svg" width="40" alt=""><br>
+<b>Stays on your machine</b><br>
+Loopback only, zero telemetry, keys encrypted on disk, optional redaction of
+secrets and PII before anything leaves.
+</td>
+<td valign="top">
+<img src="docs/assets/icons/mcp.svg" width="40" alt=""><br>
+<b>MCP server and proxy</b><br>
+Many MCP servers behind two tools, results compressed and paged — made for
+reverse-engineering servers with huge outputs.
+</td>
+</tr>
+<tr>
+<td valign="top">
+<img src="docs/assets/icons/numbers.svg" width="40" alt=""><br>
+<b>Honest numbers</b><br>
+Savings measured per request, the provider's own prompt-cache hit rate beside
+them, output shaping tested against a holdout.
+</td>
+<td valign="top">
+<img src="docs/assets/icons/platforms.svg" width="40" alt=""><br>
+<b>Every OS, hands-off</b><br>
+One-line install, autostart, checksum-verified updates, a tray icon, retries
+and an optional local-model fallback.
+</td>
+</tr>
+</table>
 
 ---
 
