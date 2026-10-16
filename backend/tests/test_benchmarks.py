@@ -242,6 +242,28 @@ def test_replay_summary_contains_numbers_only(tmp_path: Path) -> None:
     assert "bill_saved_pct" in shared["by_category"]["mcp"]["sensei"]
 
 
+def test_gateway_result_keeps_ratios_only() -> None:
+    raw = {
+        "sessions": 2,
+        "turns": 10,
+        "ttl_seconds": 300.0,
+        "prefix_tokens": 6000,
+        "arms": {
+            "raw": {"prompt_tokens": 123456, "cache_read": 100000, "hit_rate": 0.81},
+            "sensei": {"prompt_tokens": 120000, "hit_rate": 0.81, "cost_vs_raw": 0.02},
+        },
+        "live_zone_causes": {"hit": 9, "cold_start": 1},
+        "cpu_ms_per_request": {"sensei": 3.0},
+    }
+    absolute = {"prompt_tokens", "cache_read", "cache_write", "uncached", "effective_cost_units"}
+    out = refresh.shareable_gateway(raw)
+    assert "123456" not in json.dumps(out)
+    assert out["arms"]["sensei"] == {"hit_rate": 0.81, "cost_vs_raw": 0.02}
+    committed = json.loads((agent_bench.RESULTS / "gateway_replay.json").read_text("utf-8"))
+    for arm in [*out["arms"].values(), *committed["arms"].values()]:
+        assert not absolute & set(arm)
+
+
 # ─── Gate and README ─────────────────────────────────────────────────────────
 
 

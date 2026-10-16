@@ -365,7 +365,7 @@ def benchmark_svg(t: dict[str, str], data: dict, kinds: dict[str, str]) -> str:
         gw = (data.get("gateway") or {}).get("arms", {}).get("sensei")
         if gw and gw.get("cost_vs_raw") is not None:
             right.append(
-                f'<text x="{px}" y="340" class="s">Gateway end to end: {gw["cost_vs_raw"] * 100:.2f}% of the input bill</text>'
+                f'<text x="{px}" y="340" class="s">Gateway end to end, net of caching: input bill −{gw["cost_vs_raw"] * 100:.2f}%</text>'
             )
             y2 = 400
     else:

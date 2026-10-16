@@ -56,7 +56,22 @@ def gateway_replay(max_sessions: int = 16, max_turns: int = 160) -> dict:
     if len(paths) > max_sessions:
         step = len(paths) / max_sessions
         paths = [paths[int(i * step)] for i in range(max_sessions)]
-    return gr.run(paths, max_turns, 6000, 300.0)
+    return shareable_gateway(gr.run(paths, max_turns, 6000, 300.0))
+
+
+def shareable_gateway(result: dict) -> dict:
+    """Ratios and rates only: how much someone sends their agents is theirs."""
+    keep = ("hit_rate", "prompt_tokens_vs_raw", "cost_vs_raw")
+    return {
+        "privacy": "ratios, hit rates and counts of sessions/turns only; no text, no token volumes",
+        **{k: result[k] for k in ("sessions", "turns", "ttl_seconds", "prefix_tokens")},
+        "arms": {
+            name: {k: v for k, v in arm.items() if k in keep}
+            for name, arm in result["arms"].items()
+        },
+        "live_zone_causes": result.get("live_zone_causes", {}),
+        "cpu_ms_per_request": result.get("cpu_ms_per_request", {}),
+    }
 
 
 def _generator():

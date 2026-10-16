@@ -147,8 +147,9 @@ What it leaves out:
   synthetic prefix stands in for them.
 - System-reminder attachments and subagent side-chains.
 
-Nothing from the transcripts is written. `results/gateway_replay.json` holds the
-counts and the bills in token units.
+Nothing from the transcripts is written. `results/gateway_replay.json` holds
+ratios, cache-hit rates, CPU per request and the number of sessions and turns,
+with no token volumes.
 
 ## Cost model
 

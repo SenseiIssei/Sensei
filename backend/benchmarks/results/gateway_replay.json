@@ -1,0 +1,31 @@
+{
+  "privacy": "ratios, hit rates and counts of sessions/turns only; no text, no token volumes",
+  "sessions": 15,
+  "turns": 2140,
+  "ttl_seconds": 300.0,
+  "prefix_tokens": 6000,
+  "arms": {
+    "raw": {
+      "hit_rate": 0.9741
+    },
+    "sensei-0.2": {
+      "hit_rate": 0.9741,
+      "prompt_tokens_vs_raw": 0.0078,
+      "cost_vs_raw": 0.0074
+    },
+    "sensei": {
+      "hit_rate": 0.9741,
+      "prompt_tokens_vs_raw": 0.0077,
+      "cost_vs_raw": 0.0074
+    }
+  },
+  "live_zone_causes": {
+    "cold_start": 18,
+    "hit": 2094,
+    "ttl": 28
+  },
+  "cpu_ms_per_request": {
+    "sensei-0.2": 84.13,
+    "sensei": 15.25
+  }
+}

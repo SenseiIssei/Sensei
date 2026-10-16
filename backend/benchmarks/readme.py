@@ -64,9 +64,14 @@ def render(agent: dict, sessions: dict | None, gateway: dict | None = None) -> s
         arms = gateway["arms"]
         g = arms["sensei"]
         old = arms.get("sensei-0.2", {})
-        cell = f"**{g['cost_vs_raw'] * 100:.2f}%** of the input bill · cache hits {g['hit_rate'] * 100:.1f}%"
+        cell = (
+            f"input bill **-{g['cost_vs_raw'] * 100:.2f}%** · cache hits {g['hit_rate'] * 100:.1f}%"
+        )
         if old.get("cost_vs_raw") is not None:
-            cell += f" (0.2: {old['cost_vs_raw'] * 100:.2f}%)"
+            cell += f" (0.2: -{old['cost_vs_raw'] * 100:.2f}%)"
+        cpu = gateway.get("cpu_ms_per_request", {})
+        if cpu.get("sensei") and cpu.get("sensei-0.2"):
+            cell += f" · CPU {cpu['sensei']:.0f} ms/request (0.2: {cpu['sensei-0.2']:.0f})"
         cells = [cell] + ["—" for _ in names[1:]]
         rows.append(
             f"| **Gateway, end to end** | {gateway['sessions']} Claude Code sessions, {gateway['turns']:,} "
