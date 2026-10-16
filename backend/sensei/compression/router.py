@@ -128,17 +128,48 @@ def _detect_logs(text: str) -> bool:
         or _LOG_LINE_START.match(line)
         # Test runners and package managers: `test x ... ok`, pytest's dot
         # rows, `✓ renders`, `Compiling foo v1.2`. No level, no timestamp.
-        or LogCompressor.NOISE.match(line)
-        or _TEST_LINE.match(line)
+        or LogCompressor.is_noise(line)
+        or _is_test_line(line)
     )
     return hits >= max(4, int(len(sample) * 0.25))
 
 
-_TEST_LINE = re.compile(
-    r"^(?:test \S.* \.\.\. (?:ok|FAILED|ignored)$|\S+\.py [.FEsxX]+\s*\[\s*\d+%\]$"
-    r"|=+ .*(?:test session starts|FAILURES|ERRORS|short test summary|passed|failed).* =+$"
-    r"|\s*(?:FAIL|PASS)\s+\S|running \d+ tests?$|--- FAIL:)"
+_TEST_START = re.compile(r"^(?:\s*(?:FAIL|PASS)\s+\S|running \d+ tests?$|--- FAIL:)")
+_PYTEST_ROW = re.compile(r"[.FEsxX]+\s*\[\s*\d+%\]")
+_PYTEST_BANNER = (
+    "test session starts",
+    "FAILURES",
+    "ERRORS",
+    "short test summary",
+    "passed",
+    "failed",
 )
+
+
+def _is_test_line(line: str) -> bool:
+    r"""Test-runner output without a log level. String checks rather than one
+    regex: `\S+\.py ...` and `=+ .*x.* =+` backtrack quadratically on long lines."""
+    if _TEST_START.match(line):
+        return True
+    if (
+        line.startswith("test ")
+        and len(line) > 5
+        and not line[5].isspace()
+        and line.endswith((" ... ok", " ... FAILED", " ... ignored"))
+    ):
+        return True
+    head, sep, rest = line.partition(" ")
+    if sep and head.endswith(".py") and _PYTEST_ROW.fullmatch(rest):
+        return True
+    # pytest banners: `===== 1 failed, 2 passed in 3.1s =====`
+    return (
+        line.startswith("=")
+        and line.endswith("=")
+        and " " in line
+        and line.lstrip("=").startswith(" ")
+        and line.rstrip("=").endswith(" ")
+        and any(k in line for k in _PYTEST_BANNER)
+    )
 
 
 # Detection runs on every message of every request, so the indicator sets are
@@ -194,7 +225,16 @@ def _is_file_view(text: str) -> bool:
     return hits >= len(lines) * 0.6
 
 
-_WORDISH = re.compile(r"[A-Za-z][a-z'-]+[,.;:!?]?$")
+def _wordish(word: str) -> bool:
+    """A plain word: a letter, then lowercase letters, apostrophes or hyphens,
+    with at most one trailing punctuation mark."""
+    if word and word[-1] in ",.;:!?":
+        word = word[:-1]
+    if len(word) < 2 or not ("A" <= word[0] <= "Z" or "a" <= word[0] <= "z"):
+        return False
+    return all("a" <= c <= "z" or c in "'-" for c in word[1:])
+
+
 _CODEISH = re.compile(r"[{}\[\]<>=;|\\/_`@#$%^*~]|::|->")
 
 
@@ -209,7 +249,7 @@ def _is_prose(text: str) -> bool:
         total += len(line)
         if len(words) < 5:
             continue
-        plain = sum(1 for w in words if _WORDISH.match(w))
+        plain = sum(1 for w in words if _wordish(w))
         if plain >= len(words) * 0.7 and len(_CODEISH.findall(line)) <= len(words) * 0.15:
             prose += len(line)
     return total > 0 and prose >= total * 0.5

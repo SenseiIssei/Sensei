@@ -22,7 +22,33 @@ import re
 from sensei.compression import relevance
 from sensei.compression.markers import Context, plural
 
-_SENT = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(\[])")
+_SENTENCE_START = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\"'([")
+
+
+def split_sentences(line: str) -> list[str]:
+    r"""Split after `.`, `!` or `?` plus whitespace, when the next sentence
+    starts with a capital, a digit, a quote or a bracket.
+
+    A scan rather than `(?<=[.!?])\s+(?=[A-Z...])`: same result, and no
+    regex to retry a long whitespace run from every offset."""
+    out: list[str] = []
+    start = i = 0
+    n = len(line)
+    while i < n:
+        if line[i] not in ".!?":
+            i += 1
+            continue
+        j = i + 1
+        while j < n and line[j].isspace():
+            j += 1
+        if j > i + 1 and j < n and line[j] in _SENTENCE_START:
+            out.append(line[start : i + 1])
+            start = j
+        i = j if j > i + 1 else i + 1
+    out.append(line[start:])
+    return out
+
+
 _NEGATION = re.compile(
     r"\b(?:not|no|never|none|without|cannot|can't|don't|doesn't|isn't|won't|must|nicht|kein)\b",
     re.I,
@@ -57,7 +83,7 @@ class TextCrusher:
                 units.append((line, True, False))
                 new_para = not line.strip()
                 continue
-            for k, s in enumerate(_SENT.split(line)):
+            for k, s in enumerate(split_sentences(line)):
                 units.append((s, False, new_para and k == 0))
             new_para = False
             units.append(("\n", True, False))  # restores the line break

@@ -157,7 +157,7 @@ def extract(html: str) -> str:
         p.feed(html)
         p.close()
         body = "".join(p.parts)
-    body = re.sub(r"[ \t]+\n", "\n", body)
+    body = re.sub(r"(?<![ \t])[ \t]++\n", "\n", body)
     body = re.sub(r"\n[ \t]+", "\n", body)
     body = re.sub(r"\n{3,}", "\n\n", body).strip()
     title = " ".join(p.title.split())

@@ -48,11 +48,13 @@ class LogCompressor:
     )
     # Lines that are progress, never signal — even when a test is named
     # `test_error_path ... ok`.
+    #
+    # Only the alternatives with no overlapping quantifiers live in the regex;
+    # cargo's `test x ... ok`, pytest's `a.py::t PASSED` and its dot rows are
+    # recognised by `is_noise` with plain string checks, because `\S+::\S+`
+    # and `\S.* \.\.\.` backtrack quadratically on a 40 KB minified line.
     NOISE = re.compile(
-        r"^(?:test \S.* \.\.\. (?:ok|ignored)$"  # cargo
-        r"|\S+::\S+ PASSED(?:\s+\[\s*\d+%\])?$"  # pytest -v
-        r"|\S+\.py \.+\s*(?:\[\s*\d+%\])?$"  # pytest progress rows without failures
-        r"|\.+\s*\[\s*\d+%\]$"
+        r"^(?:\.+\s*\[\s*\d+%\]$"
         r"|\s*[✓✔√]\s"  # jest / vitest / mocha
         r"|=== RUN\s|--- PASS:|PASS$|ok\s+\S+\s+(?:[\d.]+s|\(cached\))$"  # go test
         r"|\s*(?:Compiling|Checking|Fresh|Downloaded|Downloading|Fetching|Updating|Locking|Adding|"
@@ -63,12 +65,43 @@ class LogCompressor:
         r"|\s*[~^]+\s*$"  # Python 3.11+ caret underlines
         r")"
     )
+    _PCT = re.compile(r"\[\s*\d+%\]")
+    _PYTEST_DOTS = re.compile(r"\.+\s*(?:\[\s*\d+%\])?")
+
+    @classmethod
+    def is_noise(cls, line: str) -> bool:
+        """Progress output: never signal, even for a test named `test_error`."""
+        if cls.NOISE.match(line):
+            return True
+        # cargo: `test path::name ... ok`
+        if (
+            line.startswith("test ")
+            and len(line) > 5
+            and not line[5].isspace()
+            and line.endswith((" ... ok", " ... ignored"))
+        ):
+            return True
+        head, sep, rest = line.partition(" ")
+        if not sep or not head:
+            return False
+        # pytest -v: `tests/a.py::test_x PASSED [ 10%]`
+        if "::" in head and rest.startswith("PASSED"):
+            tail = rest[6:].strip()
+            return not tail or cls._PCT.fullmatch(tail) is not None
+        # pytest progress row without failures: `tests/a.py ....... [ 40%]`
+        return head.endswith(".py") and cls._PYTEST_DOTS.fullmatch(rest) is not None
+
+    @classmethod
+    def is_frame(cls, line: str) -> bool:
+        """A stack frame or a rustc `--> file:line:col` location."""
+        return bool(cls.FRAME.match(line)) or line.lstrip().startswith("-->")
+
     # A leading CI timestamp (GitHub Actions, GitLab) and a BuildKit step
     # number with its elapsed seconds.
     _PREFIX = re.compile(r"^\d{4}-\d{2}-\d{2}T[\d:.]+Z?\s+(?:#\d+ (?:[\d.]+ )?)?|^#\d+ [\d.]+ ")
 
     # Stack-frame continuation lines worth keeping next to an error.
-    FRAME = re.compile(r'^\s*(at |File "|in |\| |#\d+ |\.\.\. |--> |-->)')
+    FRAME = re.compile(r'^\s*(at |File "|in |\| |#\d+ |\.\.\. )')
 
     # A traceback is a *block*: frame lines interleaved with the source line
     # each frame points at, and those source lines match nothing above. Treating
@@ -84,7 +117,6 @@ class LogCompressor:
 
     # rustc / clippy / gcc diagnostic header: `warning: unused variable: `x``.
     _DIAG = re.compile(r"^(warning|error)(\[[\w-]+\])?: (.+)$")
-    _LOCATION = re.compile(r"^\s*--> (\S+)")
     MAX_SAME_DIAG = 2
 
     # Normalize volatile tokens so otherwise-identical lines dedupe together.
@@ -114,8 +146,7 @@ class LogCompressor:
         # prefix: `2026-10-14T18:22:02Z #12 2.822 Collecting x` is pip progress.
         bare = [self._PREFIX.sub("", line, count=1) for line in lines]
         noise = [
-            bool(self.NOISE.match(b) or self.NOISE.match(line))
-            for b, line in zip(bare, lines, strict=True)
+            self.is_noise(b) or self.is_noise(line) for b, line in zip(bare, lines, strict=True)
         ]
         signal = [
             not noise[i] and bool(self.IMPORTANT.search(line) or self.SUMMARY.search(line))
@@ -142,7 +173,7 @@ class LogCompressor:
                     keep[j] = True
             # Keep a little following context (stack frames, detail lines).
             for j in range(i + 1, min(n, i + 1 + self.context_after)):
-                if not noise[j] and (self.FRAME.match(lines[j]) or lines[j].strip()):
+                if not noise[j] and (self.is_frame(lines[j]) or lines[j].strip()):
                     keep[j] = True
             # Then follow the stack-frame block in both directions.
             #
@@ -222,9 +253,9 @@ class LogCompressor:
             if seen[signature] > self.MAX_SAME_DIAG and j - i > 1:
                 loc = next(
                     (
-                        lm.group(1)
+                        lines[k].lstrip()[4:].split(" ", 1)[0]
                         for k in range(i + 1, j)
-                        if (lm := self._LOCATION.match(lines[k]))
+                        if lines[k].lstrip().startswith("--> ")
                     ),
                     None,
                 )
@@ -241,7 +272,7 @@ class LogCompressor:
 
     def _in_block(self, line: str) -> bool:
         """Is this line part of a stack-frame block?"""
-        return bool(self.FRAME.match(line) or self._BLOCK.match(line))
+        return self.is_frame(line) or bool(self._BLOCK.match(line))
 
     def _collapse_repeats(self, lines: list[str], ctx: Context) -> str:
         """Runs of lines identical after normalization keep their first and

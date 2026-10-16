@@ -123,6 +123,8 @@ The pipeline that saves the tokens.
 | `SENSEI_CCR_TTL_HOURS` | `24` |
 | `SENSEI_CODE_COMPRESSION` | `safe` |
 | `SENSEI_COMPRESSION_ENABLED` | `true` |
+| `SENSEI_COMPRESSION_LOSSY` | `true` |
+| `SENSEI_COMPRESSION_PROSE` | `rules` |
 | `SENSEI_GATEWAY_COMPRESS_SYSTEM` | `true` |
 | `SENSEI_GATEWAY_PRESERVE_CACHE` | `false` |
 | `SENSEI_LEARNED_COMPRESSOR_ENABLED` | `false` |

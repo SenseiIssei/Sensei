@@ -13,9 +13,21 @@ import re
 
 _HINT = re.compile(r'^\s*\((?:use "git [^"]+"[^)]*|use "git [^)]*)\)\s*$')
 _COMMIT = re.compile(r"^commit ([0-9a-f]{7,64})((?: \(.*\))?)$")
-_AUTHOR = re.compile(r"^Author:\s+(.*)$")
-_DATE = re.compile(r"^(?:Date|AuthorDate|CommitDate):\s+(.*)$")
-_MERGE = re.compile(r"^Merge:\s+(.*)$")
+
+
+def _field(line: str, *names: str) -> str | None:
+    r"""The value of a `Name:   value` commit header line, or None.
+
+    Prefix checks rather than `^Author:\s+(.*)$`, whose `\s+` and `.*`
+    overlap and backtrack quadratically on a line of spaces."""
+    for name in names:
+        if line.startswith(name) and line[len(name) : len(name) + 1] == ":":
+            rest = line[len(name) + 1 :]
+            if rest[:1].isspace():
+                return rest.strip()
+    return None
+
+
 _CRLF = re.compile(
     r"^warning: in the working copy of '([^']+)', (LF will be replaced by CRLF|CRLF will be "
     r"replaced by LF) the next time Git touches it$"
@@ -89,7 +101,7 @@ class GitCompressor:
     @staticmethod
     def _log(text: str) -> str:
         lines = text.split("\n")
-        authors = {m.group(1) for ln in lines if (m := _AUTHOR.match(ln))}
+        authors = {a for ln in lines if (a := _field(ln, "Author")) is not None}
         one_author = next(iter(authors)) if len(authors) == 1 else None
         out: list[str] = []
         if one_author:
@@ -105,13 +117,13 @@ class GitCompressor:
             j = i + 1
             while j < len(lines) and lines[j].strip():
                 h = lines[j]
-                if a := _AUTHOR.match(h):
+                if (a := _field(h, "Author")) is not None:
                     if not one_author:
-                        parts.append(a.group(1))
-                elif d := _DATE.match(h):
-                    parts.append(d.group(1))
-                elif mg := _MERGE.match(h):
-                    parts.append("merge " + mg.group(1))
+                        parts.append(a)
+                elif (d := _field(h, "Date", "AuthorDate", "CommitDate")) is not None:
+                    parts.append(d)
+                elif (mg := _field(h, "Merge")) is not None:
+                    parts.append("merge " + mg)
                 else:
                     break
                 j += 1
