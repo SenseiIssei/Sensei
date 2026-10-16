@@ -809,36 +809,40 @@ async def responses(request: Request) -> Any:
     )
 
 
+# The caller's path segment never reaches a log line or the upstream URL:
+# it selects one of these fixed strings or gets a 404.
+_RESPONSES_ACTIONS = {"compact": "compact", "input_tokens": "input_tokens"}
+
+
 @router.post("/v1/responses/{action}")
 async def responses_action(action: str, request: Request) -> Any:
     """``/responses/compact`` and ``/responses/input_tokens``.
 
     Codex calls ``compact`` with the whole conversation when its context fills
     up; the input is compressed exactly as for ``/responses``, so a token count
-    taken here matches what a real turn would send. Other sub-resources pass
-    through untouched.
+    taken here matches what a real turn would send.
     """
+    endpoint = _RESPONSES_ACTIONS.get(action)
+    if endpoint is None:
+        return _error(404, "Unknown /v1/responses endpoint", "not_found", {})
     body = await _json_body(request)
     if isinstance(body, JSONResponse):
         return body
     provider = APIModelProvider()
-    if action in ("compact", "input_tokens"):
-        payload, savings = compress_responses_request(body)
-    else:
-        payload, savings = body, _no_savings()
+    payload, savings = compress_responses_request(body)
     api_key = _openai_auth(request, provider)
     if not api_key:
         return _no_key(provider, savings)
     return await _forward(
         base_url=provider.base_url,
-        path=f"/responses/{action}",
+        path=f"/responses/{endpoint}",
         payload=payload,
         up_headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
         savings=savings,
         stream=False,
         api="responses",
         tool=_client_name(request),
-        record=action == "compact",
+        record=endpoint == "compact",
         meta={"api": "responses", "provider": provider.provider_name, "model": body.get("model")},
     )
 

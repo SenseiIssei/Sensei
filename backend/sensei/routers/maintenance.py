@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -8,6 +9,7 @@ from sensei.purge import purge_expired
 from sensei.security.rbac import require_admin
 
 router = APIRouter(prefix="/maintenance", tags=["maintenance"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/purge")
@@ -44,6 +46,8 @@ async def update_status(force: bool = False) -> dict[str, Any]:
     try:
         result = await asyncio.to_thread(system.check)
     except Exception as exc:
-        return {"current": __version__, "enabled": True, "error": str(exc)}
+        # The reason goes to the log; the client gets a sentence it can show.
+        logger.warning("Update check failed: %s", exc)
+        return {"current": __version__, "enabled": True, "error": "Could not reach GitHub."}
     _update_cache["result"] = result
     return {**result, "enabled": True}

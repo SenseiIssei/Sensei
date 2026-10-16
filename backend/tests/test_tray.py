@@ -32,10 +32,16 @@ class TestIcon:
         """The failure this catches is an icon that builds, packages and ships
         as an empty box — visible only to whoever installs it."""
         image = tray._icon_image(64)
-        colours = {image.getpixel((x, y)) for x in range(0, 64, 2) for y in range(0, 64, 2)}
-        colours = {c for c in colours if c[3] > 0}
-        assert tray._GREEN in colours, "the bolt is missing"
-        assert tray._DARK in colours, "the tile is missing"
+        colours = {image.getpixel((x, y)) for x in range(64) for y in range(64)}
+        colours = {c for c in colours if c[3] == 255}
+
+        def near(target: tuple[int, ...]) -> bool:
+            # Downsampling blends edges; the middle of each stroke stays true.
+            return any(all(abs(a - b) <= 6 for a, b in zip(c, target, strict=True)) for c in colours)
+
+        assert near(tray._ACCENT), "the lines are missing"
+        assert near(tray._GOLD), "the dot is missing"
+        assert near(tray._DARK), "the tile is missing"
 
     def test_the_corners_are_transparent(self) -> None:
         """A rounded tile drawn on an opaque background looks like a sticker on

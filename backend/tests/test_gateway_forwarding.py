@@ -355,3 +355,14 @@ class TestForwarding:
         assert _body(local)["model"] == "qwen3.8:27b"
         # The provider key never leaves for another server.
         assert "sk-ant-secret" not in str(local.headers)
+
+
+def test_unknown_responses_subresource_is_a_404(client, upstream):
+    sent, _ = upstream
+    resp = client.post(
+        "/v1/responses/..%2Ffiles",
+        json={"input": "x"},
+        headers={"Authorization": "Bearer k"},
+    )
+    assert resp.status_code == 404
+    assert sent == []

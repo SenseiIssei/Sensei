@@ -238,10 +238,25 @@ class TextCompressor:
         return "\n".join(result)
 
     def _fix_caps(self, text: str) -> str:
-        """Capitalize the first letter at start-of-text, after a sentence
-        terminator, or after a newline — undoing case lost to deletions."""
-        return re.sub(
-            r"(^\s*|[.!?]\s+|\n\s*)([a-z])",
-            lambda m: m.group(1) + m.group(2).upper(),
-            text,
-        )
+        r"""Capitalize the first letter at start-of-text, after a sentence
+        terminator and whitespace, or after a newline — undoing case lost to
+        deletions.
+
+        A single pass rather than ``re.sub(r"(^\s*|[.!?]\s+|\n\s*)([a-z])")``:
+        that pattern retries the whitespace run from every newline inside it,
+        which is quadratic on a payload of blank lines. Same result, linear.
+        """
+        out = list(text)
+        pending = True  # the next a-z letter starts a sentence
+        terminator = False  # the previous character was . ! or ?
+        for i, ch in enumerate(out):
+            if ch.isspace():
+                if terminator or ch == "\n":
+                    pending = True
+                terminator = False
+                continue
+            if pending and "a" <= ch <= "z":
+                out[i] = ch.upper()
+            pending = False
+            terminator = ch in ".!?"
+        return "".join(out)
