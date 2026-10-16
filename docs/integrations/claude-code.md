@@ -23,6 +23,11 @@ By default, `sensei connect` sets up two things for Claude Code:
 }
 ```
 
+The hook always calls `127.0.0.1`. Claude Code refuses HTTP hooks to private
+LAN addresses, and the hook endpoints only answer callers on this machine. If
+you set `SENSEI_HOST`, use `0.0.0.0` (or keep the loopback default); a Sensei
+bound only to a LAN address cannot serve hooks.
+
 If `CLAUDE_CONFIG_DIR` is set, both files live in that directory instead:
 `$CLAUDE_CONFIG_DIR/settings.json` and `$CLAUDE_CONFIG_DIR/.claude.json`.
 

@@ -108,7 +108,7 @@ esac
 if ask "${SENSEI_SETUP_TOOLS:-}" "Connect the AI tools on this machine (Claude Code, Cursor, Codex, …)?"; then
     "$DIR/sensei" setup-tools --from-installer | sed 's/^/  /'
 else
-    "$DIR/sensei" setup-tools --auto off --if-unset >/dev/null 2>&1 || true
+    "$DIR/sensei" setup-tools --auto off >/dev/null 2>&1 || true
     say "AI tools left alone. Connect them later with: sensei connect"
 fi
 

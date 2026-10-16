@@ -26,29 +26,44 @@ import time
 import urllib.request
 from typing import Any
 
-from sensei.config import settings
+
+def _settings_path() -> Any:
+    from sensei import integrations
+
+    return next(i for i in integrations.REGISTRY if i.id == "claude-code").path()
 
 
-def _base() -> str:
-    host = settings.host
-    if host in ("0.0.0.0", "::", ""):  # noqa: S104 — comparison, not a bind
-        host = "127.0.0.1"
-    return f"http://{host}:{settings.port}"
+def _routed_base() -> str | None:
+    """The Sensei base URL Claude Code is configured with, if it is one.
+
+    The URL in the file, not the one this process would compute: a Sensei
+    started with `--port 7100` wrote 7100 there, while this process — spawned
+    by Claude Code with no such flag — reads the default port from settings.
+    Probing that would find nothing and start a second Sensei beside the first.
+    """
+    from sensei import integrations
+
+    doc = integrations._load_json(_settings_path())
+    if not isinstance(doc, dict) or not integrations.claude_code_routed(doc):
+        return None
+    return str(doc["env"]["ANTHROPIC_BASE_URL"]).rstrip("/")
 
 
-def _alive(timeout: float = 1.0) -> bool:
+def _alive(base: str, timeout: float = 1.0) -> bool:
     try:
-        with urllib.request.urlopen(f"{_base()}/health", timeout=timeout) as resp:  # noqa: S310
+        with urllib.request.urlopen(f"{base}/health", timeout=timeout) as resp:  # noqa: S310
             return resp.status == 200
     except Exception:
         return False
 
 
-def _start_detached() -> bool:
+def _start_detached(port: int | None) -> bool:
     """Launch the tray (or a headless server) without tying it to this process."""
     from sensei.cli import system
 
     argv = system.launch_command(headless=not system._tray_available())
+    if port is not None:
+        argv = [*argv, "--port", str(port)]
     kwargs: dict[str, Any] = {
         "stdin": subprocess.DEVNULL,
         "stdout": subprocess.DEVNULL,
@@ -69,10 +84,10 @@ def _start_detached() -> bool:
 
 
 def _clear_base_url() -> bool:
-    """Remove a Sensei base URL from ~/.claude/settings.json. True if removed."""
+    """Remove a Sensei base URL from Claude Code's settings. True if removed."""
     from sensei import integrations
 
-    path = next(i for i in integrations.REGISTRY if i.id == "claude-code").path()
+    path = _settings_path()
     doc = integrations._load_json(path)
     if not isinstance(doc, dict) or not integrations.claude_code_routed(doc):
         return False
@@ -83,19 +98,22 @@ def _clear_base_url() -> bool:
 
 def claude_session_start(*, wait_seconds: float = 8.0) -> dict[str, Any]:
     """Make sure the base URL Claude Code was given leads somewhere."""
-    if _alive():
+    from sensei import integrations
+
+    base = _routed_base()
+    if base is None or _alive(base):
         return {}
-    if _start_detached():
+    if _start_detached(integrations._url_port(base)):
         deadline = time.monotonic() + wait_seconds
         while time.monotonic() < deadline:
             time.sleep(0.4)
-            if _alive(timeout=0.5):
+            if _alive(base, timeout=0.5):
                 return {"systemMessage": "Sensei was not running — started it."}
     if _clear_base_url():
         return {
             "systemMessage": (
-                f"Sensei is not answering at {_base()}, so Claude Code's base URL led "
-                "nowhere. Removed it from ~/.claude/settings.json: restart this session "
+                f"Sensei is not answering at {base}, so Claude Code's base URL led "
+                "nowhere. Removed it from Claude Code's settings: restart this session "
                 "to talk to Anthropic directly. It comes back when Sensei starts."
             )
         }

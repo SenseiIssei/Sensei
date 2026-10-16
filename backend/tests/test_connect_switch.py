@@ -163,7 +163,7 @@ def test_api_connect_and_disconnect_everything(home: Path, client: TestClient) -
 
 def test_api_per_tool_and_route(home: Path, client: TestClient) -> None:
     (home / ".claude").mkdir()
-    assert client.post("/api/setup/tools/nope/connect").status_code == 404
+    assert client.post("/api/setup/tools/nope/connect", json={}).status_code == 404
     assert client.put("/api/setup/tools/cursor/route", json={"enabled": True}).status_code == 400
     r = client.put("/api/setup/tools/claude-code/route", json={"enabled": True})
     assert r.status_code == 200
@@ -174,27 +174,40 @@ def test_api_per_tool_and_route(home: Path, client: TestClient) -> None:
 # ── The SessionStart self-heal hook ─────────────────────────────────────────
 
 
-def test_self_heal_is_silent_when_sensei_answers(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(hook, "_alive", lambda timeout=1.0: True)
+def _routed(home: Path, extra: dict[str, str] | None = None) -> Path:
+    settings = home / ".claude" / "settings.json"
+    settings.parent.mkdir(exist_ok=True)
+    env = {"ANTHROPIC_BASE_URL": "http://127.0.0.1:7000", **(extra or {})}
+    settings.write_text(json.dumps({"env": env}), "utf-8")
+    return settings
+
+
+def test_self_heal_is_silent_when_sensei_answers(
+    home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _routed(home)
+    monkeypatch.setattr(hook, "_alive", lambda base, timeout=1.0: True)
     assert hook.claude_session_start() == {}
 
 
-def test_self_heal_starts_sensei_when_it_can(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_self_heal_is_silent_without_routing(home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(hook, "_start_detached", lambda port: pytest.fail("started Sensei"))
+    assert hook.claude_session_start() == {}
+
+
+def test_self_heal_starts_sensei_when_it_can(home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _routed(home)
     state = {"started": False}
-    monkeypatch.setattr(hook, "_alive", lambda timeout=1.0: state["started"])
-    monkeypatch.setattr(hook, "_start_detached", lambda: state.update(started=True) or True)
+    monkeypatch.setattr(hook, "_alive", lambda base, timeout=1.0: state["started"])
+    monkeypatch.setattr(hook, "_start_detached", lambda port: state.update(started=True) or True)
     monkeypatch.setattr(hook.time, "sleep", lambda _s: None)
     assert "started it" in hook.claude_session_start()["systemMessage"]
 
 
 def test_self_heal_clears_a_dead_base_url(home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    settings = home / ".claude" / "settings.json"
-    settings.parent.mkdir()
-    settings.write_text(
-        json.dumps({"env": {"ANTHROPIC_BASE_URL": "http://127.0.0.1:7000", "FOO": "1"}}), "utf-8"
-    )
-    monkeypatch.setattr(hook, "_alive", lambda timeout=1.0: False)
-    monkeypatch.setattr(hook, "_start_detached", lambda: False)
+    settings = _routed(home, {"FOO": "1"})
+    monkeypatch.setattr(hook, "_alive", lambda base, timeout=1.0: False)
+    monkeypatch.setattr(hook, "_start_detached", lambda port: False)
 
     answer = hook.claude_session_start(wait_seconds=0)
     assert "Removed it" in answer["systemMessage"]
@@ -275,9 +288,14 @@ def test_the_installer_records_no_before_starting_the_tray() -> None:
     script = (ROOT / "packaging" / "sensei.iss").read_text(encoding="utf-8")
     # The section header, not the mention of it in the file's top comment.
     run = script.split("\n[Run]\n", 1)[1].split("\n[", 1)[0]
-    opt_out = run.index("setup-tools --auto off --if-unset")
-    assert "Tasks: not wiretools" in run[opt_out : opt_out + 300]
-    assert opt_out < run.index("tray --no-browser"), "the tray would scan before the no is saved"
+    tray = run.index("tray --no-browser")
+    # The wizard's "no" overrides an earlier yes; only the silent update
+    # replay leaves a later choice alone.
+    explicit = run.index('Parameters: "setup-tools --auto off";')
+    replay = run.index('Parameters: "setup-tools --auto off --if-unset";')
+    assert "Tasks: not wiretools; Check: not WizardSilent" in run[explicit : explicit + 300]
+    assert "Tasks: not wiretools; Check: WizardSilent" in run[replay : replay + 300]
+    assert max(explicit, replay) < tray, "the tray would scan before the no is saved"
     assert "--from-installer" in run
 
 
@@ -294,4 +312,12 @@ def test_install_ps1_does_not_wait_for_the_tray() -> None:
 def test_install_sh_asks_about_tools_before_starting_the_server() -> None:
     script = (ROOT / "install.sh").read_text(encoding="utf-8")
     assert script.index("setup-tools --from-installer") < script.index('"$DIR/sensei" autostart on')
-    assert "--auto off --if-unset" in script
+    # An explicit "no" overrides an earlier "yes".
+    assert "setup-tools --auto off" in script
+    assert "--if-unset" not in script
+
+
+def test_install_ps1_and_py_no_overrides_an_earlier_yes() -> None:
+    for name in ("install.ps1", "install.py"):
+        script = (ROOT / name).read_text(encoding="utf-8")
+        assert "--if-unset" not in script, name

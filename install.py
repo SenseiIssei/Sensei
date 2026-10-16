@@ -537,8 +537,8 @@ def main() -> None:
         else:
             # Remembered, so the running server's background scan does not
             # connect them anyway a few seconds after it starts.
-            run([sys.executable, "-m", "sensei.cli", "setup-tools", "--auto", "off",
-                 "--if-unset"], cwd=str(backend_dir), check=False)
+            run([sys.executable, "-m", "sensei.cli", "setup-tools", "--auto", "off"],
+                cwd=str(backend_dir), check=False)
             warn("Skipped — run 'sensei connect' whenever you want")
 
     # ── Step 8: Start ──

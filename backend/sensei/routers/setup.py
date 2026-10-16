@@ -25,7 +25,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -225,7 +225,23 @@ class ToolAction(BaseModel):
     dry_run: bool = False
 
 
-@router.post("/tools/connect")
+def _json_only(request: Request) -> None:
+    """State-changing tool routes take JSON only.
+
+    A cross-site form or `text/plain` fetch is a "simple" request that a
+    browser sends without a preflight; `application/json` is not. Together
+    with the Origin guard in security/csrf.py this keeps a web page from
+    rewiring the user's AI tools.
+    """
+    content_type = request.headers.get("content-type", "").lower()
+    if not content_type.startswith("application/json"):
+        raise HTTPException(status_code=415, detail="send Content-Type: application/json")
+
+
+_STATE = [Depends(_json_only)]
+
+
+@router.post("/tools/connect", dependencies=_STATE)
 async def connect_all_tools(req: ToolAction | None = None) -> dict[str, Any]:
     """ "Connect everything": every detected tool now, and new ones as they appear."""
     from sensei import integrations
@@ -235,7 +251,7 @@ async def connect_all_tools(req: ToolAction | None = None) -> dict[str, Any]:
     return {"outcomes": _outcome_rows(outcomes)}
 
 
-@router.post("/tools/disconnect")
+@router.post("/tools/disconnect", dependencies=_STATE)
 async def disconnect_all_tools(req: ToolAction | None = None) -> dict[str, Any]:
     """ "Disconnect everything": put every file back, and stop connecting."""
     from sensei import integrations
@@ -249,7 +265,7 @@ class AutoConnect(BaseModel):
     enabled: bool
 
 
-@router.put("/tools/auto-connect")
+@router.put("/tools/auto-connect", dependencies=_STATE)
 async def set_auto_connect(req: AutoConnect) -> dict[str, Any]:
     from sensei import integrations
 
@@ -264,7 +280,7 @@ def _known(tool_id: str) -> None:
         raise HTTPException(status_code=404, detail=f"Unknown tool '{tool_id}'")
 
 
-@router.post("/tools/{tool_id}/connect")
+@router.post("/tools/{tool_id}/connect", dependencies=_STATE)
 async def connect_tool(tool_id: str) -> dict[str, Any]:
     from sensei import integrations
 
@@ -275,7 +291,7 @@ async def connect_tool(tool_id: str) -> dict[str, Any]:
     return {"outcomes": _outcome_rows(outcomes)}
 
 
-@router.post("/tools/{tool_id}/disconnect")
+@router.post("/tools/{tool_id}/disconnect", dependencies=_STATE)
 async def disconnect_tool(tool_id: str) -> dict[str, Any]:
     from sensei import integrations
 
@@ -288,7 +304,7 @@ class RouteChoice(BaseModel):
     enabled: bool
 
 
-@router.put("/tools/{tool_id}/route")
+@router.put("/tools/{tool_id}/route", dependencies=_STATE)
 async def set_route(tool_id: str, req: RouteChoice) -> dict[str, Any]:
     """Opt one tool into (or out of) base-URL routing, then re-apply it."""
     from sensei import integrations

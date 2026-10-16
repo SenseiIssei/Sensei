@@ -52,6 +52,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -104,9 +105,14 @@ class Endpoints:
     # Opt-in features, as "<tool-id>:<feature>" (e.g. "claude-code:route").
     # Carried here so every apply function sees them without a second argument.
     opt_in: frozenset[str] = frozenset()
+    # Where hooks call in. Always loopback: the hook endpoints answer only
+    # loopback callers, and Claude Code refuses HTTP hooks to private (LAN)
+    # addresses outright. A Sensei bound to a LAN address only cannot serve
+    # hooks; docs/integrations/claude-code.md says to bind 0.0.0.0 or loopback.
+    hook_base: str = ""
 
     def hook_url(self, path: str) -> str:
-        return f"{self.anthropic}{path}"
+        return f"{self.hook_base or self.anthropic}{path}"
 
     def wants(self, tool_id: str, feature: str) -> bool:
         return f"{tool_id}:{feature}" in self.opt_in
@@ -180,6 +186,7 @@ def endpoints(host: str | None = None, port: int | None = None) -> Endpoints:
         mcp_args=args,
         mcp_ready=mcp_available(),
         opt_in=_opt_ins(),
+        hook_base=f"http://127.0.0.1:{port or settings.port}",
     )
 
 
@@ -258,11 +265,25 @@ def _atomic_write(path: Path, text: str) -> None:
 
     A half-written config file is worse than no change at all: the tool that
     reads it will not start, and the user has no idea why.
+
+    Two properties of the file survive the replace. Its *mode*: ~/.claude.json
+    holds OAuth tokens and is 0600, and a temp file created with the default
+    umask turned it world-readable. And its *identity*: a dotfile that is a
+    symlink into a dotfiles repository is written through, not replaced by a
+    plain file. The temp file is owner-only from its first byte.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".sensei-tmp")
-    tmp.write_text(text, encoding="utf-8", newline="\n")
-    os.replace(tmp, path)
+    target = path.resolve() if path.is_symlink() else path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    mode = 0o600
+    with contextlib.suppress(OSError):
+        mode = stat.S_IMODE(target.stat().st_mode)
+    tmp = target.with_name(target.name + ".sensei-tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+    with contextlib.suppress(OSError):
+        os.chmod(tmp, mode)
+    os.replace(tmp, target)
 
 
 def _backup(path: Path, stamp: str) -> Path | None:
@@ -347,15 +368,40 @@ def _deep_unset(doc: dict[str, Any], keys: tuple[str, ...], *, prune: bool = Fal
     return True
 
 
-def _points_here(value: Any) -> bool:
-    """Is this URL a Sensei on this machine (any port)?
+_LOOPBACK_URL = re.compile(r"^(https?)://(127\.0\.0\.1|localhost|\[::1\])(?::(\d+))?(/|$)")
 
-    Used before removing a base URL on undo: one the user set to their own
-    proxy is theirs, and stays.
+
+def _url_port(value: str) -> int | None:
+    match = _LOOPBACK_URL.match(value)
+    if not match:
+        return None
+    if match.group(3):
+        return int(match.group(3))
+    return 443 if match.group(1) == "https" else 80
+
+
+def _sensei_ports() -> set[int]:
+    """The ports a Sensei on this machine has been wired at: the configured
+    one, plus every one Sensei recorded writing into a tool's config."""
+    ports = {int(settings.port)}
+    raw = _read_manifest().get("ports", [])
+    if isinstance(raw, list):
+        ports |= {p for p in raw if isinstance(p, int)}
+    return ports
+
+
+def _points_here(value: Any) -> bool:
+    """Is this URL *Sensei* on this machine?
+
+    Used before removing a base URL: one the user set to their own local
+    proxy — Ollama or LiteLLM on :11434, claude-code-router on :3456 — is
+    theirs and stays. Loopback alone is not enough; the port has to be one
+    Sensei itself wrote.
     """
     if not isinstance(value, str):
         return False
-    return bool(re.match(r"^https?://(127\.0\.0\.1|localhost|\[::1\])(:\d+)?(/|$)", value))
+    port = _url_port(value)
+    return port is not None and port in _sensei_ports()
 
 
 # ── Platform directories ────────────────────────────────────────────────────
@@ -910,21 +956,53 @@ def _toml_name(raw: str) -> str:
 
 
 def _toml_sections(text: str) -> list[tuple[str | None, list[str]]]:
-    """Split TOML into (table name, lines) runs; the root run has name None."""
+    """Split TOML into (table name, lines) runs; the root run has name None.
+
+    A line that looks like a header inside a multi-line string is not one:
+    triple-double and triple-single quotes toggle a string state that is
+    tracked line by line.
+    """
     sections: list[tuple[str | None, list[str]]] = [(None, [])]
+    open_quote: str | None = None
     for line in text.splitlines(keepends=True):
-        match = _TOML_HEADER.match(line)
+        match = None if open_quote else _TOML_HEADER.match(line)
         if match:
             sections.append((_toml_name(match.group(1)), [line]))
         else:
             sections[-1][1].append(line)
+        open_quote = _toml_quote_state(line, open_quote)
     return sections
 
 
+def _toml_quote_state(line: str, open_quote: str | None) -> str | None:
+    """Which multi-line string delimiter is still open after this line."""
+    i = 0
+    while i < len(line):
+        if open_quote:
+            end = line.find(open_quote, i)
+            if end < 0:
+                return open_quote
+            i, open_quote = end + 3, None
+            continue
+        if line[i] == "#":
+            return None
+        for quote in ('"""', "'''"):
+            if line.startswith(quote, i):
+                open_quote = quote
+                i += 3
+                break
+        else:
+            if line[i] in "\"'":  # a single-line string: skip to its end
+                close = line.find(line[i], i + 1)
+                i = len(line) if close < 0 else close + 1
+            else:
+                i += 1
+    return open_quote
+
+
 def _toml_join(sections: list[tuple[str | None, list[str]]]) -> str:
-    text = "".join("".join(lines) for _, lines in sections)
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    return text
+    """Reassemble sections exactly — the user's text is never reformatted."""
+    return "".join("".join(lines) for _, lines in sections)
 
 
 def _toml_strip_markers(text: str) -> str:
@@ -1895,9 +1973,19 @@ def _record(
     manifest["entries"] = [e for e in manifest["entries"] if e is not earlier]
     first_backup: Any = str(backup) if backup else None
     created = backup is None
+    # "Pristine": nothing but Sensei has ever written this file since Sensei
+    # first touched it. Only then may undo restore the first backup (or delete
+    # a file Sensei created) wholesale. The backup taken just before this
+    # write is the file as it stood; if that differs from what Sensei left
+    # last time, someone else wrote in between — the user adding permissions,
+    # Claude Code rewriting ~/.claude.json — and restoring the oldest copy
+    # would silently throw their work away.
+    pristine = True
     if earlier is not None:
         first_backup = earlier.get("backup")
         created = bool(earlier.get("created", earlier.get("backup") is None))
+        before = _sha256(backup) if backup is not None and backup.exists() else None
+        pristine = bool(earlier.get("pristine", True)) and earlier.get("hash_after") == before
     manifest["entries"].append(
         {
             "tool_id": tool_id,
@@ -1906,6 +1994,7 @@ def _record(
             "path": str(path),
             "backup": first_backup,
             "created": created,
+            "pristine": pristine,
             "hash_after": _sha256(path) if path.exists() else None,
             "written_at": time.time(),
         }
@@ -2169,6 +2258,12 @@ def apply_all(
             # clears the earlier refusal for the tools it actually touched.
             touched = {r.tool_id for r in results if r.status in ("applied", "unchanged")}
             _set_declined(manifest, opted_out - touched)
+        # Remember the port, so a later revert recognises this Sensei's URLs —
+        # and only those — even after SENSEI_PORT has changed.
+        written_port = _url_port(ep.anthropic)
+        ports = manifest.get("ports") if isinstance(manifest.get("ports"), list) else []
+        if written_port is not None and written_port not in ports:
+            manifest["ports"] = [*ports, written_port]
         _write_manifest(manifest)
     return results
 
@@ -2213,7 +2308,10 @@ def undo_all(*, only: set[str] | None = None, dry_run: bool = False) -> list[Out
             results.append(Outcome(tool_id, display, "unchanged", detail="file is gone"))
             continue
 
-        untouched = entry.get("hash_after") == _sha256(path)
+        # Wholesale restore only when the file is exactly as Sensei last left
+        # it *and* nobody else ever wrote it in between Sensei's writes.
+        # Anything else is a surgical removal of Sensei's own keys.
+        untouched = entry.get("hash_after") == _sha256(path) and bool(entry.get("pristine", True))
         backup = Path(str(entry["backup"])) if entry.get("backup") else None
         created = bool(entry.get("created", backup is None))
 

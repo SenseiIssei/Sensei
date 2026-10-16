@@ -20,6 +20,7 @@ from sensei.routers.conversations import init_conversations_deps
 from sensei.routers.gateway import init_gateway_deps
 from sensei.routers.stats import init_stats_deps
 from sensei.security.auth import AuthMiddleware
+from sensei.security.csrf import OriginGuard
 from sensei.security.rate_limit import rate_limiter
 from sensei.security.sessions import SessionManager
 
@@ -163,6 +164,9 @@ app.add_middleware(
 
 # Auth middleware
 app.add_middleware(AuthMiddleware)
+
+# Refuse cross-site state changes on /api (a web page POSTing to loopback).
+app.add_middleware(OriginGuard)
 
 
 # Rate limiting middleware

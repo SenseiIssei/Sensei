@@ -46,7 +46,7 @@ if ($FromSource -or $env:SENSEI_FROM_SOURCE -eq "1") {
         Say "Node.js not found - skipping the web UI build (gateway and API still work)."
     }
     if ($SkipTools -or $env:SENSEI_SETUP_TOOLS -eq "no") {
-        & $vpy -m sensei.cli setup-tools --auto off --if-unset
+        & $vpy -m sensei.cli setup-tools --auto off
     } else {
         & $vpy -m sensei.cli setup-tools --from-installer
     }
@@ -119,9 +119,11 @@ try {
 $app = Join-Path $env:LOCALAPPDATA "Programs\Sensei\senseiw.exe"
 $cli = Join-Path $env:LOCALAPPDATA "Programs\Sensei\sensei.exe"
 if (($env:SENSEI_SETUP_TOOLS -eq "no" -or $SkipTools) -and (Test-Path $cli)) {
-    # The installer records this itself from 0.3 on; repeated here for a
-    # pinned older release, whose binary rejects the flag harmlessly.
-    try { & $cli setup-tools --auto off --if-unset *> $null } catch { }
+    # An explicit "no" from whoever runs this script, so it overrides an
+    # earlier "yes". install.ps1 runs the installer silently,
+    # and a silent run only records "no" if nothing was chosen before; this
+    # makes the answer stick. A pinned older release rejects the flag harmlessly.
+    try { & $cli setup-tools --auto off *> $null } catch { }
 }
 # A silent install already starts the tray. A second one cannot bind the port
 # and would sit in the notification area doing nothing, so start one only if

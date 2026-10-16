@@ -110,10 +110,16 @@ Filename: "{app}\sensei.exe"; Parameters: "setup-tools --from-installer"; Workin
 ; Unticked, the answer has to outlive the installer. The tray started below
 ; runs a background scan that connects newly found tools, and without this it
 ; connected all of them thirty seconds after being told not to. Before the tray
-; starts, so there is no window in which it can. `--if-unset` keeps a later
-; "Connect everything" from being overridden by an update.
+; starts, so there is no window in which it can.
+;
+; Someone unticking the box in the wizard has just said no, and that overrides
+; an earlier yes. A silent run is `sensei update` replaying the tasks it
+; remembers, and must not override a "Connect everything" chosen since, so
+; only that run uses `--if-unset`.
+Filename: "{app}\sensei.exe"; Parameters: "setup-tools --auto off"; WorkingDir: "{app}"; \
+  Flags: runhidden waituntilterminated; Tasks: not wiretools; Check: not WizardSilent
 Filename: "{app}\sensei.exe"; Parameters: "setup-tools --auto off --if-unset"; WorkingDir: "{app}"; \
-  Flags: runhidden waituntilterminated; Tasks: not wiretools
+  Flags: runhidden waituntilterminated; Tasks: not wiretools; Check: WizardSilent
 Filename: "{app}\senseiw.exe"; WorkingDir: "{app}"; \
   Description: "Start Sensei now"; Flags: nowait postinstall skipifsilent
 ; A silent run is an update from `sensei update`: bring the tray back.
