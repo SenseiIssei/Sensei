@@ -86,8 +86,10 @@ easy to install on every OS, and calm to look at.
 
 ### Security
 
-- DLP redaction no longer rewrites thinking signatures or encrypted reasoning,
-  which providers verify byte for byte.
+- DLP redaction now recognises OpenAI's current key formats (`sk-proj-…`,
+  `sk-svcacct-…`), which slipped through, and covers `count_tokens` and
+  `responses/compact` too. It no longer rewrites thinking signatures or
+  encrypted reasoning, which providers verify byte for byte.
 - A quadratic regular expression in the prose compressor, a log-injection path
   and an exception message reaching clients — all found by CodeQL — are fixed.
 - CI is green again: the frontend's vitest/coverage mismatch, the extension's
