@@ -122,6 +122,13 @@ class LogCompressor:
             if not signal[i]:
                 continue
             keep[i] = True
+            # rustc / clippy / gcc diagnostics are a block up to the next blank
+            # line: location, the offending source line, the caret, the help.
+            if self._DIAG.match(lines[i]):
+                for j in range(i + 1, min(n, i + 1 + self.MAX_BLOCK)):
+                    if not lines[j].strip():
+                        break
+                    keep[j] = True
             # Keep a little following context (stack frames, detail lines).
             for j in range(i + 1, min(n, i + 1 + self.context_after)):
                 if not noise[j] and (self.FRAME.match(lines[j]) or lines[j].strip()):
@@ -172,7 +179,7 @@ class LogCompressor:
             shown = ", ".join(locations[:12]) + (", ..." if len(locations) > 12 else "")
             out.append(
                 ctx.mark(
-                    f"{plural(len(locations), 'more')} '{signature}' at {shown}",
+                    f"{len(locations):,} more '{signature}' at {shown}",
                     len(locations),
                 )
             )
@@ -211,8 +218,8 @@ class LogCompressor:
                     None,
                 )
                 if loc:
-                    short = f"{m.group(1)}{m.group(2) or ''}: {m.group(3)}"[:80]
-                    dropped.setdefault(short.replace("'", ""), []).append(loc)
+                    label = signature.replace("'", "").replace("<q>", "...")[:80]
+                    dropped.setdefault(label, []).append(loc)
                     # The block and its trailing blank line are accounted for
                     # by the diagnostic marker, not by a generic run marker.
                     for k in range(i, j + (1 if j < n and not lines[j].strip() else 0)):
@@ -235,7 +242,12 @@ class LogCompressor:
         while i < n:
             norm = self._normalize(lines[i])
             j = i + 1
-            while j < n and norm.strip() and self._normalize(lines[j]) == norm:
+            while (
+                j < n
+                and norm.strip()
+                and not lines[i].startswith("[sensei: ")
+                and self._normalize(lines[j]) == norm
+            ):
                 j += 1
             run = j - i
             if run >= 4:

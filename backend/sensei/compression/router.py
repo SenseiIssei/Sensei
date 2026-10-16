@@ -376,7 +376,13 @@ class ContentRouter:
             return False
         if content_type in (ContentType.code, ContentType.config):
             return True
-        if content_type is ContentType.json and content.lstrip().startswith("{"):
+        # A JSON object on disk (package.json, tsconfig) is pretty-printed; an
+        # API or MCP response is one line. Only the first is a file to edit.
+        if (
+            content_type is ContentType.json
+            and content.lstrip().startswith("{")
+            and "\n" in content.strip()
+        ):
             return True
         if content_type is ContentType.html and len(content) <= _EDITABLE_HTML_MAX:
             return True
