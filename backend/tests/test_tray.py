@@ -37,7 +37,9 @@ class TestIcon:
 
         def near(target: tuple[int, ...]) -> bool:
             # Downsampling blends edges; the middle of each stroke stays true.
-            return any(all(abs(a - b) <= 6 for a, b in zip(c, target, strict=True)) for c in colours)
+            return any(
+                all(abs(a - b) <= 6 for a, b in zip(c, target, strict=True)) for c in colours
+            )
 
         assert near(tray._ACCENT), "the lines are missing"
         assert near(tray._GOLD), "the dot is missing"
