@@ -452,6 +452,7 @@ def replay(
         "tools": {t: getattr(c, "version", "?") for t, c in tools.items()},
         "seconds": {t: round(v, 1) for t, v in timing.items()},
         "latency": latency,
+        "timeout_s": {t: getattr(c, "timeout", None) for t, c in tools.items()},
         "total": total.as_dict(names),
         "by_agent": {a: b.as_dict(names) for a, b in sorted(by_agent.items())},
         "by_category": {
@@ -464,6 +465,33 @@ def replay(
             round(total.saved_usd[t] / billed * 100, 2) if billed else 0.0
         )
     return summary
+
+
+def shareable(summary: dict) -> dict:
+    """The summary without absolute spend: what gets written to disk.
+
+    Token counts and percentages say how well compression works; what somebody
+    spent on their agents says something about them, and nobody needs it to
+    check a benchmark. Dollar amounts become shares of the bill.
+    """
+    out = json.loads(json.dumps(summary))
+    bill = out.pop("bill_usd", {})
+    total = bill.get("total") or 0.0
+    out["bill_mix_pct"] = {
+        k: round(v / total * 100, 2) for k, v in bill.items() if k != "total" and total
+    }
+
+    def scrub(bucket: dict) -> None:
+        for name in out["tools"]:
+            if name in bucket:
+                usd = bucket[name].pop("saved_usd", 0.0)
+                bucket[name]["bill_saved_pct"] = round(usd / total * 100, 3) if total else 0.0
+
+    scrub(out["total"])
+    for group in ("by_agent", "by_category"):
+        for bucket in out[group].values():
+            scrub(bucket)
+    return out
 
 
 def print_report(summary: dict) -> None:
@@ -569,7 +597,7 @@ def main() -> int:
     summary = replay(files, tools, Tokenizer(), cost.PRICES[args.model])
     print_report(summary)
     if args.summary_json:
-        write_json(args.summary_json, summary)
+        write_json(args.summary_json, shareable(summary))
         print(f"\nwrote {args.summary_json} (numbers only)")
     return 0
 

@@ -233,8 +233,12 @@ def test_replay_summary_contains_numbers_only(tmp_path: Path) -> None:
     assert set(summary["by_category"]) == {"shell:search", "mcp"}
     assert summary["requests"] == 3
     assert summary["total"]["results"] == 2
-    # The grep result entered before request 2, so it is re-read once later.
     assert summary["bill_usd"]["total"] > 0
+    # What is written to disk carries no absolute spend, only shares.
+    shared = session_replay.shareable(summary)
+    assert "usd" not in json.dumps(shared)
+    assert sum(shared["bill_mix_pct"].values()) == pytest.approx(100, abs=0.1)
+    assert "bill_saved_pct" in shared["by_category"]["mcp"]["sensei"]
 
 
 # ─── Gate and README ─────────────────────────────────────────────────────────

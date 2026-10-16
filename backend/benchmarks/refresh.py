@@ -138,7 +138,7 @@ def main() -> int:
                 files, tools, Tokenizer(), cost.PRICES[cost.DEFAULT_MODEL]
             )
             session_replay.print_report(summary)
-            write_json(SESSIONS, summary)
+            write_json(SESSIONS, session_replay.shareable(summary))
 
     render()
     return 0

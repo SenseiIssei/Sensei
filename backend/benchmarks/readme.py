@@ -76,26 +76,45 @@ def render(agent: dict, sessions: dict | None) -> str:
         + " |"
     )
     rows.append(
-        "| Facts kept | Every fact an agent needs must still be there | "
+        "| Facts kept | Corpus: every fact an agent needs must still be there | "
         + " | ".join(f"{s[n]['all']['facts_kept']} / {s[n]['all']['facts_total']}" for n in names)
         + " |"
     )
     exact_total = sum(1 for r in agent["samples"] if r["byte_exact"])
     rows.append(
-        "| File reads unchanged | Read / `cat` output is edited next by exact match | "
+        "| File reads unchanged | Corpus: Read / `cat` output is edited next by exact match | "
         + " | ".join(
             f"{exact_total - s[n]['all']['exact_violations']} / {exact_total}" for n in names
         )
         + " |"
     )
     rows.append(
-        "| Latency p50 · p95 | The compress call alone, per tool output | "
+        "| Latency p50 · p95 | Corpus: the compress call alone, per tool output | "
         + " | ".join(
             f"{s[n]['all']['latency_ms']['p50']:.1f} · {s[n]['all']['latency_ms']['p95']:.0f} ms"
             for n in names
         )
         + " |"
     )
+    if sessions and "latency" in sessions:
+        tot = sessions["total"]
+        cells = []
+        for n in names:
+            lat = sessions["latency"].get(n)
+            if not lat or n not in tot:
+                cells.append("—")
+                continue
+            cell = f"{lat['p95_ms']:.0f} · {lat['p99_ms']:.0f} ms"
+            slow, cut = tot[n].get("slow_over_1s", 0), tot[n].get("timeouts", 0)
+            if slow or cut:
+                limit = sessions.get("timeout_s", {}).get(n) or 30
+                cell += f" · {slow} over 1 s, {cut} cut off at {limit:g} s"
+            cells.append(cell)
+        rows.append(
+            "| Latency p95 · p99 | Real sessions: per distinct tool result, and the slow tail | "
+            + " | ".join(cells)
+            + " |"
+        )
 
     sub = (
         f"<sub>{agent['tokenizer']} on the text the model receives, identical input for both tools · "
