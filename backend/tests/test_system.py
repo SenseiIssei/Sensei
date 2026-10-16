@@ -182,8 +182,15 @@ def test_update_endpoint_makes_no_request_unless_asked(monkeypatch):
     assert body["enabled"] is False
 
     monkeypatch.setattr(
-        system, "check", lambda: {"current": "0.1.19", "latest": "9.9.9",
-                                  "update_available": True, "url": "u", "checked_at": 0.0}
+        system,
+        "check",
+        lambda: {
+            "current": "0.1.19",
+            "latest": "9.9.9",
+            "update_available": True,
+            "url": "u",
+            "checked_at": 0.0,
+        },
     )
     forced = TestClient(app).get("/api/maintenance/update?force=true").json()
     assert forced["update_available"] is True

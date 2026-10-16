@@ -156,7 +156,48 @@ export interface SavingsSlice {
   estimated_cost_saved_usd: number;
 }
 
+/** What the provider reported billing, including its prompt cache. */
+export interface CacheTotals {
+  requests_reporting_usage: number;
+  prompt_tokens_billed: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  /** Share of billed prompt tokens read from cache; null until reported. */
+  hit_rate: number | null;
+}
+
+export interface UpdateStatus {
+  current: string;
+  enabled: boolean;
+  latest?: string;
+  update_available?: boolean;
+  url?: string;
+  install_kind?: string;
+  error?: string;
+}
+
+export interface ConnectedTool {
+  id: string;
+  name: string;
+  installed: boolean;
+  connected: boolean;
+  declined: boolean;
+}
+
+export interface ToolsResponse {
+  tools: ConnectedTool[];
+  auto_connect: {
+    enabled: boolean;
+    running: boolean;
+    interval_seconds: number;
+    scans: number;
+    connected_since_start: string[];
+    last_error: string | null;
+  };
+}
+
 export interface SavingsTotals {
+  cache?: CacheTotals;
   requests: number;
   tokens_before: number;
   tokens_after: number;
@@ -233,19 +274,16 @@ export interface ProviderOption {
   free: boolean;
 }
 
+/** Fallback list for the chat's model picker when the server cannot be asked.
+ *  The setup wizard always asks the provider itself. */
 export const PROVIDERS: ProviderOption[] = [
-  { id: "ollama", name: "Ollama (Local)", models: ["glm-5.2", "llama3.3", "qwen2.5"], free: true },
-  { id: "openrouter", name: "OpenRouter", models: ["zhipuai/glm-5.2", "openai/gpt-4o", "anthropic/claude-3.5-sonnet"], free: true },
-  { id: "groq", name: "Groq", models: ["llama-3.3-70b-versatile", "mixtral-8x7b"], free: true },
-  { id: "openai", name: "OpenAI", models: ["gpt-4o", "gpt-4o-mini", "o1", "o3-mini"], free: false },
-  { id: "anthropic", name: "Anthropic", models: ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus"], free: false },
-  { id: "google", name: "Google Gemini", models: ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro"], free: true },
-  { id: "deepseek", name: "DeepSeek", models: ["deepseek-chat", "deepseek-reasoner"], free: false },
+  { id: "ollama", name: "Ollama (local)", models: ["qwen3.5:9b", "gemma4:e4b", "qwen3.8:27b", "gpt-oss:20b"], free: true },
+  { id: "anthropic", name: "Anthropic", models: ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"], free: false },
+  { id: "openai", name: "OpenAI", models: ["gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"], free: false },
+  { id: "google", name: "Google Gemini", models: ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-4-argon"], free: true },
+  { id: "openrouter", name: "OpenRouter", models: ["~anthropic/claude-sonnet-latest", "~openai/gpt-sol-latest", "z-ai/glm-5.3"], free: true },
+  { id: "groq", name: "Groq", models: ["openai/gpt-oss-120b", "llama-3.3-70b-versatile"], free: true },
+  { id: "deepseek", name: "DeepSeek", models: ["deepseek-flash", "deepseek-v4-pro"], free: false },
   { id: "mistral", name: "Mistral", models: ["mistral-large-latest", "codestral-latest"], free: false },
-  { id: "together", name: "Together AI", models: ["meta-llama/Llama-3.3-70B-Instruct-Turbo"], free: false },
-  { id: "huggingface", name: "HuggingFace", models: ["THUDM/glm-5.2-744b"], free: true },
-  { id: "zai", name: "Z.ai", models: ["glm-5.2"], free: false },
-  { id: "cohere", name: "Cohere", models: ["command-r-plus"], free: false },
-  { id: "fireworks", name: "Fireworks AI", models: ["accounts/fireworks/models/llama-v3p3-70b-instruct"], free: false },
-  { id: "perplexity", name: "Perplexity", models: ["sonar-pro", "sonar"], free: false },
+  { id: "zai", name: "Z.ai", models: ["glm-5.3"], free: false },
 ];

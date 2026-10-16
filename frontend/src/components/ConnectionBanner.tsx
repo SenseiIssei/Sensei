@@ -21,13 +21,13 @@ export function ConnectionBanner() {
     <div
       role="status"
       aria-live="polite"
-      className="absolute inset-x-0 top-0 z-30 flex items-center justify-center gap-2 border-b border-amber-500/30 bg-amber-950/80 px-4 py-2 text-xs text-amber-200 backdrop-blur-sm"
+      className="absolute inset-x-0 top-0 z-50 flex items-center justify-center gap-2 border-b border-warning/30 bg-surface px-4 py-2 text-xs text-fg-secondary shadow-bar"
     >
-      <PlugZap className="h-3.5 w-3.5 shrink-0" />
+      <PlugZap className="h-3.5 w-3.5 shrink-0 text-warning" />
       <span>
         Can't reach the Sensei backend. Start it with{" "}
-        <code className="rounded bg-black/30 px-1 py-0.5 text-amber-100">sensei up</code>, or run{" "}
-        <code className="rounded bg-black/30 px-1 py-0.5 text-amber-100">sensei doctor</code> to
+        <code className="rounded-xs bg-raised px-1 py-0.5 font-mono text-fg">sensei up</code>, or run{" "}
+        <code className="rounded-xs bg-raised px-1 py-0.5 font-mono text-fg">sensei doctor</code> to
         find out why.
       </span>
     </div>

@@ -1,9 +1,21 @@
-import { useRef, useEffect, useState, useCallback } from "react";
-import { Send, Square, Zap, Paperclip, Copy, RefreshCw, Check, ChevronDown, X, FileText, Image as ImageIcon } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ArrowUp,
+  Check,
+  ChevronDown,
+  Copy,
+  FileText,
+  Image as ImageIcon,
+  Paperclip,
+  Square,
+  X,
+  Zap,
+} from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import clsx from "clsx";
 import type { ChatMessage, FileReference } from "@/types";
 import { PROVIDERS as PROVIDER_LIST } from "@/types";
+import { Logo } from "@/components/ui";
 
 interface ChatViewProps {
   messages: ChatMessage[];
@@ -14,9 +26,21 @@ interface ChatViewProps {
   onSend: (content: string, model?: string, files?: FileReference[]) => void;
   onCancel: () => void;
   onSelectModel: (model: string) => void;
+  /** Rendered at the left of the top bar — the history toggle on small screens. */
+  leading?: React.ReactNode;
 }
 
-export function ChatView({ messages, isStreaming, tokensSaved, error, selectedModel, onSend, onCancel, onSelectModel }: ChatViewProps) {
+export function ChatView({
+  messages,
+  isStreaming,
+  tokensSaved,
+  error,
+  selectedModel,
+  onSend,
+  onCancel,
+  onSelectModel,
+  leading,
+}: ChatViewProps) {
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<FileReference[]>([]);
   const [showModelPicker, setShowModelPicker] = useState(false);
@@ -26,9 +50,7 @@ export function ChatView({ messages, isStreaming, tokensSaved, error, selectedMo
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -37,9 +59,7 @@ export function ChatView({ messages, isStreaming, tokensSaved, error, selectedMo
     onSend(input, selectedModel, files.length > 0 ? files : undefined);
     setInput("");
     setFiles([]);
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-    }
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -53,27 +73,20 @@ export function ChatView({ messages, isStreaming, tokensSaved, error, selectedMo
     setInput(e.target.value);
     const el = e.target;
     el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 200) + "px";
+    el.style.height = Math.min(el.scrollHeight, window.innerHeight * 0.4) + "px";
   };
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files || []);
-    const newFiles: FileReference[] = selected.map(f => ({
-      id: `${Date.now()}-${f.name}`,
-      name: f.name,
-      type: f.type,
-      size: f.size,
-    }));
-    setFiles(prev => [...prev, ...newFiles]);
+    setFiles((prev) => [
+      ...prev,
+      ...selected.map((f) => ({ id: `${Date.now()}-${f.name}`, name: f.name, type: f.type, size: f.size })),
+    ]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, []);
 
-  const removeFile = (id: string) => {
-    setFiles(prev => prev.filter(f => f.id !== id));
-  };
-
   const copyMessage = (content: string, idx: number) => {
-    navigator.clipboard.writeText(content);
+    void navigator.clipboard?.writeText(content);
     setCopiedIdx(idx);
     setTimeout(() => setCopiedIdx(null), 2000);
   };
@@ -87,59 +100,64 @@ export function ChatView({ messages, isStreaming, tokensSaved, error, selectedMo
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full">
-      {/* Top bar with model selector */}
-      <div className="border-b border-gray-800/50 glass px-4 py-3 flex items-center justify-between">
-        <div className="relative">
-          <button
-            onClick={() => setShowModelPicker(!showModelPicker)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg glass glass-hover text-sm text-gray-300 transition-colors"
-          >
-            <span className="w-2 h-2 rounded-full bg-sensei-500" />
-            {currentModelName()}
-            <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
-          </button>
-          {showModelPicker && (
-            <div className="absolute top-full left-0 mt-2 w-80 max-h-96 overflow-y-auto scrollbar-thin glass rounded-xl border border-gray-700/50 shadow-2xl z-50">
-              <div className="p-2">
+    <div className="flex h-full min-w-0 flex-1 flex-col">
+      {/* Top bar */}
+      <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line px-4">
+        <div className="flex min-w-0 items-center gap-2">
+          {leading}
+          <div className="relative min-w-0">
+            <button
+              onClick={() => setShowModelPicker(!showModelPicker)}
+              aria-expanded={showModelPicker}
+              className="flex h-8 min-w-0 items-center gap-2 rounded-sm px-2.5 text-[13px] font-medium text-fg-secondary transition-colors hover:bg-hover hover:text-fg"
+            >
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-success" />
+              <span className="truncate">{currentModelName()}</span>
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-faint" />
+            </button>
+            {showModelPicker && (
+              <div className="animate-fade-in absolute left-0 top-full z-50 mt-1 max-h-96 w-80 overflow-y-auto rounded-md border border-line bg-surface p-1 shadow-pop scrollbar-thin">
                 <button
-                  onClick={() => { onSelectModel(""); setShowModelPicker(false); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 text-sm text-gray-300 transition-colors"
+                  onClick={() => {
+                    onSelectModel("");
+                    setShowModelPicker(false);
+                  }}
+                  className="flex h-8 w-full items-center gap-2 rounded-xs px-2.5 text-[13px] text-fg hover:bg-hover"
                 >
-                  <span className="w-2 h-2 rounded-full bg-sensei-500" />
                   Auto-detect
-                  <span className="text-xs text-gray-600 ml-auto">Recommended</span>
+                  <span className="ml-auto text-xs text-faint">Recommended</span>
                 </button>
-                {PROVIDER_LIST.map(provider => (
+                {PROVIDER_LIST.map((provider) => (
                   <div key={provider.id} className="mt-1">
-                    <div className="px-3 py-1 text-xs text-gray-500 font-semibold flex items-center gap-2">
+                    <div className="eyebrow flex items-center gap-2 px-2.5 py-1.5 text-faint">
                       {provider.name}
-                      {provider.free && <span className="text-sensei-500">FREE</span>}
+                      {provider.free && <span className="text-success">free</span>}
                     </div>
-                    {provider.models.map(model => (
+                    {provider.models.map((model) => (
                       <button
                         key={model}
-                        onClick={() => { onSelectModel(model); setShowModelPicker(false); }}
+                        onClick={() => {
+                          onSelectModel(model);
+                          setShowModelPicker(false);
+                        }}
                         className={clsx(
-                          "w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors",
-                          selectedModel === model
-                            ? "bg-sensei-600/20 text-sensei-400"
-                            : "text-gray-400 hover:bg-white/5"
+                          "flex h-8 w-full items-center gap-2 rounded-xs px-2.5 font-mono text-[12px] transition-colors",
+                          selectedModel === model ? "bg-accent-soft text-accent-soft-fg" : "text-fg-secondary hover:bg-hover",
                         )}
                       >
                         {model}
-                        {selectedModel === model && <Check className="w-3 h-3 ml-auto" />}
+                        {selectedModel === model && <Check className="ml-auto h-3.5 w-3.5" />}
                       </button>
                     ))}
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
         {tokensSaved > 0 && (
-          <div className="flex items-center gap-1.5 text-xs text-sensei-500">
-            <Zap className="w-3 h-3" />
+          <div className="num flex shrink-0 items-center gap-1.5 text-xs font-medium text-gold-text">
+            <Zap className="h-3.5 w-3.5" />
             <span>{tokensSaved.toLocaleString()} tokens saved</span>
           </div>
         )}
@@ -150,7 +168,7 @@ export function ChatView({ messages, isStreaming, tokensSaved, error, selectedMo
         {messages.length === 0 ? (
           <EmptyState />
         ) : (
-          <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+          <div className="mx-auto w-full max-w-[760px] space-y-6 px-4 py-8">
             {messages.map((msg, i) => (
               <MessageBubble
                 key={i}
@@ -161,7 +179,7 @@ export function ChatView({ messages, isStreaming, tokensSaved, error, selectedMo
               />
             ))}
             {error && (
-              <div className="px-4 py-3 rounded-lg bg-red-950/50 border border-red-900 text-red-400 text-sm">
+              <div className="rounded-md border border-danger/25 bg-danger/10 px-4 py-3 text-[13px] text-danger">
                 {error}
               </div>
             )}
@@ -169,24 +187,33 @@ export function ChatView({ messages, isStreaming, tokensSaved, error, selectedMo
         )}
       </div>
 
-      {/* Input area */}
-      <div className="border-t border-gray-800/50 glass">
-        <div className="max-w-3xl mx-auto px-4 py-4">
-          {/* File attachments preview */}
+      {/* Composer */}
+      <div className="shrink-0 px-4 pb-4">
+        <div className="mx-auto w-full max-w-[760px]">
           {files.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-2">
-              {files.map(f => (
-                <div key={f.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg glass text-xs text-gray-300">
-                  {f.type.startsWith("image/") ? <ImageIcon className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
-                  <span className="truncate max-w-32">{f.name}</span>
-                  <button onClick={() => removeFile(f.id)} className="text-gray-500 hover:text-red-400">
-                    <X className="w-3 h-3" />
+            <div className="mb-2 flex flex-wrap gap-2">
+              {files.map((f) => (
+                <div
+                  key={f.id}
+                  className="flex items-center gap-2 rounded-sm border border-line bg-surface px-2.5 py-1 text-xs text-fg-secondary"
+                >
+                  {f.type.startsWith("image/") ? <ImageIcon className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
+                  <span className="max-w-32 truncate">{f.name}</span>
+                  <button
+                    aria-label={`Remove ${f.name}`}
+                    onClick={() => setFiles((prev) => prev.filter((x) => x.id !== f.id))}
+                    className="text-faint hover:text-danger"
+                  >
+                    <X className="h-3 w-3" />
                   </button>
                 </div>
               ))}
             </div>
           )}
-          <form onSubmit={handleSubmit} className="flex items-end gap-2">
+          <form
+            onSubmit={handleSubmit}
+            className="flex items-end gap-1 rounded-lg border border-line bg-surface p-1.5 shadow-pop transition-colors focus-within:border-accent dark:border-line-strong dark:shadow-none dark:focus-within:border-accent"
+          >
             <input
               ref={fileInputRef}
               type="file"
@@ -198,50 +225,46 @@ export function ChatView({ messages, isStreaming, tokensSaved, error, selectedMo
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="p-3 rounded-xl glass glass-hover text-gray-400 transition-colors"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm text-muted transition-colors hover:bg-hover hover:text-fg"
               title="Attach files"
+              aria-label="Attach files"
             >
-              <Paperclip className="w-4 h-4" />
+              <Paperclip className="h-4 w-4" />
             </button>
-            <div className="flex-1 relative">
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={handleInput}
-                onKeyDown={handleKeyDown}
-                placeholder="Send a message to Sensei..."
-                rows={1}
-                className="w-full glass text-white text-sm rounded-xl px-4 py-3 border border-gray-700/50 focus:border-sensei-600/50 focus:outline-hidden resize-none scrollbar-thin transition-colors"
-                style={{ minHeight: "44px", maxHeight: "200px" }}
-                disabled={isStreaming}
-              />
-            </div>
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={handleInput}
+              onKeyDown={handleKeyDown}
+              placeholder="Send a message to Sensei..."
+              aria-label="Message"
+              rows={1}
+              className="max-h-[40vh] min-h-8 flex-1 resize-none bg-transparent px-1.5 py-1.5 text-[15px] leading-5 text-fg outline-none placeholder:text-faint scrollbar-thin"
+              disabled={isStreaming}
+            />
             {isStreaming ? (
               <button
                 type="button"
                 onClick={onCancel}
-                className="p-3 rounded-xl bg-gray-700 hover:bg-gray-600 text-white transition-colors"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-raised text-fg transition-colors hover:bg-pressed"
                 title="Stop generating"
+                aria-label="Stop generating"
               >
-                <Square className="w-4 h-4" />
+                <Square className="h-3.5 w-3.5" />
               </button>
             ) : (
               <button
                 type="submit"
                 disabled={!input.trim()}
-                className={clsx(
-                  "p-3 rounded-xl transition-colors",
-                  input.trim()
-                    ? "bg-sensei-600 hover:bg-sensei-700 text-white"
-                    : "bg-gray-800 text-gray-600"
-                )}
+                aria-label="Send"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-accent text-accent-fg transition-colors hover:bg-accent-hover disabled:bg-raised disabled:text-faint"
               >
-                <Send className="w-4 h-4" />
+                <ArrowUp className="h-4 w-4" />
               </button>
             )}
           </form>
-          <p className="text-xs text-gray-600 mt-2 text-center">
-            Sensei can make mistakes. Verify important information. · Enter to send, Shift+Enter for new line
+          <p className="mt-2 text-center text-xs text-faint">
+            Enter to send · Shift+Enter for a new line · answers can be wrong, check what matters
           </p>
         </div>
       </div>
@@ -249,64 +272,54 @@ export function ChatView({ messages, isStreaming, tokensSaved, error, selectedMo
   );
 }
 
-function MessageBubble({ message, isStreaming, onCopy, copied }: { message: ChatMessage; isStreaming: boolean; onCopy: () => void; copied: boolean }) {
+function MessageBubble({
+  message,
+  isStreaming,
+  onCopy,
+  copied,
+}: {
+  message: ChatMessage;
+  isStreaming: boolean;
+  onCopy: () => void;
+  copied: boolean;
+}) {
   const isUser = message.role === "user";
 
-  return (
-    <div className={clsx("group flex gap-3", isUser ? "flex-row-reverse" : "flex-row")}>
-      <div
-        className={clsx(
-          "w-8 h-8 rounded-lg shrink-0 flex items-center justify-center text-sm font-bold",
-          isUser ? "bg-blue-600 text-white" : "bg-sensei-600 text-white"
-        )}
-      >
-        {isUser ? "U" : "S"}
+  if (isUser) {
+    return (
+      <div className="group flex flex-col items-end">
+        {message.files && message.files.length > 0 && <Attachments files={message.files} />}
+        <div className="max-w-[80%] rounded-lg rounded-br-xs bg-accent-soft px-3.5 py-2.5 text-[15px] leading-6 text-fg dark:text-fg">
+          <p className="whitespace-pre-wrap">{message.content}</p>
+        </div>
       </div>
-      <div className={clsx("flex-1 max-w-[85%]", isUser ? "flex flex-col items-end" : "flex flex-col items-start")}>
-        {message.model && !isUser && (
-          <div className="text-xs text-gray-600 mb-1 px-1">{message.model}</div>
-        )}
-        {message.files && message.files.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-2">
-            {message.files.map(f => (
-              <div key={f.id} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg glass text-xs text-gray-400">
-                {f.type.startsWith("image/") ? <ImageIcon className="w-3 h-3" /> : <FileText className="w-3 h-3" />}
-                {f.name}
-              </div>
-            ))}
-          </div>
-        )}
-        <div
-          className={clsx(
-            "rounded-xl px-4 py-3",
-            isUser
-              ? "bg-blue-950/30 border border-blue-900/30"
-              : "glass"
-          )}
-        >
-          {isUser ? (
-            <p className="text-sm text-gray-200 whitespace-pre-wrap">{message.content}</p>
+    );
+  }
+
+  return (
+    <div className="group flex gap-3">
+      <Logo className="mt-0.5 h-6 w-6 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <div className="prose max-w-none">
+          {message.content ? (
+            <ReactMarkdown>{message.content}</ReactMarkdown>
           ) : (
-            <div className="prose prose-sm max-w-none text-gray-200">
-              <ReactMarkdown>{message.content || (isStreaming ? "▌" : "")}</ReactMarkdown>
-            </div>
+            isStreaming && <span className="streaming-caret" />
           )}
         </div>
-        {/* Action buttons */}
         {!isStreaming && message.content && (
-          <div className={clsx("flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity", isUser ? "flex-row-reverse" : "flex-row")}>
+          <div className="mt-1.5 flex items-center gap-2 font-mono text-[11px] text-faint opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
             <button
               onClick={onCopy}
-              className="p-1.5 rounded-lg hover:bg-white/5 text-gray-500 hover:text-gray-300 transition-colors"
+              className="rounded-xs p-1 text-faint transition-colors hover:bg-hover hover:text-fg"
               title="Copy"
+              aria-label="Copy"
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-sensei-500" /> : <Copy className="w-3.5 h-3.5" />}
+              {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
             </button>
+            {message.model && <span>{message.model}</span>}
             {message.tokensSaved != null && message.tokensSaved > 0 && (
-              <span className="text-xs text-sensei-600 px-1.5 flex items-center gap-1">
-                <Zap className="w-3 h-3" />
-                {message.tokensSaved} saved
-              </span>
+              <span className="text-gold-text">{message.tokensSaved} saved</span>
             )}
           </div>
         )}
@@ -315,21 +328,35 @@ function MessageBubble({ message, isStreaming, onCopy, copied }: { message: Chat
   );
 }
 
+function Attachments({ files }: { files: FileReference[] }) {
+  return (
+    <div className="mb-2 flex flex-wrap gap-2">
+      {files.map((f) => (
+        <div
+          key={f.id}
+          className="flex items-center gap-1.5 rounded-sm border border-line bg-surface px-2.5 py-1 text-xs text-muted"
+        >
+          {f.type.startsWith("image/") ? <ImageIcon className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
+          {f.name}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function EmptyState() {
   return (
-    <div className="h-full flex flex-col items-center justify-center text-center px-4">
-      <div className="w-16 h-16 rounded-2xl bg-sensei-600 flex items-center justify-center mb-4 glow-text">
-        <span className="text-white font-bold text-3xl">S</span>
-      </div>
-      <h2 className="text-xl font-bold text-white mb-2">Welcome to Sensei</h2>
-      <p className="text-gray-500 max-w-md">
-        Self-hosted AI workspace with token compression. 14+ model providers.
-        Your data stays local, encrypted, and private.
+    <div className="flex h-full flex-col items-center justify-center px-4 text-center">
+      <Logo className="mb-5 h-12 w-12" />
+      <h2 className="text-xl font-semibold tracking-[-0.01em] text-fg">Welcome to Sensei</h2>
+      <p className="mt-2 max-w-md text-[13px] leading-5 text-muted">
+        Every message is compressed before it leaves this machine. Ask anything — the saving shows
+        up above and on the overview.
       </p>
-      <div className="grid grid-cols-3 gap-3 mt-8 max-w-lg">
-        <FeatureCard title="60-95% Token Reduction" desc="Smart compression pipeline" />
-        <FeatureCard title="14+ Providers" desc="OpenAI, Claude, Gemini, Ollama" />
-        <FeatureCard title="Privacy-First" desc="Encrypted, local, zero telemetry" />
+      <div className="mt-8 grid w-full max-w-lg gap-3 sm:grid-cols-3">
+        <FeatureCard title="Fewer tokens" desc="JSON, logs and prose, compressed" />
+        <FeatureCard title="Any model" desc="Claude, GPT, Gemini, or local" />
+        <FeatureCard title="Stays local" desc="No telemetry, keys encrypted" />
       </div>
     </div>
   );
@@ -337,9 +364,9 @@ function EmptyState() {
 
 function FeatureCard({ title, desc }: { title: string; desc: string }) {
   return (
-    <div className="p-3 rounded-lg glass">
-      <p className="text-sm font-semibold text-sensei-400">{title}</p>
-      <p className="text-xs text-gray-600 mt-0.5">{desc}</p>
+    <div className="rounded-lg border border-line bg-surface p-3 text-left">
+      <p className="text-[13px] font-semibold text-fg">{title}</p>
+      <p className="mt-0.5 text-xs text-muted">{desc}</p>
     </div>
   );
 }

@@ -1,33 +1,43 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Sensei — Self-hosted AI</title>
+    <title>Sensei</title>
 
     <!--
-      No remote fonts on purpose.
-
-      This used to pull Inter and JetBrains Mono from fonts.googleapis.com,
-      which handed Google the IP address of every user on every page load — in
-      a tool whose entire premise is that nothing leaves your machine. It also
-      meant the UI fell back to unstyled system fonts whenever you were
-      offline, which for self-hosted software is most of the point.
-
-      The stack below resolves to the native UI font on each platform, so it
-      looks right, loads instantly, and talks to nobody.
+      No remote fonts on purpose: Inter and JetBrains Mono are bundled with the
+      app (see main.tsx). Fetching them from a font CDN would hand a third party
+      the IP address of every user on every page load, in a tool whose premise
+      is that nothing leaves your machine — and would break the UI offline.
     -->
 
-    <link rel="icon" type="image/svg+xml" href="/sensei.svg" />
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="apple-touch-icon" href="/sensei.svg" />
-    <meta name="theme-color" content="#0a0a0f" />
-    <meta name="color-scheme" content="dark" />
+    <!-- Apply the saved theme before the first paint, so a light-mode user
+         never sees a dark flash while the bundle loads. Mirrors lib/theme.ts. -->
+    <script>
+      (function () {
+        var choice = "system";
+        try {
+          choice = localStorage.getItem("sensei-theme") || "system";
+        } catch (e) {}
+        var dark =
+          choice === "dark" ||
+          (choice !== "light" &&
+            (!window.matchMedia || window.matchMedia("(prefers-color-scheme: dark)").matches));
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+      })();
+    </script>
+
+    <link rel="icon" type="image/svg+xml" href="./sensei.svg" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./sensei.svg" />
+    <meta name="theme-color" content="#0d0f10" />
+    <meta name="color-scheme" content="dark light" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta
       name="description"
-      content="Self-hosted AI workspace with token compression. Your data stays on your machine."
+      content="Fewer tokens for the AI tools you already use. Self-hosted, private, free."
     />
   </head>
   <body>

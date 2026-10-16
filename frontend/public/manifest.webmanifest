@@ -1,14 +1,18 @@
 {
-  "name": "Sensei — Self-hosted AI",
+  "name": "Sensei",
   "short_name": "Sensei",
-  "description": "Self-hosted AI workspace with token compression. Your data stays on your machine.",
+  "description": "Fewer tokens for the AI tools you already use. Self-hosted, private, free.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0a0a0f",
-  "theme_color": "#0a0a0f",
-  "categories": ["productivity", "developer", "utilities"],
+  "background_color": "#131619",
+  "theme_color": "#0d0f10",
+  "categories": [
+    "productivity",
+    "developer",
+    "utilities"
+  ],
   "icons": [
     {
       "src": "./sensei.svg",
