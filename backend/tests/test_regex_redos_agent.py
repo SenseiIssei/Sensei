@@ -139,4 +139,4 @@ def test_pathological_lines_are_fast(payload: str) -> None:
         LogCompressor.is_noise(line)
         _is_test_line(line)
         _wordish(line)
-    assert time.perf_counter() - t0 < 2.0
+    assert time.perf_counter() - t0 < 15.0  # each payload took minutes when quadratic

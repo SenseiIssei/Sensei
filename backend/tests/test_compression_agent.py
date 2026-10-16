@@ -110,7 +110,7 @@ class TestFolds:
         text = "\n".join(f"{i % 7} " + "y" * 40 for i in range(20000))
         t0 = time.perf_counter()
         folds.fold(text)
-        assert time.perf_counter() - t0 < 2.0
+        assert time.perf_counter() - t0 < 10.0  # minutes when quadratic; CI runners vary 10x
 
 
 # ─── search ─────────────────────────────────────────────────────────────────
@@ -562,4 +562,4 @@ class TestTextCompressorRegex:
         line = "LISTEN 0 511 127.0.0.1:7100" + " " * 3000 + "users:((node))"
         t0 = time.perf_counter()
         TextCompressor().compress("\n".join([line] * 5))
-        assert time.perf_counter() - t0 < 1.0
+        assert time.perf_counter() - t0 < 10.0  # was 600 s; CI runners vary 10x

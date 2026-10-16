@@ -253,25 +253,54 @@ def test_omitted_match_count_counts_matches_not_hunks(router: ContentRouter) -> 
 # ─── LOW / performance ──────────────────────────────────────────────────────
 
 
+def _scaling(run, small: int, large: int) -> tuple[float, float]:
+    """Seconds for a small and a 4x larger input (best of two each).
+
+    CI runners differ by an order of magnitude in raw speed, so an absolute
+    bound either flakes or proves nothing. Growth does not depend on the
+    machine: linear work takes ~4x as long for 4x the input, and the
+    quadratic versions these tests guard against took ~16x.
+    """
+
+    def best(n: int) -> float:
+        times = []
+        for _ in range(2):
+            t0 = time.perf_counter()
+            run(n)
+            times.append(time.perf_counter() - t0)
+        return min(times)
+
+    return best(small), best(large)
+
+
 def test_textcrusher_is_not_quadratic() -> None:
     """p9: 39 s on 1.4 MB of prose, from comparing every pair of sentences."""
     rng = random.Random(2)
     vocab = [f"w{i}" for i in range(3000)]
     sents = [" ".join(rng.choice(vocab) for _ in range(12)).capitalize() + "." for _ in range(8000)]
-    prose = "\n".join(" ".join(sents[i : i + 5]) for i in range(0, len(sents), 5))
-    t0 = time.perf_counter()
-    TextCrusher().compress(prose, Context())
-    assert time.perf_counter() - t0 < 3.0
+
+    def run(n: int) -> None:
+        part = sents[:n]
+        prose = "\n".join(" ".join(part[i : i + 5]) for i in range(0, len(part), 5))
+        TextCrusher().compress(prose, Context())
+
+    small, large = _scaling(run, 2000, 8000)
+    assert large < max(small * 9, 0.5), (small, large)
+    assert large < 30.0
 
 
-def test_fold_repeats_on_a_million_short_lines_is_fast() -> None:
+def test_fold_repeats_on_many_short_lines_is_linear() -> None:
     """p13: 6 s per million short lines in the block search."""
-    n = 600_000
+    n = 400_000
     tm = [bin(i).count("1") % 2 for i in range(n + 2)]
     lines = [["connected ok", "retrying", "waiting"][tm[i + 1] - tm[i] + 1] for i in range(n)]
-    t0 = time.perf_counter()
-    folds.fold("\n".join(lines))
-    assert time.perf_counter() - t0 < 3.0
+
+    def run(k: int) -> None:
+        folds.fold("\n".join(lines[:k]))
+
+    small, large = _scaling(run, 100_000, 400_000)
+    assert large < max(small * 9, 0.5), (small, large)
+    assert large < 60.0
 
 
 def test_lossy_flag_matches_the_bytes(router: ContentRouter) -> None:
