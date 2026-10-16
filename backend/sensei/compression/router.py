@@ -221,26 +221,34 @@ class ContentRouter:
         content_type = force_type or self.detect_type(content)
         original_tokens = _estimate_tokens(content)
 
+        # A file the model may edit next by exact string match. Source code,
+        # line-numbered file views, and JSON *objects* — config files such as
+        # package.json, which Codex reads with `cat` — stay byte-exact. JSON
+        # *arrays* are API output (search results, records) and still compress.
+        protect = (
+            edit_target
+            and settings.code_compression != "aggressive"
+            and (
+                content_type is ContentType.code
+                or (content_type is ContentType.json and content.lstrip().startswith("{"))
+                or _is_file_view(content)
+            )
+        )
+
         # Before compressing, not after: every compressor below is line- and
         # word-oriented and none of them looks at individual characters, so a
         # zero-width space survives all of them and is billed. Detection runs
         # first because how aggressive this can safely be depends on whether
         # the payload is source code — the joiners are structural in Devanagari
         # and Persian and hold emoji sequences together, and mean nothing in
-        # source.
+        # source. Protected content is not touched at all: "byte-exact" means it.
         findings = invisible.Findings()
-        if settings.strip_invisible:
+        if settings.strip_invisible and not protect:
             content, findings = invisible.clean(
                 content,
                 is_code=content_type is ContentType.code,
                 strip_nbsp=settings.strip_nbsp,
             )
-
-        protect = (
-            edit_target
-            and settings.code_compression != "aggressive"
-            and (content_type is ContentType.code or _is_file_view(content))
-        )
 
         match content_type:
             case _ if protect:

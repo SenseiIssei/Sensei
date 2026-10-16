@@ -49,6 +49,13 @@ _DECISIVE: tuple[tuple[str, re.Pattern[str]], ...] = (
 )
 
 
+def _at_boundary(line: str, i: int) -> bool:
+    """A `//` or `/*` only opens a comment at the start of a line or after
+    whitespace. Elsewhere it is far more often code: a regex literal such as
+    `url.replace(/^https?:\\/\\//, "")`, a glob, or a path."""
+    return i == 0 or line[i - 1] in " \t"
+
+
 def _scan(line: str, marker: str, quotes: str, block: bool, state: str) -> tuple[str, str]:
     """Remove comments from one line, carrying string/comment state across lines.
 
@@ -86,12 +93,12 @@ def _scan(line: str, marker: str, quotes: str, block: bool, state: str) -> tuple
         if ch in quotes:
             state = ch
             out.append(ch)
-        elif block and line.startswith("/*", i):
+        elif block and line.startswith("/*", i) and _at_boundary(line, i):
             state = "/*"
             removed = True
             i += 2
             continue
-        elif marker and line.startswith(marker, i):
+        elif marker and line.startswith(marker, i) and (marker == "#" or _at_boundary(line, i)):
             removed = True
             break
         else:
@@ -246,7 +253,11 @@ class CodeCompressor:
                     continue
                 stripped = line.strip()
                 opener = next((q for q in _TRIPLE if stripped.startswith(q)), "")
-                if opener:
+                # A docstring is the first statement of a module, class or
+                # function. Anywhere else a line starting with """ is a string
+                # argument or value — `textwrap.dedent(\n    """…` — and data.
+                at_docstring_position = not result or result[-1].rstrip().endswith(":")
+                if opener and at_docstring_position:
                     if stripped.count(opener) == 1:
                         docstring = opener
                     continue  # one-line or opening docstring

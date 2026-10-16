@@ -65,11 +65,15 @@ def _page(text: str, offset: int, limit: int) -> tuple[str, int | None]:
     Returns the page and the offset of the next one (None at the end).
     """
     offset = max(0, offset)
-    end = offset + max(1, limit)
+    limit = max(1, limit)
+    end = offset + limit
     if end >= len(text):
         return text[offset:], None
+    # Prefer a line break in the second half of the page; the next offset is
+    # always past this one, so paging can never stand still.
     cut = text.rfind("\n", offset + limit // 2, end)
-    end = cut + 1 if cut > 0 else end
+    if cut >= offset:
+        end = cut + 1
     return text[offset:end], end
 
 
@@ -218,6 +222,8 @@ def build_server(hub: Any | None = None) -> Any:
                     ),
                 }
             )
+        if max_chars is not None and max_chars <= 0:
+            return json.dumps({"error": "max_chars must be a positive number"})
         if not offset and max_chars is None:
             return text
         page, next_offset = _page(text, offset, max_chars or len(text))

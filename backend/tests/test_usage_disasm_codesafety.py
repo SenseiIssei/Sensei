@@ -77,7 +77,7 @@ class TestUsage:
 
     def test_sniffer_does_not_buffer_a_huge_line(self):
         sniffer = UsageSniffer()
-        sniffer.feed(b"data: " + b"x" * 200_000)
+        sniffer.feed(b"data: " + b"x" * (9 * 1024 * 1024))
         assert len(sniffer._pending) == 0
 
 

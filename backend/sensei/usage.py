@@ -116,9 +116,12 @@ def _usage_in_event(event: dict[str, Any]) -> Usage:
 class UsageSniffer:
     """Accumulate usage from an SSE byte stream without buffering the stream."""
 
-    # A usage event is a few hundred bytes. Anything longer without a newline is
-    # a content delta, and holding on to it would turn a proxy into a buffer.
-    _MAX_PENDING = 64 * 1024
+    # How much of one unterminated SSE line to hold. Not small: the Responses
+    # API's `response.completed` event echoes the instructions, tools and the
+    # whole output, which for Codex runs to hundreds of kilobytes — and the
+    # usage block is inside it. Bounded all the same, so one pathological line
+    # cannot turn a proxy into a buffer.
+    _MAX_PENDING = 8 * 1024 * 1024
 
     def __init__(self) -> None:
         self.usage = Usage()

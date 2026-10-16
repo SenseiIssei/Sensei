@@ -22,7 +22,8 @@ SECRET_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         ),
     ),
     ("anthropic_key", re.compile(r"sk-ant-[A-Za-z0-9_\-]{20,}")),
-    ("openai_key", re.compile(r"sk-[A-Za-z0-9]{20,}")),
+    # Project, service-account and admin keys carry a prefix: sk-proj-…, sk-svcacct-…
+    ("openai_key", re.compile(r"sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{20,}")),
     ("github_token", re.compile(r"gh[pousr]_[A-Za-z0-9]{36,}")),
     ("slack_token", re.compile(r"xox[baprs]-[A-Za-z0-9-]{10,}")),
     ("aws_access_key", re.compile(r"AKIA[0-9A-Z]{16}")),

@@ -112,11 +112,38 @@ def _has_systemd() -> bool:
 
 
 def _quote(args: list[str]) -> str:
-    return subprocess.list2cmdline(args) if os.name == "nt" else " ".join(map(_sh, args))
+    """A Windows command line, for the Run key."""
+    return subprocess.list2cmdline(args)
 
 
-def _sh(arg: str) -> str:
-    return arg if arg and all(c.isalnum() or c in "/._-:=" for c in arg) else f"'{arg}'"
+def _unit_quote(args: list[str]) -> str:
+    """An ExecStart= line. systemd splits on whitespace, honours double quotes
+    with backslash escapes, and expands `%` specifiers — so `%` is doubled."""
+
+    def one(arg: str) -> str:
+        escaped = arg.replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%")
+        return f'"{escaped}"'
+
+    return " ".join(one(a) for a in args)
+
+
+_DESKTOP_RESERVED = set(" \t\n\"'\\><~|&;$*?#()`")
+
+
+def _desktop_quote(args: list[str]) -> str:
+    """An Exec= value per the Desktop Entry spec: arguments with reserved
+    characters go in double quotes with `"`, `` ` ``, `$` and `\\` escaped; `%`
+    is a field code and doubles; and the string-level escape rule then doubles
+    every backslash once more."""
+
+    def one(arg: str) -> str:
+        arg = arg.replace("%", "%%")
+        if arg and not (set(arg) & _DESKTOP_RESERVED):
+            return arg
+        inner = "".join("\\" + c if c in '"`$\\' else c for c in arg)
+        return f'"{inner}"'
+
+    return " ".join(one(a) for a in args).replace("\\", "\\\\")
 
 
 def autostart_status() -> AutostartState:
@@ -189,7 +216,7 @@ def autostart_enable() -> AutostartState:
             "Description=Sensei — prompt-compressing AI gateway\n"
             "After=network-online.target\n\n"
             "[Service]\n"
-            f"ExecStart={_quote(launch_command(headless=True))}\n"
+            f"ExecStart={_unit_quote(launch_command(headless=True))}\n"
             "Restart=on-failure\n"
             "RestartSec=3\n\n"
             "[Install]\n"
@@ -207,7 +234,7 @@ def autostart_enable() -> AutostartState:
         "Type=Application\n"
         "Name=Sensei\n"
         "Comment=Prompt-compressing AI gateway\n"
-        f"Exec={_quote(launch_command(headless=not _tray_available()))}\n"
+        f"Exec={_desktop_quote(launch_command(headless=not _tray_available()))}\n"
         "Terminal=false\n"
         "X-GNOME-Autostart-enabled=true\n",
         encoding="utf-8",
@@ -305,8 +332,12 @@ def install_kind() -> str:
         if (exe.parent / "unins000.exe").exists():
             return "windows-installer"
         return "windows-portable"
-    if str(exe).startswith(("/usr/", "/opt/")):
+    if str(exe).startswith(("/usr/bin/", "/usr/lib/", "/opt/sensei/")):
         return "system-package"
+    # Installed somewhere the user cannot write to without sudo — for example
+    # SENSEI_INSTALL_DIR=/usr/local/bin. Replacing it in place would fail.
+    if not os.access(exe.parent, os.W_OK):
+        return "binary-readonly"
     return "binary"
 
 
@@ -362,6 +393,12 @@ def apply_update(release: dict | None = None) -> str:
             f"    pipx install --force {release['url'].replace('/tag/', '/download/')}/"
             f"sensei_gateway-{version}-py3-none-any.whl\n"
             "or, from a checkout:  git pull && pip install -e backend"
+        )
+    if kind == "binary-readonly":
+        return (
+            f"Sensei {version} is available, but {Path(sys.executable).parent} is not writable "
+            "without administrator rights. Re-run the installer with the same "
+            "SENSEI_INSTALL_DIR under sudo, or download it from " + release["url"]
         )
     if kind == "system-package":
         return (

@@ -79,7 +79,7 @@ class TestAutostartFiles:
         state = system.autostart_enable()
         assert state.enabled and state.mechanism == "systemd user service"
         unit = system._systemd_unit().read_text(encoding="utf-8")
-        assert "ExecStart=" in unit and "up --no-browser" in unit
+        assert "ExecStart=" in unit and '"up" "--no-browser"' in unit
         assert "Restart=on-failure" in unit
         assert "WantedBy=default.target" in unit
         assert not system.autostart_disable().enabled

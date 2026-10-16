@@ -45,3 +45,16 @@ def test_redact_payload_walks_nested_and_leaves_other_strings():
     assert counts.get("openai_key") == 1
     assert red["model"] == "gpt-4o"  # non-secret strings untouched
     assert red["messages"][0]["role"] == "user"
+
+
+def test_current_openai_key_formats_are_redacted():
+    """`sk-proj-…` and `sk-svcacct-…` are what OpenAI issues now; the old
+    pattern stopped at the second dash and let them through."""
+    from sensei.security.redaction import Redactor
+
+    r = Redactor()
+    for key in ("sk-proj-" + "Ab_-" * 12, "sk-svcacct-" + "x" * 40):
+        out, counts = r.redact(f"export OPENAI_API_KEY={key}")
+        assert key not in out and counts.get("openai_key") == 1
+    # Prose and identifiers that merely start with sk- are left alone.
+    assert Redactor().redact("sk-loading-spinner-container")[1] == {}

@@ -120,6 +120,7 @@ class _Connection:
     async def _run(self) -> None:
         from mcp import Client
 
+        failure: BaseException = ConnectionError("the server connection has closed")
         try:
             async with Client(self._target, read_timeout_seconds=120) as client:
                 self._ready.set_result(None)
@@ -133,20 +134,31 @@ class _Connection:
                     except Exception as exc:
                         if not future.done():
                             future.set_exception(exc)
+                        if _connection_lost(exc):
+                            # End the task, so the hub opens a fresh connection
+                            # on the next call instead of reusing a dead one.
+                            failure = exc
+                            return
                     else:
                         if not future.done():
                             future.set_result(result)
-        except Exception as exc:
+        except BaseException as exc:
+            failure = exc
+            raise
+        finally:
+            # Nothing may be left waiting: not a caller blocked on startup, and
+            # not a job queued behind the one that failed.
             if not self._ready.done():
-                self._ready.set_exception(exc)
-            # Fail anything still waiting rather than leaving it hanging.
+                self._ready.set_exception(_as_error(failure))
             while not self._queue.empty():
                 job = self._queue.get_nowait()
                 if job is not None and not job[1].done():
-                    job[1].set_exception(exc)
+                    job[1].set_exception(_as_error(failure))
 
     async def submit(self, work: Any) -> Any:
-        await self._ready
+        # Shielded: one caller giving up must not cancel the shared startup
+        # future that every other caller is waiting on too.
+        await asyncio.shield(self._ready)
         if self._task.done():
             raise ConnectionError("the server connection has closed")
         future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
@@ -160,6 +172,29 @@ class _Connection:
                 await asyncio.wait_for(self._task, timeout=10)
             except (TimeoutError, Exception):
                 self._task.cancel()
+
+
+def _connection_lost(exc: BaseException) -> bool:
+    """A failure of the connection itself, as opposed to the tool."""
+    if isinstance(exc, (ConnectionError, EOFError, BrokenPipeError)):
+        return True
+    try:
+        import anyio
+
+        if isinstance(
+            exc, (anyio.ClosedResourceError, anyio.BrokenResourceError, anyio.EndOfStream)
+        ):
+            return True
+    except ImportError:  # pragma: no cover - anyio comes with mcp
+        pass
+    return "connection closed" in str(exc).lower()
+
+
+def _as_error(exc: BaseException) -> Exception:
+    # A cancelled worker must not hand CancelledError to an unrelated caller.
+    return (
+        exc if isinstance(exc, Exception) else ConnectionError("the server connection has closed")
+    )
 
 
 @dataclass
@@ -210,12 +245,14 @@ class ProxyHub:
         if self._tools is not None and not refresh:
             return self._tools
         found: list[RemoteTool] = []
+        complete = True
         for name in self.servers:
             try:
                 listed = await self._submit(name, lambda client: client.list_tools())
             except Exception as exc:
                 self._errors[name] = str(exc) or type(exc).__name__
                 logger.warning("MCP server %r unavailable: %s", name, exc)
+                complete = False
                 continue
             for tool in listed.tools:
                 found.append(
@@ -226,7 +263,9 @@ class ProxyHub:
                         schema=dict(_field(tool, "input_schema", "inputSchema") or {}),
                     )
                 )
-        self._tools = found
+        # Only a complete list is cached: a server that was down for the first
+        # search would otherwise stay invisible until Sensei restarts.
+        self._tools = found if complete else None
         return found
 
     async def find(self, query: str, server: str | None, limit: int) -> dict[str, Any]:

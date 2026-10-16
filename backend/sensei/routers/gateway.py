@@ -29,6 +29,7 @@ import random
 import time
 from typing import Any
 
+import anyio
 import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -485,11 +486,17 @@ async def _send(
         try:
             request = client.build_request("POST", path, json=payload, headers=headers)
             resp = await client.send(request, stream=True)
-        except httpx.TransportError as exc:
+        except _NEVER_SENT as exc:
             last_exc = exc
             logger.warning(
                 "Upstream %s%s unreachable (attempt %d): %s", base_url, path, attempt + 1, exc
             )
+        except httpx.TransportError as exc:
+            # A read timeout or a dropped connection after the request went
+            # out: the provider may be generating — and billing — already.
+            # Retrying would pay for it twice.
+            logger.warning("Upstream %s%s failed after sending: %s", base_url, path, exc)
+            return None, exc
         if resp is not None:
             if resp.status_code not in _RETRY_STATUSES or attempt == attempts - 1:
                 return resp, None
@@ -500,6 +507,11 @@ async def _send(
                 await resp.aclose()
             await asyncio.sleep(delay)
     return None, last_exc
+
+
+# Failures that happen before a single byte of the request is accepted, so a
+# retry cannot double-bill.
+_NEVER_SENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
 
 
 def _fallback_target(api: str) -> tuple[str, str] | None:
@@ -556,6 +568,7 @@ async def _forward(
     tool: str = "",
     shaped: int = -1,
     record: bool = True,
+    fallback: bool = True,
 ) -> Any:
     headers = _savings_headers(savings)
     if redactions:
@@ -584,7 +597,10 @@ async def _forward(
 
     resp, exc = await _send(base_url, path, payload, up_headers)
 
-    if record and (resp is None or resp.status_code in _RETRY_STATUSES):
+    # Only a full request can be answered by another model. A count or a
+    # compaction sent to a local /responses would come back as a normal reply
+    # where the client expects something else entirely.
+    if fallback and (resp is None or resp.status_code in _RETRY_STATUSES):
         fallback, model = await _try_fallback(api, payload, up_headers)
         if fallback is not None:
             if resp is not None:
@@ -604,8 +620,12 @@ async def _forward(
     # `text/event-stream` and a JSON error inside, which clients parse as a
     # stream that ended early — the rate limit was invisible.
     if resp.status_code >= 400:
-        body = await resp.aread()
-        await resp.aclose()
+        try:
+            body = await resp.aread()
+        except httpx.HTTPError as err:
+            return _error(502, f"Upstream response broke off: {err}", "upstream_error", headers)
+        finally:
+            await resp.aclose()
         return Response(
             content=body,
             status_code=resp.status_code,
@@ -627,15 +647,23 @@ async def _forward(
                 # and let the client see a truncated stream.
                 logger.warning("Upstream stream broke off: %s", err)
             finally:
-                await upstream.aclose()
+                # Usage first: a client that hangs up (Esc in Claude Code)
+                # cancels this generator, and anything after an await in a
+                # cancelled `finally` never runs.
                 tracker.ledger.set_usage(row_id, sniffer.close())
+                with anyio.CancelScope(shield=True):
+                    await upstream.aclose()
 
         return StreamingResponse(
             event_stream(), status_code=resp.status_code, media_type=content_type, headers=headers
         )
 
-    raw = await resp.aread()
-    await resp.aclose()
+    try:
+        raw = await resp.aread()
+    except httpx.HTTPError as err:
+        return _error(502, f"Upstream response broke off: {err}", "upstream_error", headers)
+    finally:
+        await resp.aclose()
     if content_type.startswith("application/json"):
         try:
             data = resp.json()
@@ -833,6 +861,11 @@ async def responses_action(action: str, request: Request) -> Any:
     api_key = _openai_auth(request, provider)
     if not api_key:
         return _no_key(provider, savings)
+    # `compact` sends the whole conversation: it gets the same redaction and
+    # block-list as a turn, or it would be the way around both.
+    payload, red_total, reason = _apply_policy(payload)
+    if reason:
+        return _error(403, reason, "blocked_by_policy", _savings_headers(savings))
     return await _forward(
         base_url=provider.base_url,
         path=f"/responses/{endpoint}",
@@ -843,6 +876,8 @@ async def responses_action(action: str, request: Request) -> Any:
         api="responses",
         tool=_client_name(request),
         record=endpoint == "compact",
+        fallback=False,
+        redactions=red_total,
         meta={"api": "responses", "provider": provider.provider_name, "model": body.get("model")},
     )
 
@@ -958,6 +993,9 @@ async def count_tokens_anthropic(request: Request) -> Any:
     if new_system is not None:
         payload["system"] = new_system
     payload["messages"] = new_messages
+    payload, _, reason = _apply_policy(payload)
+    if reason:
+        return _error(403, reason, "blocked_by_policy", _savings_headers(savings))
     return await _forward(
         base_url=settings.anthropic_api_base_url,
         path="/messages/count_tokens",
@@ -967,4 +1005,5 @@ async def count_tokens_anthropic(request: Request) -> Any:
         stream=False,
         api="anthropic",
         record=False,
+        fallback=False,
     )
