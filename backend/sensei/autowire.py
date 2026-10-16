@@ -17,7 +17,9 @@ Three rules keep it from being intrusive:
 * It only ever *adds*. Removing a tool's configuration is a decision, and
   decisions belong to the person, not to a timer.
 * It respects `integrations.declined()`, so a tool disconnected by hand stays
-  disconnected.
+  disconnected, and `integrations.auto_connect_allowed()`, so "don't connect my
+  tools" in the installer, or "Disconnect everything", outlives the process it
+  was said to.
 * Nothing is written when the configuration would not change, so a tool already
   pointing at the gateway is not rewritten sixty times an hour, and its file's
   mtime does not churn.
@@ -28,6 +30,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from . import integrations
@@ -52,6 +55,11 @@ class Watcher:
 
     async def scan(self, *, first: bool = False) -> list[str]:
         """One pass. Returns the ids wired by this pass."""
+        # Checked on every pass, not once at startup: the choice lives in the
+        # manifest and can change while the server runs (the installer writes
+        # it, the tray and the dashboard toggle it).
+        if not await asyncio.to_thread(integrations.auto_connect_allowed):
+            return []
         # Detection touches the filesystem, and applying it writes files. Both
         # are blocking, and the event loop here is also serving the gateway.
         current = await asyncio.to_thread(integrations.status)
@@ -71,6 +79,12 @@ class Watcher:
                 self.connected.append(tool_id)
         if wired:
             logger.info("Connected to %s", ", ".join(sorted(set(wired))))
+            names = {i.id: i.name for i, _installed, _wired in current if i.id in set(wired)}
+            for listener in list(_listeners):
+                try:
+                    listener([names.get(t, t) for t in dict.fromkeys(wired)])
+                except Exception as exc:  # a notification must not stop the scan
+                    logger.debug("auto-connect listener failed: %s", exc)
         return wired
 
     async def run(self) -> None:
@@ -94,6 +108,15 @@ class Watcher:
 
 
 _watcher: Watcher | None = None
+
+# Called with the display names of tools a scan just connected. The tray uses
+# it to say "restart Cursor to pick this up" instead of leaving it unsaid.
+_listeners: list[Callable[[list[str]], None]] = []
+
+
+def subscribe(listener: Callable[[list[str]], None]) -> None:
+    if listener not in _listeners:
+        _listeners.append(listener)
 
 
 def current() -> Watcher | None:

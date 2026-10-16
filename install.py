@@ -535,7 +535,11 @@ def main() -> None:
             else:
                 warn("Some tools need a manual step — see the output above")
         else:
-            warn("Skipped — run 'sensei setup-tools' whenever you want")
+            # Remembered, so the running server's background scan does not
+            # connect them anyway a few seconds after it starts.
+            run([sys.executable, "-m", "sensei.cli", "setup-tools", "--auto", "off"],
+                cwd=str(backend_dir), check=False)
+            warn("Skipped — run 'sensei connect' whenever you want")
 
     # ── Step 8: Start ──
     step(8, "Ready to launch!")

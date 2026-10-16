@@ -16,10 +16,9 @@ class TestSmartCrusher:
         crusher = SmartCrusher()
         original = json.dumps({"name": "test", "value": 42, "empty": None, "blank": ""})
         result = crusher.compress(original)
-        data = json.loads(result)
-        assert "name" in data
-        assert "empty" not in data
-        assert "blank" not in data
+        # Minified, nothing dropped: null and "" are values, not noise.
+        assert json.loads(result) == json.loads(original)
+        assert len(result) < len(original)
 
     def test_compress_array_of_dicts(self):
         crusher = SmartCrusher()
@@ -172,23 +171,13 @@ class TestLogCompressor:
         text = "line1\nline2\nERROR boom"  # < 10 lines
         assert comp.compress(text) == text
 
-    def test_rust_matches_python(self):
-        # When the Rust accelerator is built, its output must be byte-identical
-        # to the pure-Python path.
-        from unittest import mock
-
+    def test_python_path_only(self):
+        """The accelerator's `compress_logs` implements the earlier pass (no
+        markers, no test awareness); the Python path must not delegate to it,
+        or installs with the wheel would behave differently from those without."""
         from sensei.compression import logcomp
 
-        if logcomp._core is None:
-            return
-        text = "\n".join(
-            [f"2026-01-01 12:00:{i:02d} INFO step {i} ok" for i in range(30)]
-            + ["2026-01-01 12:01:00 ERROR boom", "done"]
-        )
-        rust_out = logcomp.LogCompressor().compress(text)
-        with mock.patch.object(logcomp, "_core", None):
-            py_out = logcomp.LogCompressor().compress(text)
-        assert rust_out == py_out
+        assert not hasattr(logcomp, "_core")
 
 
 class TestContentRouter:

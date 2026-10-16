@@ -42,8 +42,36 @@ class TestWrap:
         assert env == {"ANTHROPIC_BASE_URL": "http://localhost:7000"}
 
     def test_openai_tools_get_the_v1_suffix(self):
-        env = wrap.routing_env(wrap.TOOLS["codex"], base="http://localhost:7000")
-        assert env == {"OPENAI_BASE_URL": "http://localhost:7000/v1"}
+        env = wrap.routing_env(wrap.TOOLS["opencode"], base="http://localhost:7000")
+        assert env["OPENAI_BASE_URL"] == "http://localhost:7000/v1"
+
+    def test_codex_gets_its_config_key_not_an_env_var_it_ignores(self):
+        tool = wrap.TOOLS["codex"]
+        assert wrap.routing_env(tool, base="http://localhost:7000", environ={}) == {}
+        assert wrap.routing_args(tool, base="http://localhost:7000") == [
+            "-c",
+            'openai_base_url="http://localhost:7000/v1"',
+        ]
+
+    def test_goose_host_has_no_v1(self):
+        """Goose appends v1/chat/completions itself."""
+        env = wrap.routing_env(wrap.TOOLS["goose"], base="http://localhost:7000")
+        assert env["OPENAI_HOST"] == "http://localhost:7000"
+
+    def test_copilot_byok_keeps_a_users_provider_type(self):
+        tool = wrap.TOOLS["copilot"]
+        env = wrap.routing_env(tool, base="http://localhost:7000", environ={})
+        assert env["COPILOT_PROVIDER_TYPE"] == "openai"
+        assert env["COPILOT_PROVIDER_BASE_URL"] == "http://localhost:7000/v1"
+        mine = wrap.routing_env(
+            tool, base="http://localhost:7000", environ={"COPILOT_PROVIDER_TYPE": "anthropic"}
+        )
+        assert "COPILOT_PROVIDER_TYPE" not in mine
+        assert mine["COPILOT_PROVIDER_BASE_URL"] == "http://localhost:7000"
+
+    def test_cursor_agent_gets_an_explanation(self, capsys):
+        assert wrap.run("cursor-agent", []) == 2
+        assert "MCP" in capsys.readouterr().err
 
     def test_aider_gets_both_of_its_variable_names(self):
         env = wrap.routing_env(wrap.TOOLS["aider"], base="http://localhost:7000")
@@ -70,7 +98,9 @@ class TestWrap:
 
     def test_every_tool_routes_somewhere(self):
         for name, tool in wrap.TOOLS.items():
-            assert tool.openai_vars or tool.anthropic_vars, f"{name} routes nowhere"
+            assert tool.openai_vars or tool.anthropic_vars or tool.host_vars or tool.args, (
+                f"{name} routes nowhere"
+            )
 
 
 CATALOG = [

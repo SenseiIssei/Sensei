@@ -28,20 +28,23 @@ import logging
 import random
 import time
 from typing import Any
+from urllib.parse import urlsplit
 
 import anyio
 import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
-from sensei import output_shaping
 from sensei.compression.router import ContentRouter
 from sensei.config import settings
+from sensei.gateway import ccr, extras, pipeline
+from sensei.gateway.intercept import Retriever
+from sensei.gateway.session import live_zone
 from sensei.models.api import APIModelProvider
 from sensei.savings import get_savings_tracker
 from sensei.security.filtering import check_policy
 from sensei.security.redaction import redact_payload
-from sensei.usage import UsageSniffer, from_response
+from sensei.usage import Usage, UsageSniffer, from_response
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +60,9 @@ _content_router: ContentRouter | None = None
 def init_gateway_deps(content_router: ContentRouter) -> None:
     global _content_router
     _content_router = content_router
+    # Originals the compression pipeline stored itself (on disk, by the same
+    # deterministic id) are reachable through `sensei_retrieve` too.
+    ccr.store.fallback = content_router.retrieve_original
 
 
 def _router() -> ContentRouter:
@@ -554,6 +560,29 @@ async def _try_fallback(
     return resp, model
 
 
+def _observe(prepared: pipeline.Prepared | None, usage: Usage) -> None:
+    """Tell the live zone what the provider cached, for next turn's boundary.
+
+    Only Anthropic reports cache *writes*. OpenAI caches automatically and says
+    so only on a read, so a zero there means "not reported", not "not cached".
+    """
+    if prepared is None or not prepared.key or not usage.known:
+        return
+    if prepared.api != "anthropic" and not usage.cache_read:
+        return
+    live_zone.observe_usage(prepared.key, usage.cache_read, usage.cache_write, True)
+
+
+def _sensei_block(savings: dict[str, Any], prepared: pipeline.Prepared | None) -> dict[str, Any]:
+    block = dict(savings)
+    if prepared is not None:
+        block["live_zone"] = prepared.cause
+        for key in ("tool_tokens_saved", "dedup_tokens_saved", "stale_reads", "tools_deferred"):
+            if prepared.info.get(key):
+                block[key] = prepared.info[key]
+    return block
+
+
 async def _forward(
     *,
     base_url: str,
@@ -569,14 +598,21 @@ async def _forward(
     shaped: int = -1,
     record: bool = True,
     fallback: bool = True,
+    prepared: pipeline.Prepared | None = None,
+    extra_headers: dict[str, str] | None = None,
+    cache_key: str | None = None,
 ) -> Any:
     headers = _savings_headers(savings)
+    if extra_headers:
+        headers.update(extra_headers)
     if redactions:
         headers["X-Sensei-Redactions"] = str(redactions)
     if shaped >= 0:
         # Visible to the caller so a holdout assignment can be correlated with
         # what came back, without having to read the ledger.
         headers["X-Sensei-Output-Shaped"] = "true" if shaped else "false"
+    if prepared is not None and prepared.cause != "off":
+        headers["X-Sensei-Live-Zone"] = prepared.cause
 
     tracker = get_savings_tracker()
     row_id = None
@@ -587,7 +623,10 @@ async def _forward(
             provider=str((meta or {}).get("provider") or (meta or {}).get("api") or ""),
             model=str((meta or {}).get("model") or ""),
             shaped=shaped,
+            cache_event=prepared.cause if prepared is not None else "",
         )
+        if settings.gateway_tool_budgets.strip():
+            extras.budget_meter.add(tool or "unknown", int(savings.get("prompt_tokens_after") or 0))
         if meta is not None:
             from sensei.audit import get_audit_log
 
@@ -596,16 +635,18 @@ async def _forward(
             get_audit_log().record("gateway.request", **meta)
 
     resp, exc = await _send(base_url, path, payload, up_headers)
+    from_fallback = False
 
     # Only a full request can be answered by another model. A count or a
     # compaction sent to a local /responses would come back as a normal reply
     # where the client expects something else entirely.
     if fallback and (resp is None or resp.status_code in _RETRY_STATUSES):
-        fallback, model = await _try_fallback(api, payload, up_headers)
-        if fallback is not None:
+        fallback_resp, model = await _try_fallback(api, payload, up_headers)
+        if fallback_resp is not None:
             if resp is not None:
                 await resp.aclose()
-            resp = fallback
+            resp = fallback_resp
+            from_fallback = True
             headers["X-Sensei-Fallback"] = model
 
     if resp is None:
@@ -633,29 +674,33 @@ async def _forward(
             headers=headers,
         )
 
+    retriever: Retriever | None = None
+    if (
+        prepared is not None
+        and prepared.inject
+        and settings.gateway_retrieve_intercept
+        and not from_fallback
+    ):
+
+        async def send_more(next_payload: dict[str, Any]) -> httpx.Response | None:
+            more, _ = await _send(base_url, path, next_payload, up_headers)
+            return more
+
+        retriever = Retriever(
+            api,
+            payload,
+            send_more,
+            policy=_hidden_policy,
+            scope=prepared.scope,
+            prefix=prepared.prefix,
+        )
+
     if stream and "event-stream" in content_type:
-        sniffer = UsageSniffer()
-        upstream = resp
-
-        async def event_stream():
-            try:
-                async for chunk in upstream.aiter_bytes():
-                    sniffer.feed(chunk)
-                    yield chunk
-            except httpx.HTTPError as err:
-                # Headers are already sent; all that is left is to stop cleanly
-                # and let the client see a truncated stream.
-                logger.warning("Upstream stream broke off: %s", err)
-            finally:
-                # Usage first: a client that hangs up (Esc in Claude Code)
-                # cancels this generator, and anything after an await in a
-                # cancelled `finally` never runs.
-                tracker.ledger.set_usage(row_id, sniffer.close())
-                with anyio.CancelScope(shield=True):
-                    await upstream.aclose()
-
         return StreamingResponse(
-            event_stream(), status_code=resp.status_code, media_type=content_type, headers=headers
+            _relay(resp, retriever, prepared, row_id),
+            status_code=resp.status_code,
+            media_type=content_type,
+            headers=headers,
         )
 
     try:
@@ -670,13 +715,81 @@ async def _forward(
         except ValueError:
             data = None
         if isinstance(data, dict):
+            usage = from_response(data)
+            if retriever is not None:
+                data = await retriever.complete(data)
+                usage = retriever.usage
+                if retriever.rounds:
+                    headers["X-Sensei-Retrieve-Rounds"] = str(retriever.rounds)
+            if cache_key is not None and resp.status_code == 200:
+                extras.response_cache.put(cache_key, data)
             if record:
-                data["sensei"] = savings
-                tracker.ledger.set_usage(row_id, from_response(data))
+                block = _sensei_block(savings, prepared)
+                if retriever is not None and retriever.rounds:
+                    block["retrieve"] = {
+                        "rounds": retriever.rounds,
+                        "billed_prompt_tokens_all_rounds": usage.prompt,
+                        "billed_output_tokens_all_rounds": usage.output,
+                    }
+                data["sensei"] = block
+                tracker.ledger.set_usage(row_id, usage)
+                if retriever is not None:
+                    tracker.ledger.set_retrieve_rounds(row_id, retriever.rounds)
+            _observe(prepared, usage)
             return JSONResponse(status_code=resp.status_code, content=data, headers=headers)
     return Response(
         content=raw, status_code=resp.status_code, media_type=content_type or None, headers=headers
     )
+
+
+async def _relay(
+    upstream: httpx.Response,
+    retriever: Retriever | None,
+    prepared: pipeline.Prepared | None,
+    row_id: int | None,
+):
+    """The response stream, byte for byte — or spliced, when retrieve is on."""
+    ledger = get_savings_tracker().ledger
+    if retriever is not None and settings.gateway_retrieve_in_streams:
+        try:
+            async for chunk in retriever.stream(upstream):
+                yield chunk
+        finally:
+            usage = retriever.usage_so_far()
+            ledger.set_usage(row_id, usage)
+            ledger.set_retrieve_rounds(row_id, retriever.rounds)
+            _observe(prepared, usage)
+            # A client that hangs up mid-splice must not leave a follow-up
+            # request's connection open.
+            await retriever.aclose()
+            with anyio.CancelScope(shield=True):
+                await upstream.aclose()
+        return
+
+    sniffer = UsageSniffer()
+    try:
+        async for chunk in upstream.aiter_bytes():
+            sniffer.feed(chunk)
+            yield chunk
+    except httpx.HTTPError as err:
+        # Headers are already sent; all that is left is to stop cleanly and
+        # let the client see a truncated stream.
+        logger.warning("Upstream stream broke off: %s", err)
+    finally:
+        # Usage first: a client that hangs up (Esc in Claude Code) cancels this
+        # generator, and anything after an await in a cancelled `finally`
+        # never runs.
+        usage = sniffer.close()
+        ledger.set_usage(row_id, usage)
+        _observe(prepared, usage)
+        with anyio.CancelScope(shield=True):
+            await upstream.aclose()
+
+
+def _hidden_policy(payload: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+    """Redaction and the block-list for a follow-up the gateway sends itself."""
+    payload, _, reason = _apply_policy(payload)
+    return payload, reason
 
 
 def _apply_policy(payload: dict[str, Any]) -> tuple[dict[str, Any], int, str | None]:
@@ -733,6 +846,55 @@ def _no_key(provider: APIModelProvider, savings: dict[str, Any]) -> JSONResponse
     )
 
 
+def _over_budget(tool: str, api: str) -> JSONResponse | None:
+    """A 429 when this tool has used up its configured budget."""
+    if not settings.gateway_tool_budgets.strip():
+        return None
+    over = extras.budget_meter.check(tool or "unknown")
+    if over is None and settings.savings_persist:
+        # The in-memory meter starts empty after a restart; the ledger does not.
+        limits = extras.budgets()
+        limit = limits.get((tool or "unknown").lower(), limits.get("*"))
+        if limit is not None:
+            since = time.time() - settings.gateway_tool_budget_window_hours * 3600
+            used = get_savings_tracker().ledger.tool_tokens_since(tool or "unknown", since)
+            if used >= limit:
+                extras.budget_meter.add(tool or "unknown", used - extras.budget_meter.used(tool))
+                over = extras.budget_meter.check(tool or "unknown")
+    if over is None:
+        return None
+    error = {"type": "rate_limit_error", "message": over["message"]}
+    content: dict[str, Any] = {"error": {**error, "sensei_budget": over}}
+    if api == "anthropic":
+        content = {"type": "error", **content}
+    return JSONResponse(
+        status_code=429,
+        content=content,
+        headers={"X-Sensei-Budget-Exceeded": over["tool"], "Retry-After": "3600"},
+    )
+
+
+def _route(api: str, payload: dict[str, Any], extra: dict[str, str]) -> None:
+    target = extras.route_model(api, payload)
+    if target:
+        extra["X-Sensei-Routed-From"] = str(payload.get("model") or "")
+        payload["model"] = target
+
+
+def _cached_response(
+    api: str, path: str, payload: dict[str, Any], auth: str, savings: dict[str, Any]
+) -> tuple[str | None, JSONResponse | None]:
+    """(cache key, cached response) for the opt-in exact response cache."""
+    if not extras.cacheable(payload):
+        return None, None
+    key = extras.response_cache.key(api, path, payload, auth)
+    hit = extras.response_cache.get(key)
+    if hit is None:
+        return key, None
+    headers = {**_savings_headers(savings), "X-Sensei-Cache": "hit"}
+    return key, JSONResponse(status_code=200, content=hit, headers=headers)
+
+
 @router.post("/v1/chat/completions")
 async def chat_completions(request: Request) -> Any:
     """OpenAI-compatible chat completions with transparent prompt compression."""
@@ -743,31 +905,33 @@ async def chat_completions(request: Request) -> Any:
     messages = body.get("messages")
     if not isinstance(messages, list):
         return _error(400, "'messages' must be a list", "invalid_request_error", {})
+    tool = _client_name(request)
+    if refused := _over_budget(tool, "openai"):
+        return refused
 
-    compressed, savings = compress_request_messages(messages)
+    prepared = pipeline.prepare(
+        "openai", body, compress_text=_compress_text, credential=_incoming_bearer(request) or ""
+    )
+    savings = prepared.savings
 
     provider = APIModelProvider()
     api_key = _openai_auth(request, provider)
     if not api_key:
         return _no_key(provider, savings)
 
-    # Shaping runs after compression, so the instruction is not itself
-    # compressed away, and its cost shows up honestly as input tokens.
-    shaped = -1
-    if settings.output_shaper:
-        shaped = int(output_shaping.assign())
-        if shaped:
-            compressed = output_shaping.shape_messages(compressed)
-            savings = output_shaping.account_for_instruction(savings)
-
-    payload = dict(body)
-    payload["messages"] = compressed
+    payload = prepared.payload
     if not payload.get("model"):
         payload["model"] = provider.model
+    extra: dict[str, str] = {}
+    _route("openai", payload, extra)
 
     payload, red_total, reason = _apply_policy(payload)
     if reason:
         return _error(403, reason, "blocked_by_policy", _savings_headers(savings))
+
+    cache_key, cached = _cached_response("openai", "/chat/completions", payload, api_key, savings)
+    if cached is not None:
+        return cached
 
     return await _forward(
         base_url=provider.base_url,
@@ -778,8 +942,11 @@ async def chat_completions(request: Request) -> Any:
         stream=bool(payload.get("stream")),
         api="openai",
         redactions=red_total,
-        tool=_client_name(request),
-        shaped=shaped,
+        tool=tool,
+        shaped=prepared.shaped,
+        prepared=prepared,
+        extra_headers=extra,
+        cache_key=cache_key,
         meta={
             "api": "openai",
             "provider": provider.provider_name,
@@ -804,8 +971,21 @@ async def responses(request: Request) -> Any:
         return body
     if "input" not in body:
         return _error(400, "'input' is required", "invalid_request_error", {})
+    tool = _client_name(request)
+    if refused := _over_budget(tool, "responses"):
+        return refused
 
-    payload, savings = compress_responses_request(body)
+    if isinstance(body.get("input"), list):
+        prepared: pipeline.Prepared | None = pipeline.prepare(
+            "responses",
+            body,
+            compress_text=_compress_text,
+            credential=_incoming_bearer(request) or "",
+        )
+        payload, savings = prepared.payload, prepared.savings
+    else:
+        prepared = None
+        payload, savings = compress_responses_request(body)
 
     provider = APIModelProvider()
     api_key = _openai_auth(request, provider)
@@ -813,10 +993,16 @@ async def responses(request: Request) -> Any:
         return _no_key(provider, savings)
     if not payload.get("model"):
         payload["model"] = provider.model
+    extra: dict[str, str] = {}
+    _route("responses", payload, extra)
 
     payload, red_total, reason = _apply_policy(payload)
     if reason:
         return _error(403, reason, "blocked_by_policy", _savings_headers(savings))
+
+    cache_key, cached = _cached_response("responses", "/responses", payload, api_key, savings)
+    if cached is not None:
+        return cached
 
     return await _forward(
         base_url=provider.base_url,
@@ -827,7 +1013,11 @@ async def responses(request: Request) -> Any:
         stream=bool(payload.get("stream")),
         api="responses",
         redactions=red_total,
-        tool=_client_name(request),
+        tool=tool,
+        shaped=prepared.shaped if prepared is not None else -1,
+        prepared=prepared,
+        extra_headers=extra,
+        cache_key=cache_key,
         meta={
             "api": "responses",
             "provider": provider.provider_name,
@@ -848,7 +1038,8 @@ async def responses_action(action: str, request: Request) -> Any:
 
     Codex calls ``compact`` with the whole conversation when its context fills
     up; the input is compressed exactly as for ``/responses``, so a token count
-    taken here matches what a real turn would send.
+    taken here matches what a real turn would send. Neither call is a turn, so
+    neither is remembered by the live zone.
     """
     endpoint = _RESPONSES_ACTIONS.get(action)
     if endpoint is None:
@@ -857,7 +1048,18 @@ async def responses_action(action: str, request: Request) -> Any:
     if isinstance(body, JSONResponse):
         return body
     provider = APIModelProvider()
-    payload, savings = compress_responses_request(body)
+    if isinstance(body.get("input"), list):
+        prepared = pipeline.prepare(
+            "responses",
+            body,
+            compress_text=_compress_text,
+            commit=False,
+            shape=False,
+            credential=_incoming_bearer(request) or "",
+        )
+        payload, savings = prepared.payload, prepared.savings
+    else:
+        payload, savings = compress_responses_request(body)
     api_key = _openai_auth(request, provider)
     if not api_key:
         return _no_key(provider, savings)
@@ -916,6 +1118,16 @@ def _anthropic_no_key(savings: dict[str, Any]) -> JSONResponse:
     )
 
 
+def _anthropic_credential(request: Request) -> str:
+    return request.headers.get("x-api-key") or request.headers.get("authorization") or ""
+
+
+def _first_party_anthropic() -> bool:
+    """Tool search is a first-party feature; a proxy or a cloud host may not have it."""
+    host = urlsplit(settings.anthropic_api_base_url).hostname or ""
+    return host.lower() == "api.anthropic.com"
+
+
 @router.post("/v1/messages")
 async def messages_anthropic(request: Request) -> Any:
     """Anthropic Messages API with transparent prompt compression."""
@@ -926,30 +1138,38 @@ async def messages_anthropic(request: Request) -> Any:
     messages = body.get("messages")
     if not isinstance(messages, list):
         return _error(400, "'messages' must be a list", "invalid_request_error", {})
-
-    new_system, new_messages, savings = compress_anthropic_request(body.get("system"), messages)
+    tool = _client_name(request)
+    if refused := _over_budget(tool, "anthropic"):
+        return refused
 
     up_headers = _anthropic_headers(request)
+    # A Claude subscription token: its tools and cache markers go upstream
+    # exactly as Claude Code sent them.
+    oauth = up_headers is not None and pipeline.is_oauth(up_headers)
+    prepared = pipeline.prepare(
+        "anthropic",
+        body,
+        compress_text=_compress_text,
+        oauth=oauth,
+        first_party=_first_party_anthropic(),
+        credential=_anthropic_credential(request),
+    )
+    savings = prepared.savings
     if up_headers is None:
         return _anthropic_no_key(savings)
 
-    shaped = -1
-    if settings.output_shaper:
-        shaped = int(output_shaping.assign())
-        if shaped:
-            # `system` stays untouched: it is the cached prefix, which is the
-            # whole reason CacheAligner exists.
-            new_messages = output_shaping.shape_messages(new_messages)
-            savings = output_shaping.account_for_instruction(savings)
-
-    payload = dict(body)
-    if new_system is not None:
-        payload["system"] = new_system
-    payload["messages"] = new_messages
+    payload = prepared.payload
+    extra: dict[str, str] = {}
+    _route("anthropic", payload, extra)
 
     payload, red_total, reason = _apply_policy(payload)
     if reason:
         return _error(403, reason, "blocked_by_policy", _savings_headers(savings))
+
+    auth = up_headers.get("x-api-key") or up_headers.get("authorization") or ""
+    cache_key, cached = _cached_response("anthropic", "/messages", payload, auth, savings)
+    if cached is not None:
+        return cached
 
     return await _forward(
         base_url=settings.anthropic_api_base_url,
@@ -960,8 +1180,11 @@ async def messages_anthropic(request: Request) -> Any:
         stream=bool(payload.get("stream")),
         api="anthropic",
         redactions=red_total,
-        tool=_client_name(request),
-        shaped=shaped,
+        tool=tool,
+        shaped=prepared.shaped,
+        prepared=prepared,
+        extra_headers=extra,
+        cache_key=cache_key,
         meta={
             "api": "anthropic",
             "provider": "anthropic",
@@ -978,6 +1201,9 @@ async def count_tokens_anthropic(request: Request) -> Any:
     Claude Code calls this to decide when to compact. Without this route it got
     a 404 through the gateway; an uncompressed passthrough would count a prompt
     bigger than the one really sent, and compact too early.
+
+    A dry run of the same pipeline: the live zone is read, never written, and
+    tool search is left out because the counting endpoint rejects server tools.
     """
     body = await _json_body(request)
     if isinstance(body, JSONResponse):
@@ -985,15 +1211,22 @@ async def count_tokens_anthropic(request: Request) -> Any:
     messages = body.get("messages")
     if not isinstance(messages, list):
         return _error(400, "'messages' must be a list", "invalid_request_error", {})
-    new_system, new_messages, savings = compress_anthropic_request(body.get("system"), messages)
     up_headers = _anthropic_headers(request)
+    oauth = up_headers is not None and pipeline.is_oauth(up_headers)
+    prepared = pipeline.prepare(
+        "anthropic",
+        body,
+        compress_text=_compress_text,
+        oauth=oauth,
+        first_party=False,
+        commit=False,
+        shape=False,
+        credential=_anthropic_credential(request),
+    )
+    savings = prepared.savings
     if up_headers is None:
         return _anthropic_no_key(savings)
-    payload = dict(body)
-    if new_system is not None:
-        payload["system"] = new_system
-    payload["messages"] = new_messages
-    payload, _, reason = _apply_policy(payload)
+    payload, _, reason = _apply_policy(prepared.payload)
     if reason:
         return _error(403, reason, "blocked_by_policy", _savings_headers(savings))
     return await _forward(
@@ -1007,3 +1240,27 @@ async def count_tokens_anthropic(request: Request) -> Any:
         record=False,
         fallback=False,
     )
+
+
+# ─── What the cache-aware gateway is doing ───────────────────────────────────
+
+
+@router.get("/api/gateway/stats")
+async def gateway_stats() -> dict[str, Any]:
+    """Live-zone outcomes, why caches missed, and the opt-in features' state.
+
+    ``live_zone`` is this process; ``ledger`` is every recorded request, with
+    what the provider billed per outcome — the place to look when the cache hit
+    rate is lower than it should be.
+    """
+    return {
+        "live_zone": live_zone.stats(),
+        "ledger": get_savings_tracker().ledger.cache_events(),
+        "retrieve_tool": settings.gateway_retrieve_tool,
+        "tool_schema_compaction": settings.gateway_tool_schema_compaction,
+        "tool_search": settings.gateway_tool_search,
+        "dedup": settings.gateway_dedup,
+        "response_cache": extras.response_cache.stats(),
+        "model_router": bool(settings.gateway_model_router.strip()),
+        "tool_budgets": extras.budgets(),
+    }
