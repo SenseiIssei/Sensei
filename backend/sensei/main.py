@@ -210,6 +210,7 @@ from sensei.routers.chat import router as chat_router
 from sensei.routers.conversations import router as conversations_router
 from sensei.routers.extract import router as extract_router
 from sensei.routers.gateway import router as gateway_router
+from sensei.routers.hooks import router as hooks_router
 from sensei.routers.maintenance import router as maintenance_router
 from sensei.routers.models import router as models_router
 from sensei.routers.rag import router as rag_router
@@ -237,6 +238,8 @@ app.include_router(webhook_router, prefix="/api")
 # OpenAI-compatible compression gateway — mounted at the root so clients can use
 # http://<host>:<port>/v1 as a drop-in OpenAI base URL.
 app.include_router(gateway_router)
+# Tool-output hooks (Claude Code, Copilot CLI, Gemini CLI, Cursor, plugins).
+app.include_router(hooks_router)
 
 
 @app.get("/")

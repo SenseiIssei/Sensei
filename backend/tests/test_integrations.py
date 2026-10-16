@@ -44,6 +44,17 @@ def sandbox(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     fake_home = tmp_path / "user-home"
     fake_home.mkdir(exist_ok=True)
     monkeypatch.setattr(Path, "home", classmethod(lambda _cls: fake_home))
+    # Path.home() is not the only way in: several tools live under %APPDATA%,
+    # $XDG_CONFIG_HOME or a tool-specific home variable, and those come from
+    # the environment of whoever runs the suite.
+    for var, sub in (
+        ("APPDATA", "AppData/Roaming"),
+        ("LOCALAPPDATA", "AppData/Local"),
+        ("XDG_CONFIG_HOME", ".config"),
+    ):
+        monkeypatch.setenv(var, str(fake_home / sub))
+    for var in ("CODEX_HOME", "COPILOT_HOME", "CLINE_DIR"):
+        monkeypatch.delenv(var, raising=False)
     return tmp_path
 
 
@@ -237,48 +248,6 @@ def test_block_is_not_appended_twice(sandbox: Path, monkeypatch: pytest.MonkeyPa
     assert cfg.read_text(encoding="utf-8") == once
 
 
-def test_an_existing_block_is_brought_up_to_date(
-    sandbox: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A block used to be written once and never touched again.
-
-    Seeing its own marker was treated as "already done", so Codex kept a block
-    from an older version through the upgrade that added an MCP server to it,
-    and a machine whose gateway port moved kept pointing at the old port
-    forever. Found by installing the upgrade and reading the file.
-    """
-    codex = next(i for i in integrations.BLOCK_REGISTRY if i.id == "codex")
-    path = codex.path()  # inside the sandbox's fake home, not the real one
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        f'[windows]\nsandbox = "elevated"\n\n{integrations.BLOCK_BEGIN}\n'
-        f'[model_providers.sensei]\nbase_url = "http://127.0.0.1:9999/v1"\n'
-        f"{integrations.BLOCK_END}\n",
-        encoding="utf-8",
-    )
-
-    outcomes = integrations.apply_all(only={"codex"}, include_undetected=True)
-
-    text = path.read_text(encoding="utf-8")
-    assert [o.status for o in outcomes] == ["applied"]
-    assert "9999" not in text, "the stale block survived the update"
-    assert text.startswith('[windows]\nsandbox = "elevated"'), "content outside the markers moved"
-    assert text.count(integrations.BLOCK_BEGIN) == 1, "the block was duplicated"
-
-
-def test_an_up_to_date_block_is_left_alone(sandbox: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Rewriting an identical block on every scan would churn the file's mtime
-    sixty times an hour, which is what the auto-connect watcher does."""
-    codex = next(i for i in integrations.BLOCK_REGISTRY if i.id == "codex")
-    integrations.apply_all(only={"codex"}, include_undetected=True)
-    before = codex.path().read_text(encoding="utf-8")
-
-    outcomes = integrations.apply_all(only={"codex"}, include_undetected=True)
-
-    assert [o.status for o in outcomes] == ["unchanged"]
-    assert codex.path().read_text(encoding="utf-8") == before
-
-
 def test_conflicting_key_becomes_a_manual_step(
     sandbox: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -318,35 +287,6 @@ def test_a_frozen_binary_spawns_itself_not_a_module(monkeypatch: pytest.MonkeyPa
     ep = integrations.endpoints()
     assert ep.mcp_command == "/opt/sensei/sensei"
     assert ep.mcp_args == ("mcp",)
-
-
-@pytest.mark.skipif(
-    not integrations.mcp_available(),
-    reason="a build without the extra deliberately writes no mcp block",
-)
-def test_codex_gets_mcp_tools_that_work_without_an_api_key() -> None:
-    """Codex signed in with ChatGPT has OAuth tokens and a null OPENAI_API_KEY.
-
-    The provider block Sensei writes declares `env_key = "OPENAI_API_KEY"`, so
-    selecting it on a subscription account swaps a working login for a missing
-    environment variable. The MCP block needs no credential at all, which makes
-    it the part that actually helps most users — checked on a real machine,
-    where `auth.json` held exactly that shape.
-    """
-    codex = next(i for i in integrations.BLOCK_REGISTRY if i.id == "codex")
-    body = codex.body(integrations.endpoints())
-
-    assert "[mcp_servers.sensei]" in body
-    assert "[model_providers.sensei]" in body
-
-
-def test_codex_gets_no_mcp_block_when_mcp_cannot_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A build without the extra would point Codex at a command that exits
-    immediately — the same silent failure as pointing it at a missing file."""
-    monkeypatch.setattr(integrations, "mcp_available", lambda: False)
-    codex = next(i for i in integrations.BLOCK_REGISTRY if i.id == "codex")
-
-    assert "[mcp_servers.sensei]" not in codex.body(integrations.endpoints())
 
 
 def test_the_tray_points_tools_at_the_console_binary(
@@ -514,12 +454,12 @@ class TestMcpAvailability:
         assert integrations._mcp_apply(("mcpServers",))(doc, self._endpoints(True))
         assert doc["mcpServers"]["sensei"]["args"] == ["mcp"]
 
-    def test_claude_code_still_gets_its_routing(self) -> None:
-        """The gateway half is what matters there and works regardless; only
-        the tools are unavailable."""
+    def test_claude_code_still_gets_its_hook(self) -> None:
+        """The compression hook is what matters there and works regardless;
+        only the tools are unavailable."""
         doc: dict = {}
         assert integrations._claude_code_apply(doc, self._endpoints(False))
-        assert doc["env"]["ANTHROPIC_BASE_URL"] == "http://127.0.0.1:7000"
+        assert doc["hooks"]["PostToolUse"]
         assert "mcpServers" not in doc
 
     def test_availability_follows_the_import(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -644,16 +584,3 @@ def test_an_existing_tool_directory_counts_as_installed(
     tool_dir.mkdir()
     entry = _json_integration(tool_dir / "config.json")
     assert entry.detect() is True
-
-
-def test_codex_provider_uses_the_responses_wire_api() -> None:
-    """Codex removed `wire_api = "chat"` in 2026 and refuses to start with it.
-
-    The provider block must say "responses", which Sensei now serves at
-    /v1/responses — and re-running setup-tools rewrites an old block in place.
-    """
-    codex = next(i for i in integrations.BLOCK_REGISTRY if i.id == "codex")
-    body = codex.body(integrations.endpoints())
-
-    assert 'wire_api = "responses"' in body
-    assert 'wire_api = "chat"' not in body

@@ -10,7 +10,8 @@
 # Settings, as environment variables (set before piping into iex):
 #   $env:SENSEI_VERSION = "0.2.0"     a specific release instead of the latest
 #   $env:SENSEI_AUTOSTART = "no"      do not start at sign-in
-#   $env:SENSEI_SETUP_TOOLS = "no"    do not connect AI tools
+#   $env:SENSEI_SETUP_TOOLS = "no"    do not connect AI tools, now or later
+#                                     (remembered; `sensei connect` changes it)
 #
 # From a clone, `.\install.ps1 -FromSource` builds and installs from the
 # checkout instead (Python 3.11+ required, Node.js optional for the web UI).
@@ -44,7 +45,11 @@ if ($FromSource -or $env:SENSEI_FROM_SOURCE -eq "1") {
     } else {
         Say "Node.js not found - skipping the web UI build (gateway and API still work)."
     }
-    if (-not $SkipTools) { & $vpy -m sensei.cli setup-tools }
+    if ($SkipTools -or $env:SENSEI_SETUP_TOOLS -eq "no") {
+        & $vpy -m sensei.cli setup-tools --auto off --if-unset
+    } else {
+        & $vpy -m sensei.cli setup-tools --from-installer
+    }
     Ok "Installed from source. Start it with: $vpy -m sensei.cli tray"
     if ($Run) { & $vpy -m sensei.cli up }
     return
@@ -86,7 +91,12 @@ try {
     $taskArg = if ($tasks.Count) { "/TASKS=`"$($tasks -join ',')`"" } else { "/TASKS=`"`"" }
 
     Say "Installing (per-user, no administrator rights needed)"
-    $proc = Start-Process -FilePath $exe -ArgumentList "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", $taskArg -PassThru -Wait
+    # Not `Start-Process -Wait`: that waits for every process the installer
+    # starts, and a silent install ends by starting the tray, which runs until
+    # sign-out. On a real desktop the script then hung forever. WaitForExit()
+    # waits for the installer itself and nothing else.
+    $proc = Start-Process -FilePath $exe -ArgumentList "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", $taskArg -PassThru
+    $proc.WaitForExit()
     if ($proc.ExitCode -ne 0) { throw "The installer exited with code $($proc.ExitCode)." }
     Ok "Installed Sensei $($release.tag_name)"
 } finally {
@@ -94,7 +104,25 @@ try {
 }
 
 $app = Join-Path $env:LOCALAPPDATA "Programs\Sensei\senseiw.exe"
-if ((Test-Path $app) -and -not $env:CI) { Start-Process $app -ArgumentList "tray" }
+$cli = Join-Path $env:LOCALAPPDATA "Programs\Sensei\sensei.exe"
+if (($env:SENSEI_SETUP_TOOLS -eq "no" -or $SkipTools) -and (Test-Path $cli)) {
+    # The installer records this itself from 0.3 on; repeated here for a
+    # pinned older release, whose binary rejects the flag harmlessly.
+    try { & $cli setup-tools --auto off --if-unset *> $null } catch { }
+}
+# A silent install already starts the tray. A second one cannot bind the port
+# and would sit in the notification area doing nothing, so start one only if
+# none is running (the tray itself also checks, for older installers).
+$running = Get-Process -Name "senseiw" -ErrorAction SilentlyContinue
+if ((Test-Path $app) -and -not $env:CI -and -not $running) {
+    Start-Process $app -ArgumentList "tray", "--no-browser"
+}
+if ($env:SENSEI_SETUP_TOOLS -eq "no" -or $SkipTools) {
+    Say "AI tools were left alone, and new ones will not be connected automatically."
+    Say "Connect them later:  sensei connect   (or the tray menu)"
+} else {
+    Say "See what was connected:  sensei setup-tools --status"
+}
 
 Write-Host ""
 Ok "Done. Sensei is in the tray; dashboard: http://localhost:7000/app/"

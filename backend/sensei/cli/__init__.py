@@ -6,7 +6,9 @@ look up per tool. This replaces all of that:
 
     sensei up              start the server and open the web UI
     sensei wrap claude     route Claude Code through the compression gateway
-    sensei setup-tools     wire every AI tool on this machine into Sensei
+    sensei connect         connect every AI tool on this machine (and new ones)
+    sensei disconnect      undo all of it, and stop connecting new ones
+    sensei setup-tools     the same, tool by tool (--status, --only, --undo)
     sensei doctor          find out exactly why something isn't working
     sensei models          what your machine can run, and what it already has
     sensei stats           tokens and dollars saved
@@ -41,8 +43,10 @@ def _build_parser() -> argparse.ArgumentParser:
             "  sensei up --expose           also serve it to your local network\n"
             "  sensei wrap claude           run Claude Code through Sensei\n"
             "  sensei wrap aider -- --model gpt-6.1-sol\n"
+            "  sensei connect               connect every AI tool on this machine\n"
+            "  sensei setup-tools --status  what is connected, and why not\n"
             "  sensei setup-tools --dry-run see what would be configured\n"
-            "  sensei setup-tools           wire up Cursor, Cline, Codex, ...\n"
+            "  sensei disconnect            put every tool back as it was\n"
             "  sensei doctor                diagnose a broken setup\n"
             "  sensei models --pull llama3.2:3b\n"
             "  sensei mcp                   serve compression as MCP tools\n"
@@ -117,6 +121,56 @@ def _build_parser() -> argparse.ArgumentParser:
         "configuring the whole machine",
     )
 
+    p_tools.add_argument(
+        "--route",
+        dest="route",
+        action="store_const",
+        const=True,
+        default=None,
+        help="opt in to base-URL routing for the --only tool (claude-code, codex, "
+        "vscode-copilot); Claude Code then loses Remote Control",
+    )
+    p_tools.add_argument(
+        "--no-route",
+        dest="route",
+        action="store_const",
+        const=False,
+        help="opt out of base-URL routing again (the compression hook stays)",
+    )
+    p_tools.add_argument(
+        "--auto",
+        choices=["on", "off", "default"],
+        help="connect newly installed tools automatically while Sensei runs",
+    )
+    p_tools.add_argument(
+        "--if-unset",
+        action="store_true",
+        help="with --auto: only if no choice was recorded yet (used by installers)",
+    )
+    p_tools.add_argument("--from-installer", action="store_true", help=argparse.SUPPRESS)
+    p_tools.add_argument(
+        "--forget",
+        action="store_true",
+        help="with --undo: also forget which tools were disconnected and the "
+        "auto-connect choice (used by the uninstaller)",
+    )
+
+    p_connect = sub.add_parser(
+        "connect",
+        help="connect every AI tool on this machine, now and as new ones appear",
+        description="Detects every supported tool and connects it — a compression hook, "
+        "base-URL routing or MCP tools, whichever the tool allows. Every file is "
+        "backed up first; `sensei disconnect` puts them all back.",
+    )
+    p_connect.add_argument("--dry-run", action="store_true", help="show changes, write nothing")
+    p_disconnect = sub.add_parser(
+        "disconnect", help="undo every tool connection and stop connecting new tools"
+    )
+    p_disconnect.add_argument("--dry-run", action="store_true", help="show changes, write nothing")
+
+    p_hook = sub.add_parser("hook", help=argparse.SUPPRESS)
+    p_hook.add_argument("name", help="claude-session-start")
+
     p_doctor = sub.add_parser("doctor", help="check the setup and report what's wrong")
     p_doctor.add_argument(
         "--verify",
@@ -146,6 +200,38 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_mcp.add_argument("--host", default="127.0.0.1", help="bind address for HTTP transports")
     p_mcp.add_argument("--port", type=int, default=7001, help="port for HTTP transports")
+    p_mcp.add_argument(
+        "--allow-host",
+        action="append",
+        default=[],
+        metavar="HOST",
+        help="accept this Host header too (a tunnel's hostname); see docs/remote-mcp.md",
+    )
+    p_mcp.add_argument(
+        "--allow-origin",
+        action="append",
+        default=[],
+        metavar="ORIGIN",
+        help="accept browser requests from this origin",
+    )
+    p_mcp.add_argument(
+        "--no-auth",
+        action="store_true",
+        help="no bearer token (loopback only; refused with --allow-host)",
+    )
+    p_mcp.add_argument(
+        "--proxy-tools",
+        dest="proxy_tools",
+        action="store_const",
+        const=True,
+        default=None,
+        help="offer sensei_find_tools/sensei_call_tool over HTTP even when exposed",
+    )
+    p_mcp.add_argument(
+        "--show-token",
+        action="store_true",
+        help="print the bearer token HTTP clients must send, and exit",
+    )
 
     p_auto = sub.add_parser(
         "autostart",
@@ -215,7 +301,26 @@ def main(argv: list[str] | None = None) -> int:
                 include_undetected=args.include_undetected,
                 only=args.only,
                 project=args.project,
+                route=args.route,
+                auto=args.auto,
+                if_unset=args.if_unset,
+                from_installer=args.from_installer,
+                forget=args.forget,
             )
+
+        if args.command in ("connect", "disconnect"):
+            from sensei.cli import setup_tools
+
+            return setup_tools.run(
+                dry_run=args.dry_run,
+                connect_all=args.command == "connect",
+                disconnect_all=args.command == "disconnect",
+            )
+
+        if args.command == "hook":
+            from sensei.cli import hook
+
+            return hook.run(args.name)
 
         if args.command == "doctor":
             from sensei.cli import doctor
@@ -250,7 +355,16 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "mcp":
             from sensei import mcp_server
 
-            return mcp_server.run(transport=args.transport, host=args.host, port=args.port)
+            return mcp_server.run(
+                transport=args.transport,
+                host=args.host,
+                port=args.port,
+                no_auth=args.no_auth,
+                allow_hosts=tuple(args.allow_host),
+                allow_origins=tuple(args.allow_origin),
+                proxy_tools=args.proxy_tools,
+                show_token=args.show_token,
+            )
 
         parser.print_help()
         return 0
