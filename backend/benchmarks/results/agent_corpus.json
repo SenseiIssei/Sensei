@@ -8,10 +8,10 @@
     "samples": 42
   },
   "repeats": 5,
-  "python": "3.12",
+  "python": "3.14",
   "tools": {
     "sensei": {
-      "version": "0.2.0+2acf192",
+      "version": "0.3.0+e860abc",
       "mode": "ContentRouter.compress(edit_target=True), as the gateway applies it to tool results",
       "settings": {
         "code_compression": "safe",
@@ -21,7 +21,8 @@
     "headroom": {
       "version": "0.41.0",
       "mode": "headroom.compress() on an OpenAI-format tool message, CompressConfig(protect_recent=0)",
-      "model": "claude-sonnet-4-5-20250929"
+      "model": "claude-sonnet-4-5-20250929",
+      "carried_over_from": "2026-10-16"
     }
   },
   "headroom_published": {
@@ -47,7 +48,7 @@
         "facts_kept": 2,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 0.521
+        "ms_p50": 0.699
       },
       "headroom": {
         "tokens": 842,
@@ -75,7 +76,7 @@
         "facts_kept": 2,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 2.034
+        "ms_p50": 9.449
       },
       "headroom": {
         "tokens": 2957,
@@ -103,7 +104,7 @@
         "facts_kept": 2,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 0.548
+        "ms_p50": 1.052
       },
       "headroom": {
         "tokens": 1083,
@@ -131,7 +132,7 @@
         "facts_kept": 2,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 3.187
+        "ms_p50": 7.631
       },
       "headroom": {
         "tokens": 3272,
@@ -159,7 +160,7 @@
         "facts_kept": 2,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 6.938
+        "ms_p50": 10.827
       },
       "headroom": {
         "tokens": 4001,
@@ -187,7 +188,7 @@
         "facts_kept": 2,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 0.044
+        "ms_p50": 0.047
       },
       "headroom": {
         "tokens": 668,
@@ -215,7 +216,7 @@
         "facts_kept": 2,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 0.57
+        "ms_p50": 0.559
       },
       "headroom": {
         "tokens": 14816,
@@ -243,7 +244,7 @@
         "facts_kept": 2,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 0.108
+        "ms_p50": 0.112
       },
       "headroom": {
         "tokens": 388,
@@ -271,7 +272,7 @@
         "facts_kept": 3,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 2.617
+        "ms_p50": 4.412
       },
       "headroom": {
         "tokens": 880,
@@ -299,7 +300,7 @@
         "facts_kept": 3,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 4.84
+        "ms_p50": 7.863
       },
       "headroom": {
         "tokens": 9025,
@@ -327,7 +328,7 @@
         "facts_kept": 2,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 5.947
+        "ms_p50": 4.596
       },
       "headroom": {
         "tokens": 1059,
@@ -355,7 +356,7 @@
         "facts_kept": 3,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 1.255
+        "ms_p50": 4.12
       },
       "headroom": {
         "tokens": 1032,
@@ -383,7 +384,7 @@
         "facts_kept": 3,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 4.811
+        "ms_p50": 5.666
       },
       "headroom": {
         "tokens": 274,
@@ -411,7 +412,7 @@
         "facts_kept": 2,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 1.053
+        "ms_p50": 1.32
       },
       "headroom": {
         "tokens": 1779,
@@ -439,7 +440,7 @@
         "facts_kept": 1,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 0.793
+        "ms_p50": 0.681
       },
       "headroom": {
         "tokens": 480,
@@ -467,7 +468,7 @@
         "facts_kept": 1,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 0.293
+        "ms_p50": 0.362
       },
       "headroom": {
         "tokens": 636,
@@ -495,7 +496,7 @@
         "facts_kept": 1,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 0.92
+        "ms_p50": 0.859
       },
       "headroom": {
         "tokens": 1289,
@@ -523,7 +524,7 @@
         "facts_kept": 1,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 1.698
+        "ms_p50": 1.502
       },
       "headroom": {
         "tokens": 426,
@@ -551,7 +552,7 @@
         "facts_kept": 2,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 1.205
+        "ms_p50": 1.391
       },
       "headroom": {
         "tokens": 1555,
@@ -579,7 +580,7 @@
         "facts_kept": 3,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 0.161
+        "ms_p50": 0.223
       },
       "headroom": {
         "tokens": 12707,
@@ -607,7 +608,7 @@
         "facts_kept": 3,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 6.258
+        "ms_p50": 7.278
       },
       "headroom": {
         "tokens": 5501,
@@ -635,7 +636,7 @@
         "facts_kept": 2,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 2.487
+        "ms_p50": 4.246
       },
       "headroom": {
         "tokens": 4073,
@@ -663,7 +664,7 @@
         "facts_kept": 3,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 2.058
+        "ms_p50": 2.483
       },
       "headroom": {
         "tokens": 699,
@@ -691,7 +692,7 @@
         "facts_kept": 3,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 10.02
+        "ms_p50": 5.941
       },
       "headroom": {
         "tokens": 1387,
@@ -719,7 +720,7 @@
         "facts_kept": 2,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 1.239
+        "ms_p50": 1.231
       },
       "headroom": {
         "tokens": 4977,
@@ -747,7 +748,7 @@
         "facts_kept": 2,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 0.67
+        "ms_p50": 0.753
       },
       "headroom": {
         "tokens": 595,
@@ -775,7 +776,7 @@
         "facts_kept": 1,
         "missing": [],
         "exact_ok": true,
-        "ms_p50": 1.319
+        "ms_p50": 1.207
       },
       "headroom": {
         "tokens": 2126,
@@ -803,7 +804,7 @@
         "facts_kept": 1,
         "missing": [],
         "exact_ok": true,
-        "ms_p50": 0.922
+        "ms_p50": 0.904
       },
       "headroom": {
         "tokens": 1132,
@@ -831,7 +832,7 @@
         "facts_kept": 1,
         "missing": [],
         "exact_ok": true,
-        "ms_p50": 1.222
+        "ms_p50": 1.201
       },
       "headroom": {
         "tokens": 2134,
@@ -859,7 +860,7 @@
         "facts_kept": 1,
         "missing": [],
         "exact_ok": true,
-        "ms_p50": 0.657
+        "ms_p50": 0.874
       },
       "headroom": {
         "tokens": 890,
@@ -887,7 +888,7 @@
         "facts_kept": 1,
         "missing": [],
         "exact_ok": true,
-        "ms_p50": 1.079
+        "ms_p50": 0.792
       },
       "headroom": {
         "tokens": 934,
@@ -943,7 +944,7 @@
         "facts_kept": 2,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 4.941
+        "ms_p50": 5.643
       },
       "headroom": {
         "tokens": 14161,
@@ -971,7 +972,7 @@
         "facts_kept": 1,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 25.444
+        "ms_p50": 29.217
       },
       "headroom": {
         "tokens": 14294,
@@ -999,7 +1000,7 @@
         "facts_kept": 1,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 7.556
+        "ms_p50": 8.346
       },
       "headroom": {
         "tokens": 8654,
@@ -1027,7 +1028,7 @@
         "facts_kept": 1,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 8.362
+        "ms_p50": 7.955
       },
       "headroom": {
         "tokens": 1103,
@@ -1057,7 +1058,7 @@
         "facts_kept": 1,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 1.201
+        "ms_p50": 1.425
       },
       "headroom": {
         "tokens": 9561,
@@ -1085,7 +1086,7 @@
         "facts_kept": 1,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 5.155
+        "ms_p50": 10.319
       },
       "headroom": {
         "tokens": 1103,
@@ -1115,7 +1116,7 @@
         "facts_kept": 1,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 5.367
+        "ms_p50": 8.208
       },
       "headroom": {
         "tokens": 14172,
@@ -1143,7 +1144,7 @@
         "facts_kept": 2,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 3.55
+        "ms_p50": 4.93
       },
       "headroom": {
         "tokens": 9586,
@@ -1171,7 +1172,7 @@
         "facts_kept": 1,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 3.821
+        "ms_p50": 4.854
       },
       "headroom": {
         "tokens": 10817,
@@ -1199,7 +1200,7 @@
         "facts_kept": 1,
         "missing": [],
         "exact_ok": null,
-        "ms_p50": 21.519
+        "ms_p50": 27.624
       },
       "headroom": {
         "tokens": 9484,
@@ -1225,8 +1226,8 @@
         "exact_violations": 0,
         "grew": 0,
         "latency_ms": {
-          "p50": 1.215,
-          "p95": 7.312
+          "p50": 1.353,
+          "p95": 10.827
         }
       },
       "by_kind": {
@@ -1240,8 +1241,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 0.591,
-            "p95": 3.591
+            "p50": 5.285,
+            "p95": 14.8
           }
         },
         "git_log": {
@@ -1254,8 +1255,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 4.51,
-            "p95": 7.718
+            "p50": 8.769,
+            "p95": 37.071
           }
         },
         "git_diff": {
@@ -1268,8 +1269,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 0.089,
-            "p95": 0.635
+            "p50": 0.093,
+            "p95": 0.716
           }
         },
         "git_status": {
@@ -1282,8 +1283,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 0.108,
-            "p95": 0.131
+            "p50": 0.112,
+            "p95": 0.154
           }
         },
         "test_pytest": {
@@ -1296,8 +1297,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 3.568,
-            "p95": 6.079
+            "p50": 6.602,
+            "p95": 20.025
           }
         },
         "test_js": {
@@ -1310,8 +1311,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 5.947,
-            "p95": 12.44
+            "p50": 4.596,
+            "p95": 6.641
           }
         },
         "build_cargo": {
@@ -1324,8 +1325,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 1.255,
-            "p95": 1.918
+            "p50": 4.12,
+            "p95": 20.312
           }
         },
         "build_ci": {
@@ -1338,8 +1339,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 4.811,
-            "p95": 5.444
+            "p50": 5.666,
+            "p95": 7.781
           }
         },
         "pkg_install": {
@@ -1352,8 +1353,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 1.026,
-            "p95": 1.162
+            "p50": 0.819,
+            "p95": 5.653
           }
         },
         "listing": {
@@ -1366,8 +1367,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 0.92,
-            "p95": 1.873
+            "p50": 0.859,
+            "p95": 2.648
           }
         },
         "kubectl": {
@@ -1380,8 +1381,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 1.205,
-            "p95": 1.277
+            "p50": 1.391,
+            "p95": 4.08
           }
         },
         "json_api": {
@@ -1394,8 +1395,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 0.161,
-            "p95": 0.23
+            "p50": 0.223,
+            "p95": 0.707
           }
         },
         "mcp": {
@@ -1408,8 +1409,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 3.878,
-            "p95": 7.967
+            "p50": 6.039,
+            "p95": 13.583
           }
         },
         "file_read": {
@@ -1422,8 +1423,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 1.037,
-            "p95": 1.415
+            "p50": 1.136,
+            "p95": 1.878
           }
         },
         "cat_source": {
@@ -1436,8 +1437,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 0.07,
-            "p95": 43.98
+            "p50": 0.032,
+            "p95": 13.236
           }
         },
         "web_page": {
@@ -1450,8 +1451,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 2.058,
-            "p95": 2.277
+            "p50": 2.483,
+            "p95": 4.648
           }
         },
         "stack_trace": {
@@ -1464,8 +1465,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 1.869,
-            "p95": 17.538
+            "p50": 1.497,
+            "p95": 7.424
           }
         },
         "prose": {
@@ -1478,8 +1479,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 0.67,
-            "p95": 2.404
+            "p50": 0.753,
+            "p95": 3.103
           }
         }
       },
@@ -1494,8 +1495,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 4.941,
-            "p95": 7.805
+            "p50": 5.643,
+            "p95": 8.205
           }
         },
         "sre_incident": {
@@ -1508,8 +1509,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 11.108,
-            "p95": 64.81
+            "p50": 8.853,
+            "p95": 37.111
           }
         },
         "codebase_exploration": {
@@ -1522,8 +1523,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 5.155,
-            "p95": 11.58
+            "p50": 7.483,
+            "p95": 14.086
           }
         },
         "issue_triage": {
@@ -1536,8 +1537,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 4.051,
-            "p95": 22.021
+            "p50": 8.191,
+            "p95": 39.562
           }
         },
         "total": {
@@ -1550,8 +1551,8 @@
           "exact_violations": 0,
           "grew": 0,
           "latency_ms": {
-            "p50": 5.622,
-            "p95": 26.185
+            "p50": 8.191,
+            "p95": 31.806
           }
         }
       },
@@ -1565,8 +1566,8 @@
         "exact_violations": 0,
         "grew": 0,
         "latency_ms": {
-          "p50": 1.869,
-          "p95": 21.137
+          "p50": 3.015,
+          "p95": 21.844
         }
       },
       "cost": {

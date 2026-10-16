@@ -1,5 +1,81 @@
 # Changelog
 
+## [0.3.0] — 2026-10-16
+
+The release that makes Sensei connect itself to every AI tool it finds, handle
+real coding-agent traffic, and measure itself honestly, including against
+Headroom.
+
+### Switch it on once
+
+- **`sensei connect` / `sensei disconnect`**, plus the same two buttons in the
+  tray and on the Connections page. Sensei wires every tool it detects and
+  explains every tool it can't, with the reason. New tools are picked up while
+  it runs. Every edit is backed up, hash-checked and reversible.
+- **25 tools.** New: VS Code Copilot, Copilot CLI, Antigravity, Qwen Code,
+  Crush, Factory, Junie, Kimi, Amp, Kiro, Warp, Augment, LM Studio and Goose.
+  Fixed: opencode (shape and path), Kilo (`kilo.jsonc`), Devin (macOS path,
+  windsurf-next), Cline (CLI and every editor), the Claude Desktop MSIX
+  install, Continue (YAML), and Codex. Codex's `config.toml` is now edited
+  table by table, so the Codex app rewriting the file no longer drops Sensei's
+  settings.
+- **Claude Code uses a hook by default, not a base URL.** A PostToolUse HTTP
+  hook compresses Bash, Grep, Glob, WebFetch and MCP output before it enters
+  the conversation. Read, Edit and Write are never touched. If Sensei is not
+  running, the hook does nothing and Claude Code carries on. Remote Control
+  and the desktop app's Code tab keep working. Routing the whole conversation
+  through the gateway is still available with `--route`, with a session-start
+  hook that clears the base URL if Sensei has gone away. Copilot CLI,
+  opencode and Kilo get the same hook approach.
+- **Installer fixes.** `SENSEI_SETUP_TOOLS=no` is now honoured; before, the
+  running server wired everything 30 seconds later anyway. `install.ps1` no
+  longer hangs on a real desktop.
+- **Remote MCP** for clients that only accept HTTPS (ChatGPT, claude.ai
+  connectors): bearer token, Host and Origin checks, and a tunnel recipe in
+  `docs/remote-mcp.md`.
+
+### Compression for what agents actually read
+
+- **New compressors** for grep/rg results, diffs, git output, test and build
+  output, directory listings, configs, HTML, minified files and base64 blobs.
+- **Lossless folds first.** Each fold is verified by a round trip before
+  anything lossy runs.
+- **Lossy cuts can be undone.** Every lossy cut leaves a
+  `[sensei: …; retrieve ccr=<id>]` marker. The id is the content hash, so the
+  same input always gives the same bytes.
+- **Nothing can grow.** A result that comes out larger than the input is
+  replaced by the original.
+- **File reads stay byte-exact**, including code that only looks like prose.
+- An independent review found nine ways the first version could hide
+  information, such as diff lines folded away and distinct compiler errors
+  merged into one. All nine are fixed and each has a regression test.
+
+### A gateway that respects the prompt cache
+
+- **Live zone.** Each turn replays what was sent last turn byte for byte and
+  compresses only the new messages. That keeps the provider's cache hitting
+  and keeps thinking-block signatures valid. Cache misses are attributed
+  (cold start, TTL, prefix change). Preparing a request takes 15 ms of CPU,
+  against 84 ms in 0.2.
+- **`sensei_retrieve`, answered by the gateway.** When the model asks for an
+  original, the gateway fetches it and continues the upstream call, so the
+  client never sees the extra round trip.
+- **Tool definitions** are compacted safely; Anthropic tool search is opt-in.
+- **Repeated tool output** across turns becomes a one-line reference.
+- **Opt-in extras:** a model router, an exact response cache, and per-tool
+  budgets.
+
+### Honest numbers
+
+- The README's 79% is gone; it came from six hand-written samples. On 430 real
+  Claude Code and Codex sessions, Sensei removes **3.9%** of tool-output
+  tokens. That is **0.68%** of the bill once prompt caching is priced in
+  (Headroom 0.41 on the same data: 3.6% and 0.56%).
+- On a seeded corpus of realistic agent tool output, Sensei removes **37.9%**
+  (Headroom: 18.1%) and keeps 74 of 74 facts.
+- `cd backend && python -m benchmarks.refresh` regenerates every number,
+  graphic and README table. Nightly CI fails on regressions or a stale README.
+
 ## [0.2.0] — 2026-10-16
 
 The release that makes Sensei safe to put in front of a coding agent all day,
