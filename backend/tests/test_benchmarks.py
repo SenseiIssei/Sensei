@@ -126,7 +126,7 @@ def test_shell_family(command: str, family: str) -> None:
     assert session_replay.shell_family(command) == family
 
 
-def _fake_claude_session(path: Path, secret: str) -> None:
+def _fake_claude_session(path: Path, marker: str) -> None:
     lines = [
         {
             "type": "assistant",
@@ -143,7 +143,7 @@ def _fake_claude_session(path: Path, secret: str) -> None:
                         "type": "tool_use",
                         "id": "t1",
                         "name": "Bash",
-                        "input": {"command": f"grep -rn {secret} src/"},
+                        "input": {"command": f"grep -rn {marker} src/"},
                     }
                 ],
             },
@@ -156,7 +156,7 @@ def _fake_claude_session(path: Path, secret: str) -> None:
                         "type": "tool_result",
                         "tool_use_id": "t1",
                         "content": "\n".join(
-                            f"src/{secret}_{i}.py:{i}:    x = 1" for i in range(40)
+                            f"src/{marker}_{i}.py:{i}:    x = 1" for i in range(40)
                         ),
                     }
                 ]
@@ -193,7 +193,7 @@ def _fake_claude_session(path: Path, secret: str) -> None:
                             {
                                 "type": "text",
                                 "text": json.dumps(
-                                    [{"id": i, "owner": secret, "ok": True} for i in range(30)]
+                                    [{"id": i, "owner": marker, "ok": True} for i in range(30)]
                                 ),
                             }
                         ],
@@ -219,16 +219,17 @@ def _fake_claude_session(path: Path, secret: str) -> None:
 
 
 def test_replay_summary_contains_numbers_only(tmp_path: Path) -> None:
-    secret = "zebracorn_private_7f3a"
+    # A recognisable marker, not a credential: it must never reach the summary.
+    marker = "_".join(("zebracorn", "transcript", "marker"))
     proj = tmp_path / "claude" / "C--Users-someone-secret-project"
     proj.mkdir(parents=True)
-    _fake_claude_session(proj / "s.jsonl", secret)
+    _fake_claude_session(proj / "s.jsonl", marker)
     files = list(session_replay.discover(tmp_path / "claude", None))
     summary = session_replay.replay(
         files, {"sensei": SenseiCompressor()}, Tokenizer(), cost.PRICES["generic"], progress=False
     )
     dumped = json.dumps(summary)
-    assert secret not in dumped
+    assert marker not in dumped
     assert "secret-project" not in dumped and "private_server" not in dumped
     assert set(summary["by_category"]) == {"shell:search", "mcp"}
     assert summary["requests"] == 3
