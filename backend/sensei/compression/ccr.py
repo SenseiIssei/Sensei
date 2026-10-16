@@ -66,6 +66,12 @@ class CCRStore:
 
         return entry["original"]
 
+    def retrieve_compressed(self, ccr_id: str) -> str | None:
+        """The compressed form, for paging through a view too long to send whole."""
+        if self.retrieve(ccr_id) is None:  # same TTL rules
+            return None
+        return self._index[ccr_id]["compressed"]
+
     def get_info(self, ccr_id: str) -> dict[str, Any] | None:
         """Get metadata about a CCR entry."""
         entry = self._index.get(ccr_id)

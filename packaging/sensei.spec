@@ -34,7 +34,8 @@ if dist.exists():
 # time: a contributor without the extra installed still gets a working binary,
 # minus the MCP server.
 try:
-    _mcp = collect_submodules("mcp")
+    # mcp 2.x keeps its wire types in a separate distribution.
+    _mcp = collect_submodules("mcp") + collect_submodules("mcp_types")
 except Exception:  # pragma: no cover - the extra simply isn't installed
     _mcp = []
 

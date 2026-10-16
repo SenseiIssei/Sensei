@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from sensei.config import settings
+from sensei.usage import Usage
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,14 @@ CREATE INDEX IF NOT EXISTS events_ts ON events (ts);
 _MIGRATIONS: tuple[tuple[str, str], ...] = (
     ("output_tokens", "ALTER TABLE events ADD COLUMN output_tokens INTEGER NOT NULL DEFAULT 0"),
     ("shaped", "ALTER TABLE events ADD COLUMN shaped INTEGER NOT NULL DEFAULT -1"),
+    # What the provider billed, as opposed to what Sensei estimated it sent.
+    # `prompt_billed` is the whole prompt including cached tokens; the two cache
+    # columns are the parts of it read from and written to the provider's
+    # prompt cache. Zero means "not reported", which is every streaming row
+    # written before the stream sniffer existed.
+    ("prompt_billed", "ALTER TABLE events ADD COLUMN prompt_billed INTEGER NOT NULL DEFAULT 0"),
+    ("cache_read", "ALTER TABLE events ADD COLUMN cache_read INTEGER NOT NULL DEFAULT 0"),
+    ("cache_write", "ALTER TABLE events ADD COLUMN cache_write INTEGER NOT NULL DEFAULT 0"),
 )
 
 DAY = 86_400.0
@@ -155,7 +164,11 @@ class SavingsLedger:
 
     def set_output_tokens(self, row_id: int, output_tokens: int) -> None:
         """Fill in what the model actually wrote, once the response is in."""
-        if row_id is None or not settings.savings_persist:
+        self.set_usage(row_id, Usage(output=_int(output_tokens)))
+
+    def set_usage(self, row_id: int | None, usage: Usage) -> None:
+        """Fill in what the provider reported, once the response is in."""
+        if row_id is None or not settings.savings_persist or not usage.known:
             return
         with self._lock:
             conn = self._connect()
@@ -163,12 +176,13 @@ class SavingsLedger:
                 return
             try:
                 conn.execute(
-                    "UPDATE events SET output_tokens = ? WHERE rowid = ?",
-                    (_int(output_tokens), row_id),
+                    "UPDATE events SET output_tokens = ?, prompt_billed = ?,"
+                    " cache_read = ?, cache_write = ? WHERE rowid = ?",
+                    (usage.output, usage.prompt, usage.cache_read, usage.cache_write, row_id),
                 )
                 conn.commit()
             except sqlite3.Error as exc:
-                logger.warning("Could not record output tokens: %s", exc)
+                logger.warning("Could not record usage: %s", exc)
 
     def output_arms(self, model: str | None = None) -> tuple[list[int], list[int]]:
         """Output-token counts for (shaped, control).
@@ -208,14 +222,16 @@ class SavingsLedger:
     def totals(self, since: float | None = None) -> dict[str, Any]:
         rows = self._query(
             "SELECT COUNT(*), COALESCE(SUM(before),0), COALESCE(SUM(after),0),"
-            " COALESCE(SUM(saved),0), COALESCE(SUM(blocks),0), MIN(ts)"
+            " COALESCE(SUM(saved),0), COALESCE(SUM(blocks),0), MIN(ts),"
+            " COALESCE(SUM(prompt_billed),0), COALESCE(SUM(cache_read),0),"
+            " COALESCE(SUM(cache_write),0), COALESCE(SUM(prompt_billed > 0),0)"
             " FROM events WHERE ts >= ?",
             (since or 0.0,),
         )
         if not rows:
             return _empty_totals()
-        requests, before, after, saved, blocks, first = rows[0]
-        return _shape(
+        requests, before, after, saved, blocks, first, billed, read, write, reported = rows[0]
+        out = _shape(
             requests=_int(requests),
             before=_int(before),
             after=_int(after),
@@ -223,6 +239,10 @@ class SavingsLedger:
             blocks=_int(blocks),
             since=float(first) if first else time.time(),
         )
+        out["cache"] = _cache_block(
+            billed=_int(billed), read=_int(read), write=_int(write), reported=_int(reported)
+        )
+        return out
 
     def daily(self, days: int = 30) -> list[dict[str, Any]]:
         """One bucket per calendar day, oldest first, gaps filled with zeroes.
@@ -364,8 +384,27 @@ def _shape(
     }
 
 
+def _cache_block(*, billed: int, read: int, write: int, reported: int) -> dict[str, Any]:
+    """Prompt-cache figures as the provider reported them.
+
+    ``hit_rate`` is the share of billed prompt tokens served from the cache.
+    It is ``None`` rather than 0 until something has reported usage, because
+    "0% cached" and "nothing told us" are different facts and only one of them
+    is a problem worth looking into.
+    """
+    return {
+        "requests_reporting_usage": reported,
+        "prompt_tokens_billed": billed,
+        "cache_read_tokens": read,
+        "cache_write_tokens": write,
+        "hit_rate": round(read / billed, 4) if billed else None,
+    }
+
+
 def _empty_totals() -> dict[str, Any]:
-    return _shape(requests=0, before=0, after=0, saved=0, blocks=0, since=time.time())
+    out = _shape(requests=0, before=0, after=0, saved=0, blocks=0, since=time.time())
+    out["cache"] = _cache_block(billed=0, read=0, write=0, reported=0)
+    return out
 
 
 class SavingsTracker:

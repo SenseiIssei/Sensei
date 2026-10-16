@@ -8,6 +8,16 @@ manifest to live somewhere else.
 
 Each of these is one-time setup. After it, a release publishes itself.
 
+**Until then, the supported install path is the one-command installers** —
+`install.sh` (macOS, Linux) and `install.ps1` (Windows) at the repository root.
+They need nothing but a GitHub release: they download the binary for the
+machine, verify it against `SHA256SUMS`, install it per-user, and offer
+autostart and tool wiring. CI runs both for real on every pull request.
+`sensei update` uses the same release assets and checksums.
+
+As of 0.2.0 none of the channels below is set up yet (no PyPI project, no tap,
+no bucket, no winget manifest), so the README does not advertise them.
+
 ---
 
 ## The state of it

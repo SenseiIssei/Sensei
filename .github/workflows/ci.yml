@@ -256,12 +256,56 @@ jobs:
           load: true
           tags: sensei-frontend:ci
 
+  # The one-command installers, run for real against a published release on
+  # every OS: download, SHA256SUMS check, install, and the binary answering.
+  # Plus the Windows installer script compiled with dummy binaries, because the
+  # release workflow only compiles it on a tag — too late to find a typo.
+  installers:
+    name: installers (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    env:
+      SENSEI_VERSION: "0.1.19"
+      SENSEI_AUTOSTART: "no"
+      SENSEI_SETUP_TOOLS: "no"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: install.sh (macOS / Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh -n install.sh
+          if command -v shellcheck >/dev/null; then shellcheck -s sh install.sh; fi
+          SENSEI_INSTALL_DIR="$RUNNER_TEMP/bin" sh install.sh
+          "$RUNNER_TEMP/bin/sensei" --version
+      - name: install.ps1 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./install.ps1
+          & "$env:LOCALAPPDATA\Programs\Sensei\sensei.exe" --version
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: Compile the Windows installer script
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          choco install innosetup --no-progress -y > /dev/null
+          mkdir -p dist-app
+          printf 'MZ' > dist-app/sensei.exe
+          printf 'MZ' > dist-app/senseiw.exe
+          "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" //Qp //DAppVersion=0.0.0 packaging/sensei.iss
+
   # A single required check to point branch protection at, so adding a matrix
   # entry later doesn't mean reconfiguring the protection rule.
   ci-ok:
     name: CI OK
     if: always()
-    needs: [lint-backend, backend, frontend, extension, rust, rust-parity, e2e, docker]
+    needs: [lint-backend, backend, frontend, extension, rust, rust-parity, e2e, docker, installers]
     runs-on: ubuntu-latest
     steps:
       - name: Fail if any dependency failed

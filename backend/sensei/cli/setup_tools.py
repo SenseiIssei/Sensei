@@ -119,7 +119,7 @@ def run(
         print("  This build cannot serve MCP — the optional 'mcp' extra is missing.")
         print("  Tools wired only through MCP are skipped rather than given a server")
         print("  entry that fails to start. Install it with:")
-        print('      pip install "sensei-gateway[mcp]"')
+        print('      pip install -e "backend[mcp]"   (the release binaries include it)')
     if project_root:
         print(f"  Scoped to {project_root}")
         print("  Only tools that read per-repository config are touched.")

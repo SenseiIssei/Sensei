@@ -22,7 +22,8 @@ SECRET_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         ),
     ),
     ("anthropic_key", re.compile(r"sk-ant-[A-Za-z0-9_\-]{20,}")),
-    ("openai_key", re.compile(r"sk-[A-Za-z0-9]{20,}")),
+    # Project, service-account and admin keys carry a prefix: sk-proj-…, sk-svcacct-…
+    ("openai_key", re.compile(r"sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{20,}")),
     ("github_token", re.compile(r"gh[pousr]_[A-Za-z0-9]{36,}")),
     ("slack_token", re.compile(r"xox[baprs]-[A-Za-z0-9-]{10,}")),
     ("aws_access_key", re.compile(r"AKIA[0-9A-Z]{16}")),
@@ -54,6 +55,13 @@ class Redactor:
         return text, counts
 
 
+# Fields that carry opaque, provider-signed blobs: Anthropic thinking-block
+# signatures and redacted thinking, OpenAI encrypted reasoning. The provider
+# verifies them byte for byte and rejects the whole request if one changes, and
+# a base64 blob can contain a run that happens to look like a key.
+_OPAQUE_KEYS = frozenset({"signature", "encrypted_content", "data"})
+
+
 def redact_payload(obj: Any, redactor: Redactor | None = None) -> tuple[Any, dict[str, int]]:
     """Recursively redact every string leaf in a request payload.
 
@@ -72,7 +80,7 @@ def redact_payload(obj: Any, redactor: Redactor | None = None) -> tuple[Any, dic
         if isinstance(o, list):
             return [walk(x) for x in o]
         if isinstance(o, dict):
-            return {k: walk(v) for k, v in o.items()}
+            return {k: (v if k in _OPAQUE_KEYS else walk(v)) for k, v in o.items()}
         return o
 
     return walk(obj), counts

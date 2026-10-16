@@ -93,3 +93,16 @@ def test_cleanup_still_does_its_job() -> None:
 
     assert _tidy("hello   ,  world") == "Hello, world"
     assert _tidy("  ,,, leading") == "Leading"
+
+
+def test_fix_caps_is_linear_on_blank_lines() -> None:
+    r"""`(^\s*|[.!?]\s+|\n\s*)([a-z])` retried every whitespace run from each
+    newline in it — quadratic on a payload of blank lines (CodeQL py/polynomial-redos)."""
+    import time
+
+    from sensei.compression.textcomp import TextCompressor
+
+    text = "\n" * 200_000 + "x"
+    start = time.perf_counter()
+    assert TextCompressor()._fix_caps(text).endswith("X")
+    assert time.perf_counter() - start < 1.0

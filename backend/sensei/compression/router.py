@@ -10,6 +10,8 @@ from sensei.compression import invisible, learned
 from sensei.compression.cachealign import CacheAligner
 from sensei.compression.ccr import CCRStore
 from sensei.compression.codecomp import CodeCompressor
+from sensei.compression.disasm import DisasmCompressor
+from sensei.compression.disasm import detect as _detect_disasm
 from sensei.compression.logcomp import LogCompressor
 from sensei.compression.smartcrusher import SmartCrusher
 from sensei.compression.textcomp import TextCompressor
@@ -22,6 +24,7 @@ class ContentType(str, Enum):
     json = "json"
     code = "code"
     logs = "logs"
+    disasm = "disasm"
     text = "text"
     mixed = "mixed"
 
@@ -136,6 +139,20 @@ def _detect_code(text: str) -> bool:
     return matches >= 2
 
 
+# A file shown with line numbers — Claude Code's Read tool (`   12→code` or
+# `   12<TAB>code`), `cat -n`, `nl -ba`. That is a view somebody is about to edit by
+# exact string match, which is the one thing compression must not interfere with.
+_FILE_VIEW_LINE = re.compile(r"^\s*\d+(?:→|\t)")
+
+
+def _is_file_view(text: str) -> bool:
+    lines = [line for line in text.split("\n", 50)[:50] if line.strip()]
+    if len(lines) < 3:
+        return False
+    hits = sum(1 for line in lines if _FILE_VIEW_LINE.match(line))
+    return hits >= len(lines) * 0.6
+
+
 class ContentRouter:
     """Routes content to the appropriate compressor based on detected type.
 
@@ -150,7 +167,8 @@ class ContentRouter:
         enable_caching: bool = True,
     ):
         self.smart_crusher = SmartCrusher()
-        self.code_compressor = CodeCompressor()
+        self.code_compressor = CodeCompressor(mode=settings.code_compression)
+        self.disasm_compressor = DisasmCompressor()
         self.text_compressor = TextCompressor()
         # Learned prose compressor when available, else the rule-based one.
         self.prose_compressor = learned.get_prose_compressor() or self.text_compressor
@@ -163,18 +181,33 @@ class ContentRouter:
         """Detect the content type of a text block."""
         if _detect_json(content):
             return ContentType.json
+        if _detect_disasm(content):
+            return ContentType.disasm
         if _detect_logs(content):
             return ContentType.logs
         if _detect_code(content):
             return ContentType.code
         return ContentType.text
 
-    def compress(self, content: str, force_type: ContentType | None = None) -> CompressionResult:
+    def compress(
+        self,
+        content: str,
+        force_type: ContentType | None = None,
+        *,
+        edit_target: bool = False,
+    ) -> CompressionResult:
         """Compress a single content block.
 
         Args:
             content: The text to compress.
             force_type: Override content type detection.
+            edit_target: The text reached the model as a tool result, so the
+                model may edit it next by exact string match (Claude Code's
+                Edit, Codex's apply_patch). Source code and line-numbered file
+                views then pass through byte-exact unless
+                ``SENSEI_CODE_COMPRESSION=aggressive``: a model that never saw
+                a comment writes an ``old_string`` without it, the edit fails,
+                and the retry costs more than the compression saved.
 
         Returns:
             CompressionResult with original, compressed, and metadata.
@@ -188,15 +221,29 @@ class ContentRouter:
         content_type = force_type or self.detect_type(content)
         original_tokens = _estimate_tokens(content)
 
+        # A file the model may edit next by exact string match. Source code,
+        # line-numbered file views, and JSON *objects* — config files such as
+        # package.json, which Codex reads with `cat` — stay byte-exact. JSON
+        # *arrays* are API output (search results, records) and still compress.
+        protect = (
+            edit_target
+            and settings.code_compression != "aggressive"
+            and (
+                content_type is ContentType.code
+                or (content_type is ContentType.json and content.lstrip().startswith("{"))
+                or _is_file_view(content)
+            )
+        )
+
         # Before compressing, not after: every compressor below is line- and
         # word-oriented and none of them looks at individual characters, so a
         # zero-width space survives all of them and is billed. Detection runs
         # first because how aggressive this can safely be depends on whether
         # the payload is source code — the joiners are structural in Devanagari
         # and Persian and hold emoji sequences together, and mean nothing in
-        # source.
+        # source. Protected content is not touched at all: "byte-exact" means it.
         findings = invisible.Findings()
-        if settings.strip_invisible:
+        if settings.strip_invisible and not protect:
             content, findings = invisible.clean(
                 content,
                 is_code=content_type is ContentType.code,
@@ -204,6 +251,12 @@ class ContentRouter:
             )
 
         match content_type:
+            case _ if protect:
+                compressed = content
+                compressor = "passthrough (edit target)"
+            case ContentType.disasm:
+                compressed = self.disasm_compressor.compress(content)
+                compressor = "disasmcompressor"
             case ContentType.json:
                 compressed = self.smart_crusher.compress(content)
                 compressor = "smartcrusher"

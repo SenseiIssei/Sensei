@@ -6,6 +6,8 @@ import type {
   SavingsResponse,
   SetupStatus,
   StatsResponse,
+  ToolsResponse,
+  UpdateStatus,
 } from "@/types";
 
 const API_BASE = "/api";
@@ -44,6 +46,16 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(update),
     });
+  },
+
+  async getTools(): Promise<ToolsResponse> {
+    return fetchJSON(`${API_BASE}/setup/tools`);
+  },
+
+  /** `force` asks GitHub now; without it the server only answers from its
+   *  daily check, and makes no request at all unless SENSEI_UPDATE_CHECK is on. */
+  async getUpdateStatus(force = false): Promise<UpdateStatus> {
+    return fetchJSON(`${API_BASE}/maintenance/update${force ? "?force=true" : ""}`);
   },
 
   async getStats(): Promise<StatsResponse> {

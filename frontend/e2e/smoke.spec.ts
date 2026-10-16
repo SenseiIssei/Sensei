@@ -45,12 +45,12 @@ const NEEDS_SETUP = {
   configured_providers: [],
   active_provider: "openrouter",
   model_provider: "auto",
-  ollama: { running: false, host: "http://localhost:11434", models: [], active_model: "glm-5.2" },
+  ollama: { running: false, host: "http://localhost:11434", models: [], active_model: "qwen3.5:9b" },
   hardware: { os: "Linux", arch: "x86_64", cpu_count: 8, ram_mb: 16000, gpus: [], usable_vram_mb: 0 },
   recommended_local_model: null,
   catalog: [
-    { id: "ollama", name: "Ollama (local)", free: true, models: ["glm-5.2"] },
-    { id: "openrouter", name: "OpenRouter", free: true, models: ["openai/gpt-4o"] },
+    { id: "ollama", name: "Ollama (local)", free: true, models: ["qwen3.5:9b"] },
+    { id: "openrouter", name: "OpenRouter", free: true, models: ["~anthropic/claude-sonnet-latest"] },
   ],
   compression_enabled: true,
 };
@@ -67,7 +67,7 @@ test("lands on the savings dashboard", async ({ page }) => {
   // moved to /workspace and is reachable from the header.
   await page.goto("/");
   await expect(page).toHaveTitle(/Sensei/);
-  await expect(page.getByRole("heading", { name: /SAVINGS/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Overview/ })).toBeVisible();
   await expect(page.getByText("Estimated cost saved")).toBeVisible();
   await expect(page.getByText("Claude Code")).toBeVisible();
 });
@@ -76,7 +76,7 @@ test("the dashboard says whether it is actually streaming", async ({ page }) => 
   // The badge reports the real connection state rather than being decoration
   // that always reads "live". With no backend it must not claim to be live.
   await page.goto("/");
-  await expect(page.getByText(/LIVE|POLLING/)).toBeVisible();
+  await expect(page.getByText(/^(Live|Polling)$/)).toBeVisible();
 });
 
 test("the setup wizard does not drop on top of the dashboard", async ({ page }) => {
@@ -90,12 +90,12 @@ test("the setup wizard does not drop on top of the dashboard", async ({ page }) 
   await page.route("**/api/setup/status", (route) => route.fulfill({ json: NEEDS_SETUP }));
 
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /SAVINGS/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Overview/ })).toBeVisible();
   await expect(page.getByText("Your tools are connected and being compressed.")).toBeVisible();
 
   // Long enough for the old behaviour to have swapped the view out.
   await page.waitForTimeout(3000);
-  await expect(page.getByRole("heading", { name: /SAVINGS/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Overview/ })).toBeVisible();
 });
 
 test("the wizard still guards the chat, which does need a provider", async ({ page }) => {
@@ -131,4 +131,52 @@ test("send button enables only when the input has text", async ({ page }) => {
   await expect(sendButton).toBeEnabled();
   await input.fill("");
   await expect(sendButton).toBeDisabled();
+});
+
+test("the theme follows the system and can be switched", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+
+  await page.getByRole("radio", { name: "Dark" }).first().click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+  // Remembered across a reload, not just for this page.
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+});
+
+test("connections lists the tools on this machine", async ({ page }) => {
+  await page.route("**/api/setup/tools", (route) =>
+    route.fulfill({
+      json: {
+        tools: [
+          { id: "claude-code", name: "Claude Code", installed: true, connected: true, declined: false },
+          { id: "codex", name: "Codex CLI", installed: true, connected: false, declined: false },
+        ],
+        auto_connect: { enabled: true, running: true, interval_seconds: 60, scans: 1, connected_since_start: [], last_error: null },
+      },
+    }),
+  );
+  await page.goto("/");
+  await page.getByRole("link", { name: "Connections" }).first().click();
+  await expect(page.getByRole("heading", { name: "Connections" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Claude Code" })).toBeVisible();
+  await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+  await expect(page.getByText("Not connected")).toBeVisible();
+});
+
+test("settings never asks GitHub unless told to", async ({ page }) => {
+  const asked: string[] = [];
+  await page.route("**/api/maintenance/update**", (route) => {
+    asked.push(route.request().url());
+    return route.fulfill({ json: { current: "0.2.0", enabled: false } });
+  });
+  await page.goto("/#/settings");
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(page.getByText("0.2.0")).toBeVisible();
+  expect(asked.every((url) => !url.includes("force=true"))).toBe(true);
+
+  await page.getByRole("button", { name: "Check now" }).click();
+  await expect.poll(() => asked.some((url) => url.includes("force=true"))).toBe(true);
 });

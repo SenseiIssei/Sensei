@@ -1,21 +1,59 @@
-import { useState, useEffect, useCallback } from "react";
-import { Menu } from "lucide-react";
-import { Sidebar, StatsPanel, SettingsPanel } from "@/components/Sidebar";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { History, X } from "lucide-react";
 import { ChatView } from "@/components/ChatView";
-import { SetupWizard } from "@/components/SetupWizard";
+import { ConversationList } from "@/components/ConversationList";
 import { SavingsDashboard } from "@/components/SavingsDashboard";
-import { ConnectionBanner } from "@/components/ConnectionBanner";
+import { SetupWizard } from "@/components/SetupWizard";
+import { IconButton } from "@/components/ui";
 import { useChat } from "@/hooks/useChat";
 import { api } from "@/lib/api";
 import type { Conversation, SetupStatus } from "@/types";
 
-export default function App({ initialView = "savings" }: { initialView?: "savings" | "chat" } = {}) {
+/**
+ * Whether Sensei has a provider of its own.
+ *
+ * Asked once per page load and shared. `null` while unknown — which is also
+ * what a backend that is not running looks like, and in that case the
+ * connection banner already says so; nothing here stacks a second error on it.
+ */
+let setupCache: SetupStatus | null = null;
+
+function useSetupStatus(): [SetupStatus | null, () => void] {
+  const [status, setStatus] = useState<SetupStatus | null>(setupCache);
+  const refresh = useCallback(() => {
+    api
+      .getSetupStatus()
+      .then((s) => {
+        setupCache = s;
+        setStatus(s);
+      })
+      .catch(() => setStatus(null));
+  }, []);
+  useEffect(() => {
+    if (!setupCache) refresh();
+  }, [refresh]);
+  return [status, refresh];
+}
+
+/** The landing screen. */
+export function OverviewPage() {
+  const navigate = useNavigate();
+  const [setup] = useSetupStatus();
+  return (
+    <SavingsDashboard
+      needsSetup={Boolean(setup?.needs_setup)}
+      onOpenChat={() => navigate("/workspace")}
+      onOpenSettings={() => navigate("/settings")}
+    />
+  );
+}
+
+/** Sensei's own chat — the one part that needs a provider of its own. */
+export function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [showStats, setShowStats] = useState(false);
-  const [showSavings, setShowSavings] = useState(initialView === "savings");
-  const [showSettings, setShowSettings] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [setup, setSetup] = useState<SetupStatus | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [setup, refreshSetup] = useSetupStatus();
   const [setupDismissed, setSetupDismissed] = useState(false);
 
   const {
@@ -34,10 +72,9 @@ export default function App({ initialView = "savings" }: { initialView?: "saving
 
   const refreshConversations = useCallback(async () => {
     try {
-      const convs = await api.listConversations();
-      setConversations(convs);
+      setConversations(await api.listConversations());
     } catch {
-      // Backend might not be running
+      // Backend not running — the connection banner says so.
     }
   }, []);
 
@@ -45,27 +82,9 @@ export default function App({ initialView = "savings" }: { initialView?: "saving
     refreshConversations();
   }, [refreshConversations, conversationId, tokensSaved]);
 
-  // Ask once on load whether there is anything to talk to. A failure here means
-  // the backend isn't up, which the chat view already reports — don't stack a
-  // second error screen on top of it.
-  useEffect(() => {
-    api
-      .getSetupStatus()
-      .then(setSetup)
-      .catch(() => setSetup(null));
-  }, []);
-
-  const handleSetupDone = useCallback(() => {
-    setSetupDismissed(true);
-    api.getSetupStatus().then(setSetup).catch(() => undefined);
-  }, []);
-
-  const handleNewChat = useCallback(() => {
-    clearMessages();
-  }, [clearMessages]);
-
-  const handleSelectConversation = useCallback(
+  const select = useCallback(
     async (id: string) => {
+      setHistoryOpen(false);
       try {
         const conv = await api.getConversation(id);
         loadConversation(
@@ -74,109 +93,79 @@ export default function App({ initialView = "savings" }: { initialView?: "saving
             content: m.content,
             timestamp: m.timestamp,
           })),
-          id
+          id,
         );
       } catch {
-        // Error loading conversation
+        // Gone or unreadable — leave the current view as it is.
       }
     },
-    [loadConversation]
+    [loadConversation],
   );
 
-  const handleDeleteConversation = useCallback(
+  const remove = useCallback(
     async (id: string) => {
       try {
         await api.deleteConversation(id);
-        if (conversationId === id) {
-          clearMessages();
-        }
+        if (conversationId === id) clearMessages();
         refreshConversations();
       } catch {
-        // Error deleting
+        // Ignore: the list refreshes on the next change anyway.
       }
     },
-    [conversationId, clearMessages, refreshConversations]
+    [conversationId, clearMessages, refreshConversations],
   );
 
-  // The wizard belongs in front of the chat, not in front of the dashboard.
-  //
-  // It used to preempt everything as soon as the setup probe came back, which
-  // on this machine took 2.7 seconds: you landed on your savings, read them,
-  // and then the wizard dropped on top. Two separate faults in one behaviour.
-  //
-  // The flash is the smaller one. The real error is the premise — `needs_setup`
-  // means "no provider of Sensei's own", and the gateway does not need one. It
-  // forwards whatever credential the calling tool sent, so a Claude Code or
-  // Copilot subscription routes through it with nothing configured here. The
-  // parts that originate a request rather than relay one — the chat, RAG, the
-  // agent — are the ones that need a key, so that is where the wizard goes.
-  const needsSetup = Boolean(setup?.needs_setup) && !setupDismissed;
-  if (needsSetup && !showSavings) {
-    return <SetupWizard status={setup!} onDone={handleSetupDone} />;
-  }
-
-  // Savings is the landing view, not something you click through the chat to
-  // find. It is the reason the product exists and the only screen that changes
-  // on its own; the chat is a feature of it rather than the other way round.
-  if (showSavings) {
+  // The wizard belongs in front of the chat, not in front of the dashboard:
+  // the gateway forwards whatever credential the calling tool sends and needs
+  // no provider of its own, but this chat originates requests and does.
+  if (setup?.needs_setup && !setupDismissed) {
     return (
-      <SavingsDashboard
-        needsSetup={needsSetup}
-        onOpenChat={() => setShowSavings(false)}
-        onOpenSettings={() => {
-          setShowSavings(false);
-          setShowSettings(true);
+      <SetupWizard
+        status={setup}
+        onDone={() => {
+          setSetupDismissed(true);
+          refreshSetup();
         }}
       />
     );
   }
 
-  return (
-    <div className="relative flex h-dvh w-full overflow-hidden">
-      <ConnectionBanner />
-      {/* Below `md` the sidebar is a drawer; the backdrop closes it. */}
-      {sidebarOpen && (
-        <button
-          aria-label="Close menu"
-          onClick={() => setSidebarOpen(false)}
-          className="fixed inset-0 z-30 bg-black/60 md:hidden"
-        />
-      )}
-      <div
-        className={
-          "fixed inset-y-0 left-0 z-40 transition-transform md:static md:translate-x-0 " +
-          (sidebarOpen ? "translate-x-0" : "-translate-x-full")
-        }
-      >
-        <Sidebar
-          conversations={conversations}
-          activeConversationId={conversationId}
-          onSelectConversation={(id) => {
-            setSidebarOpen(false);
-            return handleSelectConversation(id);
-          }}
-          onNewChat={() => {
-            setSidebarOpen(false);
-            handleNewChat();
-          }}
-          onDeleteConversation={handleDeleteConversation}
-          onOpenSettings={() => setShowSettings(true)}
-          onOpenStats={() => setShowStats(true)}
-          onOpenSavings={() => {
-            setSidebarOpen(false);
-            setShowSavings(true);
-          }}
-          tokensSaved={tokensSaved}
-        />
-      </div>
+  const list = (
+    <ConversationList
+      conversations={conversations}
+      activeId={conversationId}
+      onSelect={select}
+      onNew={() => {
+        setHistoryOpen(false);
+        clearMessages();
+      }}
+      onDelete={remove}
+    />
+  );
 
-      <button
-        onClick={() => setSidebarOpen(true)}
-        aria-label="Open menu"
-        className="fixed left-3 top-3 z-20 rounded-lg glass p-2 text-gray-300 md:hidden"
-      >
-        <Menu className="h-5 w-5" />
-      </button>
+  return (
+    <div className="relative flex h-full">
+      <aside className="hidden w-64 shrink-0 border-r border-line md:block">{list}</aside>
+
+      {historyOpen && (
+        <div className="absolute inset-0 z-30 md:hidden">
+          <button
+            aria-label="Close history"
+            onClick={() => setHistoryOpen(false)}
+            className="absolute inset-0 bg-[var(--scrim)]"
+          />
+          <aside className="animate-fade-in absolute inset-y-0 left-0 w-72 border-r border-line bg-canvas shadow-pop">
+            <IconButton
+              label="Close history"
+              onClick={() => setHistoryOpen(false)}
+              className="absolute right-2 top-2 z-10"
+            >
+              <X className="h-4 w-4" />
+            </IconButton>
+            <div className="h-full pt-10">{list}</div>
+          </aside>
+        </div>
+      )}
 
       <ChatView
         messages={messages}
@@ -187,9 +176,12 @@ export default function App({ initialView = "savings" }: { initialView?: "saving
         onSend={sendMessage}
         onCancel={cancelStreaming}
         onSelectModel={setSelectedModel}
+        leading={
+          <IconButton label="History" className="md:hidden" onClick={() => setHistoryOpen(true)}>
+            <History className="h-4 w-4" />
+          </IconButton>
+        }
       />
-      <StatsPanel open={showStats} onClose={() => setShowStats(false)} />
-      <SettingsPanel open={showSettings} onClose={() => setShowSettings(false)} />
     </div>
   );
 }

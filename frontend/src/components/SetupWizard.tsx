@@ -1,21 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
-import {
-  Check,
-  Cpu,
-  Download,
-  ExternalLink,
-  Loader2,
-  Lock,
-  Server,
-  Sparkles,
-  TriangleAlert,
-} from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Check, Cpu, Download, ExternalLink, Loader2, Lock, Server, TriangleAlert } from "lucide-react";
 import clsx from "clsx";
 import { api } from "@/lib/api";
-import type { SetupStatus, ProviderModels } from "@/types";
+import type { ProviderModels, SetupStatus } from "@/types";
+import { Logo } from "@/components/ui";
 
 /**
- * First-run setup.
+ * First-run setup for Sensei's own chat.
  *
  * The point is that a new user never opens a text editor. Two paths, both
  * finishing in one screen: run a model locally for free, or paste a key for a
@@ -27,32 +18,48 @@ function gb(mb: number | null | undefined): string {
   return mb ? `${(mb / 1024).toFixed(1)} GB` : "unknown";
 }
 
+const FIELD =
+  "h-9 w-full rounded-sm border border-line-strong bg-surface px-3 text-sm text-fg outline-none " +
+  "transition-shadow focus:border-accent focus:ring-1 focus:ring-accent/50 disabled:opacity-50";
+const LABEL = "block text-[13px] font-medium text-fg-secondary";
+
 type Path = "local" | "api";
 
-export function SetupWizard({ status, onDone }: { status: SetupStatus; onDone: () => void }) {
+export function SetupWizard({
+  status,
+  onDone,
+  embedded = false,
+}: {
+  status: SetupStatus;
+  onDone: () => void;
+  /** Inside the Settings page: no welcome header, no skip link. */
+  embedded?: boolean;
+}) {
   const suggestion = status.recommended_local_model;
   // Ollama already running means local is a real option; otherwise lead with
   // the path that can actually finish right now.
   const [path, setPath] = useState<Path>(status.ollama.running ? "local" : "api");
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto surreal-bg">
-      <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col justify-center px-4 py-10 sm:px-6">
-        <header className="mb-8 text-center">
-          <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl glass">
-            <Sparkles className="h-7 w-7 text-sensei-400" />
-          </div>
-          <h1 className="text-2xl font-semibold text-white sm:text-3xl">Welcome to Sensei</h1>
-          <p className="mt-2 text-sm text-gray-400">
-            One thing left: pick something for Sensei to talk to.
-          </p>
-        </header>
+    <div className={embedded ? "" : "h-full overflow-y-auto scrollbar-thin"}>
+      <div
+        className={clsx(
+          "mx-auto flex w-full flex-col",
+          !embedded && "min-h-full max-w-2xl justify-center px-4 py-10 sm:px-6",
+        )}
+      >
+        {!embedded && (
+          <header className="mb-8 text-center">
+            <Logo className="mx-auto mb-5 h-12 w-12" />
+            <h1 className="text-2xl font-semibold tracking-[-0.01em] text-fg">Welcome to Sensei</h1>
+            <p className="mt-2 text-[13px] text-muted">
+              One thing left for the chat: pick something for Sensei to talk to. The gateway
+              already works without this.
+            </p>
+          </header>
+        )}
 
-        <div
-          className="mb-6 grid gap-3 sm:grid-cols-2"
-          role="tablist"
-          aria-label="Setup method"
-        >
+        <div className="mb-4 grid gap-3 sm:grid-cols-2" role="tablist" aria-label="Setup method">
           <PathCard
             active={path === "local"}
             onClick={() => setPath("local")}
@@ -75,19 +82,21 @@ export function SetupWizard({ status, onDone }: { status: SetupStatus; onDone: (
           <ApiPath status={status} onDone={onDone} />
         )}
 
-        <footer className="mt-8 space-y-3 text-center">
-          <p className="text-xs text-gray-500">
+        <footer className="mt-6 space-y-3 text-center">
+          <p className="text-xs text-muted">
             {status.hardware.cpu_count} cores · {gb(status.hardware.ram_mb)} RAM ·{" "}
             {status.hardware.gpus[0]?.name ?? "no GPU detected"} ·{" "}
             {gb(status.hardware.usable_vram_mb)} usable for a model
             {suggestion ? ` · best local fit: ${suggestion.name}` : ""}
           </p>
-          <button
-            onClick={onDone}
-            className="text-xs text-gray-500 underline underline-offset-4 hover:text-gray-300"
-          >
-            Skip for now — I'll configure this later
-          </button>
+          {!embedded && (
+            <button
+              onClick={onDone}
+              className="text-xs text-muted underline underline-offset-4 hover:text-fg"
+            >
+              Skip for now — I'll configure this later
+            </button>
+          )}
         </footer>
       </div>
     </div>
@@ -113,17 +122,15 @@ function PathCard({
       aria-selected={active}
       onClick={onClick}
       className={clsx(
-        "rounded-xl border p-4 text-left transition-colors",
-        active
-          ? "border-sensei-600/60 bg-sensei-950/40"
-          : "border-gray-700/50 glass glass-hover",
+        "rounded-lg border p-4 text-left transition-colors duration-150",
+        active ? "border-accent bg-accent-soft" : "border-line bg-surface hover:bg-raised",
       )}
     >
-      <div className="mb-1 flex items-center gap-2 text-white">
-        <span className={active ? "text-sensei-400" : "text-gray-400"}>{icon}</span>
-        <span className="font-medium">{title}</span>
+      <div className="mb-1 flex items-center gap-2 text-fg">
+        <span className={active ? "text-accent" : "text-muted"}>{icon}</span>
+        <span className="text-[15px] font-semibold">{title}</span>
       </div>
-      <p className="text-xs text-gray-400">{subtitle}</p>
+      <p className="text-xs text-muted">{subtitle}</p>
     </button>
   );
 }
@@ -151,12 +158,13 @@ function LocalPath({ status, onDone }: { status: SetupStatus; onDone: () => void
     return (
       <Panel>
         <div className="flex items-start gap-3">
-          <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
+          <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
           <div className="min-w-0">
-            <p className="text-sm text-white">Ollama isn't running</p>
-            <p className="mt-1 text-xs text-gray-400">
-              Sensei looked at <code className="text-gray-300">{status.ollama.host}</code> and got
-              no answer. Install it, then pull a model — Sensei will pick it up automatically.
+            <p className="text-sm font-medium text-fg">Ollama isn't running</p>
+            <p className="mt-1 text-xs text-muted">
+              Sensei looked at <code className="font-mono text-fg-secondary">{status.ollama.host}</code>{" "}
+              and got no answer. Install it, then pull a model — Sensei will pick it up
+              automatically.
             </p>
           </div>
         </div>
@@ -165,20 +173,20 @@ function LocalPath({ status, onDone }: { status: SetupStatus; onDone: () => void
           href="https://ollama.com"
           target="_blank"
           rel="noreferrer noopener"
-          className="mt-4 inline-flex items-center gap-1.5 text-sm text-sensei-400 hover:text-sensei-300"
+          className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-hover"
         >
           Get Ollama <ExternalLink className="h-3.5 w-3.5" />
         </a>
 
         {suggestion && (
-          <div className="mt-4 rounded-lg border border-gray-700/50 bg-black/20 p-3">
-            <p className="text-xs text-gray-400">
+          <div className="mt-4 rounded-md border border-line bg-code-bg p-3">
+            <p className="text-xs text-muted">
               For {gb(status.hardware.usable_vram_mb)} of usable memory, start with:
             </p>
-            <code className="mt-2 block overflow-x-auto whitespace-pre text-sm text-sensei-300">
+            <code className="mt-2 block overflow-x-auto whitespace-pre font-mono text-[13px] text-fg">
               ollama pull {suggestion.id}
             </code>
-            <p className="mt-2 text-xs text-gray-500">
+            <p className="mt-2 text-xs text-muted">
               {suggestion.name} · {suggestion.params} · {gb(suggestion.size_mb)} — {suggestion.good_for}
             </p>
           </div>
@@ -189,18 +197,13 @@ function LocalPath({ status, onDone }: { status: SetupStatus; onDone: () => void
 
   return (
     <Panel>
-      <label htmlFor="local-model" className="block text-sm text-white">
+      <label htmlFor="local-model" className={LABEL}>
         Installed models
       </label>
-      <p className="mb-3 mt-1 text-xs text-gray-400">
+      <p className="mb-3 mt-1 text-xs text-muted">
         Found {status.ollama.models.length} on {status.ollama.host}.
       </p>
-      <select
-        id="local-model"
-        value={model}
-        onChange={(e) => setModel(e.target.value)}
-        className="w-full rounded-lg border border-gray-700/50 bg-gray-900 px-3 py-2 text-sm text-white focus:border-sensei-600/50 focus:outline-hidden"
-      >
+      <select id="local-model" value={model} onChange={(e) => setModel(e.target.value)} className={FIELD}>
         {status.ollama.models.map((m) => (
           <option key={m} value={m}>
             {m}
@@ -208,15 +211,17 @@ function LocalPath({ status, onDone }: { status: SetupStatus; onDone: () => void
         ))}
       </select>
 
-      {suggestion && !status.ollama.models.some((m) => m.split(":")[0] === suggestion.id.split(":")[0]) && (
-        <p className="mt-3 flex items-start gap-1.5 text-xs text-gray-500">
-          <Download className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>
-            For this hardware, <code className="text-gray-400">ollama pull {suggestion.id}</code>{" "}
-            would fit comfortably.
-          </span>
-        </p>
-      )}
+      {suggestion &&
+        !status.ollama.models.some((m) => m.split(":")[0] === suggestion.id.split(":")[0]) && (
+          <p className="mt-3 flex items-start gap-1.5 text-xs text-muted">
+            <Download className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              For this hardware,{" "}
+              <code className="font-mono text-fg-secondary">ollama pull {suggestion.id}</code> would
+              fit comfortably.
+            </span>
+          </p>
+        )}
 
       <Actions error={error} saving={saving} disabled={!model} onSave={save} />
     </Panel>
@@ -269,14 +274,14 @@ function ApiPath({ status, onDone }: { status: SetupStatus; onDone: () => void }
 
   return (
     <Panel>
-      <label htmlFor="provider" className="block text-sm text-white">
+      <label htmlFor="provider" className={LABEL}>
         Provider
       </label>
       <select
         id="provider"
         value={provider}
         onChange={(e) => setProvider(e.target.value)}
-        className="mt-2 w-full rounded-lg border border-gray-700/50 bg-gray-900 px-3 py-2 text-sm text-white focus:border-sensei-600/50 focus:outline-hidden"
+        className={clsx(FIELD, "mt-2")}
       >
         {providers.map((p) => (
           <option key={p.id} value={p.id}>
@@ -287,22 +292,20 @@ function ApiPath({ status, onDone }: { status: SetupStatus; onDone: () => void }
       </select>
 
       {/* A server on this machine has no account, so it has no key. Asking for
-          one anyway suggests the user is missing something they need to go and
-          find, and the reassurance underneath — "forwards it to LM Studio and
-          nowhere else" — is about a credential that will never exist. */}
+          one anyway suggests the user is missing something they must go find. */}
       {selected?.local ? (
-        <p className="mt-5 text-xs text-gray-500">
+        <p className="mt-5 text-xs text-muted">
           No API key: {selected.name} runs on this machine, so nothing is sent anywhere and there is
           no account to sign in to. Sensei will reach it at its usual address — start it, then pick
           a model below.
         </p>
       ) : (
         <>
-          <label htmlFor="api-key" className="mt-5 block text-sm text-white">
+          <label htmlFor="api-key" className={clsx(LABEL, "mt-5")}>
             API key
           </label>
           <div className="relative mt-2">
-            <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+            <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
             <input
               id="api-key"
               type="password"
@@ -316,26 +319,26 @@ function ApiPath({ status, onDone }: { status: SetupStatus; onDone: () => void }
                   ? "already set — leave blank to keep it"
                   : "paste it here"
               }
-              className="w-full rounded-lg border border-gray-700/50 bg-gray-900 py-2 pl-9 pr-3 text-sm text-white focus:border-sensei-600/50 focus:outline-hidden"
+              className={clsx(FIELD, "pl-9 placeholder:text-faint")}
             />
           </div>
-          <p className="mt-2 text-xs text-gray-500">
+          <p className="mt-2 text-xs text-muted">
             Stored encrypted on this machine, never in plain text. Sensei forwards it to{" "}
             {selected?.name ?? "the provider"} and nowhere else.
           </p>
         </>
       )}
 
-      <label htmlFor="model" className="mt-5 block text-sm text-white">
+      <label htmlFor="model" className={clsx(LABEL, "mt-5")}>
         Model
-        {loadingModels && <Loader2 className="ml-2 inline h-3.5 w-3.5 animate-spin text-gray-500" />}
+        {loadingModels && <Loader2 className="ml-2 inline h-3.5 w-3.5 animate-spin text-faint" />}
       </label>
       <select
         id="model"
         value={model}
         onChange={(e) => setModel(e.target.value)}
         disabled={!list?.models.length}
-        className="mt-2 w-full rounded-lg border border-gray-700/50 bg-gray-900 px-3 py-2 text-sm text-white focus:border-sensei-600/50 focus:outline-hidden disabled:opacity-50"
+        className={clsx(FIELD, "mt-2")}
       >
         {(list?.models ?? []).map((m) => (
           <option key={m} value={m}>
@@ -344,20 +347,29 @@ function ApiPath({ status, onDone }: { status: SetupStatus; onDone: () => void }
         ))}
       </select>
       {list && (
-        <p className="mt-2 text-xs text-gray-500">
+        <p className="mt-2 text-xs text-muted">
           {list.source === "live"
             ? `${list.models.length} models, fetched from ${selected?.name ?? provider} just now.`
             : list.detail}
         </p>
       )}
 
-      <Actions error={error} saving={saving} disabled={!apiKey && !status.configured_providers.includes(provider)} onSave={save} />
+      <Actions
+        error={error}
+        saving={saving}
+        disabled={!apiKey && !status.configured_providers.includes(provider)}
+        onSave={save}
+      />
     </Panel>
   );
 }
 
 function Panel({ children }: { children: React.ReactNode }) {
-  return <div className="glass-card p-5 sm:p-6">{children}</div>;
+  return (
+    <div className="animate-fade-in rounded-lg border border-line bg-surface p-5 shadow-sm sm:p-6 dark:shadow-none">
+      {children}
+    </div>
+  );
 }
 
 function Actions({
@@ -374,14 +386,14 @@ function Actions({
   return (
     <>
       {error && (
-        <p role="alert" className="mt-4 text-xs text-red-400">
+        <p role="alert" className="mt-4 text-xs text-danger">
           {error}
         </p>
       )}
       <button
         onClick={onSave}
         disabled={saving || disabled}
-        className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-sensei-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sensei-500 disabled:cursor-not-allowed disabled:opacity-40"
+        className="mt-6 flex h-9 w-full items-center justify-center gap-2 rounded-sm bg-accent px-4 text-[13px] font-semibold text-accent-fg transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
       >
         {saving ? (
           <>

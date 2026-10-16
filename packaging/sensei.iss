@@ -16,7 +16,7 @@
 ; that no longer exists would break Claude Code, Cursor and the rest with a
 ; "connection refused" that never mentions Sensei.
 ;
-;   iscc packaging\sensei.iss /DAppVersion=0.1.19 /DSourceExe=..\dist-app\sensei.exe
+;   iscc packaging\sensei.iss /DAppVersion=0.2.0 /DSourceExe=..\dist-app\sensei.exe
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -59,6 +59,13 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\sensei.exe
 SetupIconFile=sensei.ico
+; `sensei update` runs this installer silently while Sensei itself is running.
+; Restart Manager closes it so its files can be replaced; the [Run] entry
+; below starts it again afterwards.
+CloseApplications=force
+RestartApplications=no
+; The PATH entry below takes effect in new terminals without signing out.
+ChangesEnvironment=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -98,8 +105,17 @@ Filename: "{app}\sensei.exe"; Parameters: "setup-tools"; WorkingDir: "{app}"; \
   StatusMsg: "Connecting your AI tools..."; Flags: runhidden waituntilterminated; Tasks: wiretools
 Filename: "{app}\senseiw.exe"; WorkingDir: "{app}"; \
   Description: "Start Sensei now"; Flags: nowait postinstall skipifsilent
+; A silent run is an update from `sensei update`: bring the tray back.
+Filename: "{app}\senseiw.exe"; Parameters: "tray --no-browser"; WorkingDir: "{app}"; \
+  Flags: nowait; Check: WizardSilent
 
 [UninstallRun]
+; A running tray holds senseiw.exe open, and Windows will not delete it.
+Filename: "{sys}\taskkill.exe"; Parameters: "/IM senseiw.exe /F"; \
+  RunOnceId: "StopTray"; Flags: runhidden waituntilterminated
+; `sensei autostart on` writes a Run key the installer did not create.
+Filename: "{app}\sensei.exe"; Parameters: "autostart off"; WorkingDir: "{app}"; \
+  RunOnceId: "AutostartOff"; Flags: runhidden waituntilterminated
 ; Put the other tools back before removing the binary they point at. Runs first
 ; because after the files are gone there is nothing left to run it with.
 Filename: "{app}\sensei.exe"; Parameters: "setup-tools --undo"; WorkingDir: "{app}"; \
@@ -113,3 +129,41 @@ Type: filesandordirs; Name: "{app}\.sensei_memory"
 Type: files; Name: "{app}\.sensei_savings.db*"
 Type: files; Name: "{app}\.sensei_audit.jsonl"
 Type: dirifempty; Name: "{app}"
+
+[Registry]
+; `sensei` on PATH for this user, so `sensei doctor` and `sensei update` work in
+; any new terminal. Per-user (HKCU) like everything else here; removed again by
+; the [Code] below on uninstall.
+Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; \
+  ValueData: "{olddata};{app}"; Check: NeedsAddPath(ExpandConstant('{app}'))
+
+[Code]
+function NeedsAddPath(Dir: string): Boolean;
+var
+  Paths: string;
+begin
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', Paths) then
+  begin
+    Result := True;
+    exit;
+  end;
+  Result := Pos(';' + Uppercase(Dir) + ';', ';' + Uppercase(Paths) + ';') = 0;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Paths, Dir: string;
+  P: Integer;
+begin
+  if CurUninstallStep <> usPostUninstall then
+    exit;
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', Paths) then
+    exit;
+  Dir := ExpandConstant('{app}');
+  P := Pos(';' + Uppercase(Dir), Uppercase(Paths));
+  if P > 0 then
+  begin
+    Delete(Paths, P, Length(Dir) + 1);
+    RegWriteExpandStringValue(HKCU, 'Environment', 'Path', Paths);
+  end;
+end;

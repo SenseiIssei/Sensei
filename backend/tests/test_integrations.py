@@ -644,3 +644,16 @@ def test_an_existing_tool_directory_counts_as_installed(
     tool_dir.mkdir()
     entry = _json_integration(tool_dir / "config.json")
     assert entry.detect() is True
+
+
+def test_codex_provider_uses_the_responses_wire_api() -> None:
+    """Codex removed `wire_api = "chat"` in 2026 and refuses to start with it.
+
+    The provider block must say "responses", which Sensei now serves at
+    /v1/responses — and re-running setup-tools rewrites an old block in place.
+    """
+    codex = next(i for i in integrations.BLOCK_REGISTRY if i.id == "codex")
+    body = codex.body(integrations.endpoints())
+
+    assert 'wire_api = "responses"' in body
+    assert 'wire_api = "chat"' not in body

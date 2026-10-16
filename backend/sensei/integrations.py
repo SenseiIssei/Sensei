@@ -615,7 +615,10 @@ BLOCK_REGISTRY: tuple[BlockIntegration, ...] = (
             "[model_providers.sensei]\n"
             'name = "Sensei"\n'
             f'base_url = "{ep.openai}"\n'
-            'wire_api = "chat"\n'
+            # Codex removed the chat wire API in 2026: "responses" is the only
+            # value it accepts, and a provider still set to "chat" stops it
+            # from starting at all. Sensei serves /v1/responses for it.
+            'wire_api = "responses"\n'
             'env_key = "OPENAI_API_KEY"\n'
             "\n"
             # The MCP server is the part that works for everyone. Routing Codex

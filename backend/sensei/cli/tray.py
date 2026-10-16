@@ -29,38 +29,36 @@ from sensei.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Matches the dashboard: Sensei green on the near-black the UI uses.
-_GREEN = (34, 197, 94, 255)
-_DARK = (10, 10, 15, 255)
+# The app logo: three lines narrowing on the dashboard's dark canvas, in its
+# periwinkle accent, with the one gold dot that marks a saving.
+_ACCENT = (166, 176, 242, 255)
+_GOLD = (255, 212, 125, 255)
+_DARK = (19, 22, 25, 255)
 
 
 def _icon_image(size: int = 64) -> Any:
-    """A bolt on a rounded square, drawn rather than loaded."""
+    """The logo, drawn rather than loaded (see frontend/public/sensei.svg)."""
     from PIL import Image, ImageDraw
 
-    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    # Drawn at 4x and scaled down: Pillow's shapes have no anti-aliasing.
+    big = size * 4
+    image = Image.new("RGBA", (big, big), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
 
-    pad = size // 10
-    radius = size // 5
-    draw.rounded_rectangle([pad, pad, size - pad, size - pad], radius=radius, fill=_DARK)
+    def u(v: float) -> float:  # SVG units (0..100) to pixels
+        return v * big / 100
 
-    # A lightning bolt, in fractions of the icon so it scales cleanly.
-    def point(fx: float, fy: float) -> tuple[float, float]:
-        return (pad + fx * (size - 2 * pad), pad + fy * (size - 2 * pad))
-
-    draw.polygon(
-        [
-            point(0.56, 0.10),
-            point(0.28, 0.55),
-            point(0.46, 0.55),
-            point(0.40, 0.90),
-            point(0.70, 0.42),
-            point(0.51, 0.42),
-        ],
-        fill=_GREEN,
-    )
-    return image
+    draw.rounded_rectangle([0, 0, big - 1, big - 1], radius=u(22), fill=_DARK)
+    stroke = u(8.5)
+    for x0, x1, y in ((24, 76, 34), (32, 68, 51), (40, 60, 68)):
+        draw.line([(u(x0), u(y)), (u(x1), u(y))], fill=_ACCENT, width=round(stroke))
+        for x in (x0, x1):  # round caps
+            draw.ellipse(
+                [u(x) - stroke / 2, u(y) - stroke / 2, u(x) + stroke / 2, u(y) + stroke / 2],
+                fill=_ACCENT,
+            )
+    draw.ellipse([u(72 - 5.5), u(68 - 5.5), u(72 + 5.5), u(68 + 5.5)], fill=_GOLD)
+    return image.resize((size, size), Image.Resampling.LANCZOS)
 
 
 def _url(path: str = "/app/") -> str:
@@ -76,7 +74,7 @@ def run(port: int | None = None, open_browser: bool = True) -> int:
         import pystray
     except ImportError:
         print("The tray needs the optional 'tray' extra:")
-        print('    pip install "sensei-gateway[tray]"')
+        print('    pip install -e "backend[tray]"   (the release binaries include it)')
         return 1
 
     import uvicorn
@@ -120,6 +118,37 @@ def run(port: int | None = None, open_browser: bool = True) -> int:
         # blocking here freezes the menu.
         threading.Thread(target=setup_tools.run, daemon=True).start()
 
+    from sensei.cli import system
+
+    def starts_at_login(*_: Any) -> bool:
+        try:
+            return system.autostart_status().enabled
+        except Exception:
+            return False
+
+    def toggle_autostart(*_: Any) -> None:
+        if starts_at_login():
+            system.autostart_disable()
+        else:
+            system.autostart_enable()
+
+    def check_updates(icon: Any, *_: Any) -> None:
+        def work() -> None:
+            try:
+                info = system.check()
+            except Exception as exc:
+                icon.notify(f"Could not check for updates: {exc}", "Sensei")
+                return
+            if info["update_available"]:
+                icon.notify(
+                    f"Sensei {info['latest']} is available — run `sensei update`.", "Sensei"
+                )
+                webbrowser.open(info["url"])
+            else:
+                icon.notify(f"Sensei {info['current']} is up to date.", "Sensei")
+
+        threading.Thread(target=work, daemon=True).start()
+
     def quit_sensei(icon: Any, *_: Any) -> None:
         server.should_exit = True
         icon.stop()
@@ -131,6 +160,8 @@ def run(port: int | None = None, open_browser: bool = True) -> int:
         menu=pystray.Menu(
             pystray.MenuItem("Open dashboard", open_dashboard, default=True),
             pystray.MenuItem("Connect my AI tools", wire_tools),
+            pystray.MenuItem("Start at login", toggle_autostart, checked=starts_at_login),
+            pystray.MenuItem("Check for updates", check_updates),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit Sensei", quit_sensei),
         ),

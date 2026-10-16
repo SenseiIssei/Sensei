@@ -87,67 +87,70 @@ class Settings(BaseSettings):
 
     # Ollama (local, free, no API key)
     ollama_host: str = "http://localhost:11434"
-    ollama_model: str = "glm-5.2"
+    ollama_model: str = "qwen3.5:9b"
 
     # Z.ai API (GLM original)
-    zai_api_base_url: str = "https://open.bigmodel.cn/api/paas/v4"
+    zai_api_base_url: str = "https://api.z.ai/api/paas/v4"
     zai_api_key: str = ""
-    zai_api_model: str = "glm-5.2"
+    zai_api_model: str = "glm-5.3"
 
     # OpenRouter API (aggregator — access all models)
     openrouter_api_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_api_key: str = ""
-    openrouter_api_model: str = "zhipuai/glm-5.2"
+    openrouter_api_model: str = "~anthropic/claude-sonnet-latest"
 
-    # HuggingFace API
-    huggingface_api_base_url: str = "https://api-inference.huggingface.co/models"
+    # HuggingFace Inference Providers (OpenAI-compatible router; the old
+    # api-inference.huggingface.co/models endpoint does not speak /chat/completions)
+    huggingface_api_base_url: str = "https://router.huggingface.co/v1"
     huggingface_api_key: str = ""
-    huggingface_api_model: str = "THUDM/glm-5.2-744b"
+    huggingface_api_model: str = "openai/gpt-oss-120b"
 
-    # OpenAI API (GPT-4o, GPT-4o-mini, o1, o3, etc.)
+    # OpenAI API (GPT-6 Astra / Sol / Luna)
     openai_api_base_url: str = "https://api.openai.com/v1"
     openai_api_key: str = ""
-    openai_api_model: str = "gpt-4o"
+    openai_api_model: str = "gpt-6.1-sol"
 
-    # Anthropic / Claude API (Claude 3.5 Sonnet, Opus, Haiku)
+    # Anthropic / Claude API (Claude 5: Fable, Opus, Sonnet, Haiku)
     anthropic_api_base_url: str = "https://api.anthropic.com/v1"
     anthropic_api_key: str = ""
-    anthropic_api_model: str = "claude-3-5-sonnet-20241022"
+    anthropic_api_model: str = "claude-sonnet-5-5"
 
-    # Google Gemini API (Gemini 2.0 Flash, Pro, etc.)
-    google_api_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    # Google Gemini API, through its OpenAI-compatible endpoint. The bare
+    # /v1beta base has no /chat/completions route — requests 404'd there.
+    google_api_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai"
     google_api_key: str = ""
-    google_api_model: str = "gemini-2.0-flash"
+    google_api_model: str = "gemini-3.8-flash"
 
-    # Groq API (ultra-fast inference, Llama, Mixtral, etc.)
+    # Groq API (ultra-fast inference: gpt-oss, Llama, Qwen)
     groq_api_base_url: str = "https://api.groq.com/openai/v1"
     groq_api_key: str = ""
-    groq_api_model: str = "llama-3.3-70b-versatile"
+    groq_api_model: str = "openai/gpt-oss-120b"
 
     # Mistral API (Mistral Large, Codestral, etc.)
     mistral_api_base_url: str = "https://api.mistral.ai/v1"
     mistral_api_key: str = ""
     mistral_api_model: str = "mistral-large-latest"
 
-    # Together AI API (Llama, Qwen, DeepSeek, etc.)
-    together_api_base_url: str = "https://api.together.xyz/v1"
+    # Together AI API (GLM, Kimi, Qwen, DeepSeek, gpt-oss)
+    together_api_base_url: str = "https://api.together.ai/v1"
     together_api_key: str = ""
-    together_api_model: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+    together_api_model: str = "zai-org/GLM-5.3"
 
-    # DeepSeek API (DeepSeek V3, R1, etc.)
-    deepseek_api_base_url: str = "https://api.deepseek.com/v1"
+    # DeepSeek API (V4 Flash / V4 Pro)
+    deepseek_api_base_url: str = "https://api.deepseek.com"
     deepseek_api_key: str = ""
-    deepseek_api_model: str = "deepseek-chat"
+    deepseek_api_model: str = "deepseek-flash"
 
-    # Cohere API (Command R+, etc.)
-    cohere_api_base_url: str = "https://api.cohere.com/v1"
+    # Cohere, through its OpenAI-compatibility API (the native /v1 chat endpoint
+    # takes a different request shape and rejected every forwarded request).
+    cohere_api_base_url: str = "https://api.cohere.ai/compatibility/v1"
     cohere_api_key: str = ""
-    cohere_api_model: str = "command-r-plus"
+    cohere_api_model: str = "command-a-plus-05-2026"
 
-    # Fireworks AI API (Llama, Qwen, etc.)
+    # Fireworks AI API (GLM, Kimi, Qwen)
     fireworks_api_base_url: str = "https://api.fireworks.ai/inference/v1"
     fireworks_api_key: str = ""
-    fireworks_api_model: str = "accounts/fireworks/models/llama-v3p3-70b-instruct"
+    fireworks_api_model: str = "accounts/fireworks/models/glm-5p3"
 
     # Perplexity API (Sonar, etc.)
     perplexity_api_base_url: str = "https://api.perplexity.ai"
@@ -237,6 +240,14 @@ class Settings(BaseSettings):
     # On, the marker states how much went and that the original is retrievable,
     # so a model reading it can ask rather than answer around the gap.
     text_truncate_paragraphs: bool = False
+    # How hard to compress source code.
+    #   safe        remove what a compiler ignores (comments, docstrings, blank
+    #               lines) and never touch string literals. Code that reaches
+    #               the model as a tool result — a file an agent may edit next
+    #               by exact string match — passes through byte-exact.
+    #   aggressive  also rewrite code in tool results and fold long import
+    #               blocks. More savings; agents' exact-match edits can fail.
+    code_compression: Literal["safe", "aggressive"] = "safe"
     ccr_ttl_hours: int = 24
     ccr_cache_dir: str = ".sensei_cache"
     # Ask the model for terser answers. Output tokens cost roughly 4-5x input
@@ -258,6 +269,19 @@ class Settings(BaseSettings):
     # Set to false and the totals go back to being per-process and in-memory.
     savings_persist: bool = True
     savings_db: str = ".sensei_savings.db"
+
+    # Ask GitHub once a day whether a newer release exists, and show it in the
+    # dashboard and tray. Off by default: it is a request to a third party, and
+    # Sensei makes none unless you ask. `sensei update --check` works either way.
+    update_check: bool = False
+
+    # MCP proxy: other MCP servers (REA, GhidraMCP, filesystem, GitHub, …)
+    # behind `sensei_find_tools` / `sensei_call_tool`, with compressed results.
+    # Empty = ~/.sensei/mcp-servers.json. Same format as Claude Desktop's.
+    mcp_servers_file: str = ""
+    # A tool result longer than this (after compression) comes back as a first
+    # page plus a ccr_id; `sensei_retrieve` pages through the rest.
+    mcp_page_chars: int = 12_000
     # How long a row is kept. The dashboard's longest view is a year.
     savings_retention_days: int = 400
     # Compress system prompts at the gateway too (where IDE tools hide most of
@@ -279,6 +303,20 @@ class Settings(BaseSettings):
     # Left in place for the case it is actually good for — keeping older turns
     # verbatim because you want them verbatim, accepting the cache cost.
     gateway_preserve_cache: bool = False
+    # Retry a provider that answered 429/5xx (or could not be reached) before
+    # giving up. Only ever before the first byte reaches the client — a stream
+    # that has started is never replayed. Retry-After is honoured up to
+    # upstream_retry_max_wait seconds.
+    upstream_retries: int = 2
+    upstream_retry_max_wait: float = 8.0
+    # Last resort when the provider stays down: send the same request to a
+    # local server instead (Ollama, llama.cpp, LM Studio and vLLM all speak
+    # /v1/messages, /v1/chat/completions and /v1/responses now). Off by
+    # default — a different model answering is a decision, not a default. The
+    # response carries `X-Sensei-Fallback` so the switch is never silent.
+    fallback_enabled: bool = False
+    fallback_base_url: str = "http://localhost:11434"
+    fallback_model: str = ""  # empty → ollama_model
 
     # Memory
     memory_enabled: bool = True
@@ -428,6 +466,12 @@ class Settings(BaseSettings):
         p = Path(self.session_dir)
         p.mkdir(parents=True, exist_ok=True)
         return p
+
+    @property
+    def mcp_servers_path(self) -> Path:
+        if self.mcp_servers_file:
+            return Path(self.mcp_servers_file).expanduser()
+        return SENSEI_HOME / "mcp-servers.json"
 
     @property
     def savings_db_path(self) -> Path:

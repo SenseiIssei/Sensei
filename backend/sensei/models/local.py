@@ -72,7 +72,7 @@ class LocalModelProvider(ModelProvider):
         if not self.model_path or not os.path.exists(self.model_path):
             raise FileNotFoundError(
                 f"Local model not found at {self.model_path}. "
-                "Set SENSEI_LOCAL_MODEL_PATH to your GLM-5.2 GGUF/model path."
+                "Set SENSEI_LOCAL_MODEL_PATH to a GGUF or model directory."
             )
 
         if self.backend == "vllm":
@@ -218,12 +218,12 @@ class LocalModelProvider(ModelProvider):
         model_name = os.path.basename(self.model_path) if self.model_path else "unknown"
         return ModelInfo(
             id=f"local:{model_name}",
-            name=f"GLM-5.2 Local ({self.backend})",
+            name=f"Local model ({self.backend})",
             provider="local",
             backend=self.backend,
             context_window=self.context_size,
             status=ModelStatus.available if available else ModelStatus.unavailable,
-            description=f"Local GLM-5.2 via {self.backend}",
+            description=f"Local model via {self.backend}",
             quantization="GGUF" if self.backend == "llama.cpp" else None,
         )
 

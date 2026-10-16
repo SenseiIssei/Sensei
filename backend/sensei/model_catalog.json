@@ -8,95 +8,89 @@
     "quantization Ollama pulls for that tag. Treat it as a sizing hint, not a",
     "guarantee: quantization choices move these numbers considerably.",
     "",
-    "Verify a tag exists before relying on it: `ollama show <tag>`."
+    "Verify a tag exists before relying on it: `ollama show <tag>`.",
+    "",
+    "Refreshed 2026-10-16 against ollama.com/library."
   ],
   "models": [
     {
-      "id": "qwen2.5:0.5b",
-      "name": "Qwen2.5 0.5B",
-      "size_mb": 400,
-      "params": "0.5B",
+      "id": "qwen3.5:0.8b",
+      "name": "Qwen3.5 0.8B",
+      "size_mb": 1000,
+      "params": "0.8B",
       "good_for": "Smoke-testing the pipeline on any machine, including a Pi.",
       "quality": "basic"
     },
     {
-      "id": "llama3.2:1b",
-      "name": "Llama 3.2 1B",
-      "size_mb": 1300,
-      "params": "1B",
+      "id": "qwen3.5:4b",
+      "name": "Qwen3.5 4B",
+      "size_mb": 3300,
+      "params": "4B",
       "good_for": "Fast replies on a laptop with no dedicated GPU.",
-      "quality": "basic"
-    },
-    {
-      "id": "llama3.2:3b",
-      "name": "Llama 3.2 3B",
-      "size_mb": 2000,
-      "params": "3B",
-      "good_for": "General chat on modest hardware. A sensible floor.",
       "quality": "decent"
     },
     {
-      "id": "phi4",
-      "name": "Phi-4",
-      "size_mb": 9100,
-      "params": "14B",
-      "good_for": "Reasoning and maths well above its size class.",
+      "id": "gemma4:e4b",
+      "name": "Gemma 4 E4B",
+      "size_mb": 6600,
+      "params": "4B effective",
+      "good_for": "General chat and images on modest hardware. A sensible floor.",
       "quality": "good"
     },
     {
-      "id": "qwen2.5-coder:7b",
-      "name": "Qwen2.5 Coder 7B",
-      "size_mb": 4700,
-      "params": "7B",
-      "good_for": "Code completion and review. Pairs well with the gateway.",
+      "id": "ornith:9b",
+      "name": "Ornith 9B",
+      "size_mb": 5600,
+      "params": "9B",
+      "good_for": "Agentic coding on an 8 GB GPU. Pairs well with the gateway.",
       "quality": "good"
     },
     {
-      "id": "qwen2.5-coder:32b",
-      "name": "Qwen2.5 Coder 32B",
-      "size_mb": 20000,
-      "params": "32B",
-      "good_for": "The strongest local coding model most desktops can hold.",
-      "quality": "excellent"
+      "id": "qwen3.5:9b",
+      "name": "Qwen3.5 9B",
+      "size_mb": 7600,
+      "params": "9B",
+      "good_for": "The default chat model: strong for its size, 256K context.",
+      "quality": "good"
     },
     {
-      "id": "mistral-small",
-      "name": "Mistral Small",
+      "id": "gpt-oss:20b",
+      "name": "gpt-oss 20B",
       "size_mb": 14000,
-      "params": "22B",
-      "good_for": "Balanced general use with a long context.",
-      "quality": "good"
-    },
-    {
-      "id": "deepseek-r1:14b",
-      "name": "DeepSeek R1 14B",
-      "size_mb": 9000,
-      "params": "14B",
-      "good_for": "Step-by-step reasoning you can watch.",
-      "quality": "good"
-    },
-    {
-      "id": "deepseek-r1:70b",
-      "name": "DeepSeek R1 70B",
-      "size_mb": 43000,
-      "params": "70B",
-      "good_for": "Serious reasoning, if you have the VRAM for it.",
+      "params": "20B",
+      "good_for": "Tool use and reasoning; OpenAI's open-weight model.",
       "quality": "excellent"
     },
     {
-      "id": "llama3.3:70b",
-      "name": "Llama 3.3 70B",
-      "size_mb": 43000,
-      "params": "70B",
-      "good_for": "Broad general capability at the top of consumer hardware.",
+      "id": "qwen3.8:27b",
+      "name": "Qwen3.8 27B",
+      "size_mb": 18000,
+      "params": "27B",
+      "good_for": "The strongest local coding model a 24 GB GPU can hold.",
       "quality": "excellent"
     },
     {
-      "id": "glm-5.2",
-      "name": "GLM-5.2",
+      "id": "qwen3.6:35b",
+      "name": "Qwen3.6 35B (MoE)",
+      "size_mb": 23000,
+      "params": "35B MoE",
+      "good_for": "Fast for its size: only a few billion parameters are active per token.",
+      "quality": "excellent"
+    },
+    {
+      "id": "gpt-oss:120b",
+      "name": "gpt-oss 120B",
+      "size_mb": 65000,
+      "params": "120B MoE",
+      "good_for": "Workstation-class reasoning. Needs 80 GB of memory or more.",
+      "quality": "excellent"
+    },
+    {
+      "id": "glm-5.3",
+      "name": "GLM-5.3",
       "size_mb": 400000,
       "params": "744B MoE",
-      "good_for": "The model Sensei is designed around. Needs a server, not a desktop — most people should reach it through an API provider instead.",
+      "good_for": "Frontier open weights. Needs a server, not a desktop — most people should reach it through an API provider instead.",
       "quality": "excellent"
     }
   ]
