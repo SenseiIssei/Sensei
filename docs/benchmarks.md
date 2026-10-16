@@ -12,7 +12,7 @@ From `backend/`, with Sensei installed (`pip install -e .`):
 
 ```bash
 python -m benchmarks.headroom_env          # once: Headroom in ~/.cache/sensei-bench, pinned
-python -m benchmarks.refresh --sessions    # measure, redraw the SVGs, rewrite the README table
+python -m benchmarks.refresh --sessions    # measure (corpus, your sessions, gateway replay), redraw, rewrite the table
 ```
 
 That's the whole procedure. Leave out `--sessions` to skip replaying your own
@@ -115,6 +115,40 @@ a fixed list: no text, no command lines, no paths, no project names. Sensei's ow
 warnings are silenced during a replay because they quote the payload they fire on.
 The committed `results/session_replay.json` is such a file, from the maintainer's
 machine. Re-running `refresh --sessions` replaces it with yours.
+
+## Gateway replay
+
+`session_replay` measures each tool result on its own. A real agent is billed per
+*request*: the whole history is resent every turn, the provider serves the
+unchanged prefix from its prompt cache, and anything that changes earlier bytes
+is billed again as a cache write. `python -m benchmarks.gateway_replay` (written
+with the cache-aware gateway, and run by `refresh --sessions`) measures that bill.
+
+How it works:
+
+- Every assistant turn in a Claude Code transcript becomes one Messages request,
+  with Claude Code's cache breakpoints.
+- Each request is sent through the gateway's real HTTP route, so the live zone,
+  dedup, tool compaction and markers are all in play.
+- Upstream is a stub that emulates Anthropic's prompt-cache accounting: prefix
+  hashes at breakpoints, a 20-block lookback, a 5-minute TTL and a minimum prefix.
+- The same requests are billed three ways: unmodified (`raw`), through 0.2's
+  stateless compression, and through this gateway.
+
+Effective cost is uncached input × 1 plus cache writes × 1.25 plus cache reads ×
+0.1, in units of the input price. The README reports the gateway's change against
+`raw`, together with the cache-hit rate. The sessions are an even spread across
+sizes of the transcripts over 200 kB.
+
+What it leaves out:
+
+- Output tokens. A stub cannot know how the model would have answered.
+- The real system prompt and tool list, which aren't in transcripts. A fixed-size
+  synthetic prefix stands in for them.
+- System-reminder attachments and subagent side-chains.
+
+Nothing from the transcripts is written. `results/gateway_replay.json` holds the
+counts and the bills in token units.
 
 ## Cost model
 

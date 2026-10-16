@@ -324,6 +324,7 @@ def evaluate(router: ContentRouter | None = None) -> dict:
 def evaluate_agent(router: ContentRouter | None = None, seed: int | None = None) -> dict:
     """Fact retention and byte-exactness on the seeded agent corpus."""
     from benchmarks.corpus import DEFAULT_SEED, build_corpus, corpus_digest
+    from benchmarks.harness import missing_facts
 
     router = router or ContentRouter(enable_caching=False)
     seed = DEFAULT_SEED if seed is None else seed
@@ -332,8 +333,8 @@ def evaluate_agent(router: ContentRouter | None = None, seed: int | None = None)
     for s in samples:
         # As the gateway treats a tool result: code and file views stay exact.
         out = router.compress(s.text, edit_target=True)
-        haystack = _normalise(out.compressed)
-        missing = [f for f in s.facts if _normalise(f) not in haystack]
+        # Grouped grep/listing output is expanded with its exact inverse first.
+        missing = missing_facts(s.facts, out.compressed)
         cases.append(
             {
                 "name": s.name,
@@ -399,7 +400,9 @@ def evaluate_with_model(
     router = ContentRouter(enable_caching=False)
     items: list[tuple[str, str, str, str, bool]] = []  # name, text, q, a, edit_target
     if corpus in ("micro", "both"):
-        items += [(c.name, c.content, c.question, c.answer, False) for c in CORPUS if c.question]
+        items += [
+            (c.name, c.content, c.question, c.answer, c.edit_target) for c in CORPUS if c.question
+        ]
     if corpus in ("agent", "both"):
         from benchmarks.corpus import build_corpus
 

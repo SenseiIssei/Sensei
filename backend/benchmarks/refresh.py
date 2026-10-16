@@ -35,6 +35,28 @@ from benchmarks.harness import RESULTS, default_headroom_python, read_json, writ
 ROOT = Path(__file__).resolve().parents[2]
 GENERATE = ROOT / "docs" / "assets" / "generate.py"
 SESSIONS = RESULTS / "session_replay.json"
+GATEWAY = RESULTS / "gateway_replay.json"
+
+
+def gateway_replay(max_sessions: int = 16, max_turns: int = 160) -> dict:
+    """The live gateway end to end against a prompt-cache emulator.
+
+    Same session choice as ``python -m benchmarks.gateway_replay``: the
+    transcripts of at least 200 kB, an even spread across sizes. Only the
+    aggregate it returns is kept.
+    """
+    import glob
+    import os
+
+    from benchmarks import gateway_replay as gr
+
+    pattern = os.path.expanduser("~/.claude/projects/*/*.jsonl")
+    paths = [p for p in glob.glob(pattern) if os.path.getsize(p) >= 200_000]
+    paths.sort(key=lambda p: (-os.path.getsize(p), p))
+    if len(paths) > max_sessions:
+        step = len(paths) / max_sessions
+        paths = [paths[int(i * step)] for i in range(max_sessions)]
+    return gr.run(paths, max_turns, 6000, 300.0)
 
 
 def _generator():
@@ -59,7 +81,8 @@ def rendered() -> dict[Path, str]:
             theme, data, gen.HEADROOM_SCENARIOS, gen.HEADROOM_PUBLISHED
         )
     text = (ROOT / "README.md").read_text(encoding="utf-8")
-    out[ROOT / "README.md"] = readme.update(text, readme.render(data["agent"], data["sessions"]))
+    block = readme.render(data["agent"], data["sessions"], data.get("gateway"))
+    out[ROOT / "README.md"] = readme.update(text, block)
     return out
 
 
@@ -88,7 +111,9 @@ def main() -> int:
         "--no-headroom", action="store_true", help="do not run Headroom even if available"
     )
     parser.add_argument(
-        "--sessions", action="store_true", help="also replay your own sessions (opt-in)"
+        "--sessions",
+        action="store_true",
+        help="also replay your own sessions, per tool result and through the gateway (opt-in)",
     )
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument(
@@ -139,6 +164,8 @@ def main() -> int:
             )
             session_replay.print_report(summary)
             write_json(SESSIONS, session_replay.shareable(summary))
+            print("gateway replay with prompt-cache emulation …")
+            write_json(GATEWAY, gateway_replay())
 
     render()
     return 0

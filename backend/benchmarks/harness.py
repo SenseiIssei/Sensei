@@ -56,9 +56,30 @@ def normalise(text: str) -> str:
     return re.sub(r"\s+", " ", text)
 
 
+def _views(compressed: str) -> list[str]:
+    """The text as a reader sees it, plus grouped output expanded back.
+
+    Lossless grouping prints ``path:line:text`` hits rg ``--heading`` style —
+    the path once, then ``32:text`` under it — and path lists as a directory
+    heading with names under it. Nothing is lost, but the literal
+    ``path:line`` string no longer appears. Expanding with the compressors'
+    own exact inverses (which they verify on every call) lets the fact check
+    see what a reader sees, without accepting anything that was dropped.
+    """
+    views = [compressed]
+    try:
+        from sensei.compression.listing import ListingCompressor
+        from sensei.compression.search import SearchCompressor
+    except ImportError:  # an older Sensei without grouping
+        return views
+    views.append(SearchCompressor.ungroup(compressed))
+    views.append("\n".join(ListingCompressor._ungroup(compressed.split("\n"))))
+    return views
+
+
 def missing_facts(facts: Sequence[str], compressed: str) -> list[str]:
-    hay = normalise(compressed)
-    return [f for f in facts if normalise(f) not in hay]
+    hays = [normalise(v) for v in _views(compressed)]
+    return [f for f in facts if not any(normalise(f) in h for h in hays)]
 
 
 # ─── Compressors ─────────────────────────────────────────────────────────────

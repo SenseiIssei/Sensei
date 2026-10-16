@@ -234,7 +234,9 @@ def load_results() -> dict:
     agent = json.loads((RESULTS / "agent_corpus.json").read_text(encoding="utf-8"))
     path = RESULTS / "session_replay.json"
     sessions = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
-    return {"agent": agent, "sessions": sessions}
+    path = RESULTS / "gateway_replay.json"
+    gateway = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+    return {"agent": agent, "sessions": sessions, "gateway": gateway}
 
 
 def headline_tokens(data: dict) -> tuple[int, int]:
@@ -360,6 +362,12 @@ def benchmark_svg(t: dict[str, str], data: dict, kinds: dict[str, str]) -> str:
                 f'<text x="{px}" y="318" class="s">Headroom on the same data: {_fmt_pct(tot["headroom"]["saved_pct"])} · {tot["headroom"]["bill_saved_pct"]:.2f}%</text>'
             )
         y2 = 380
+        gw = (data.get("gateway") or {}).get("arms", {}).get("sensei")
+        if gw and gw.get("cost_vs_raw") is not None:
+            right.append(
+                f'<text x="{px}" y="340" class="s">Gateway end to end: {gw["cost_vs_raw"] * 100:.2f}% of the input bill</text>'
+            )
+            y2 = 400
     else:
         y2 = 160
     right += [
