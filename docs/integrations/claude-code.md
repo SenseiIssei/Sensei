@@ -23,6 +23,9 @@ By default, `sensei connect` sets up two things for Claude Code:
 }
 ```
 
+If `CLAUDE_CONFIG_DIR` is set, both files live in that directory instead:
+`$CLAUDE_CONFIG_DIR/settings.json` and `$CLAUDE_CONFIG_DIR/.claude.json`.
+
 ## Why a hook and not `ANTHROPIC_BASE_URL`
 
 - Claude Code (2.1.196 and later) turns **Remote Control** off while

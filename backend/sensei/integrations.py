@@ -77,7 +77,6 @@ BLOCK_END = "# <<< sensei <<<"
 # recognising Sensei's own hook entries, so a port change still finds them.
 CLAUDE_HOOK_PATH = "/hooks/claude/post-tool-use"
 COPILOT_HOOK_PATH = "/hooks/copilot/post-tool-use"
-GEMINI_HOOK_PATH = "/hooks/gemini/after-tool"
 GENERIC_HOOK_PATH = "/hooks/compress"
 
 # The tools whose output the Claude Code hook may compress. Read, Edit, Write
@@ -159,12 +158,19 @@ def endpoints(host: str | None = None, port: int | None = None) -> Endpoints:
     #                  thing it can do, and PyInstaller's sys.executable points
     #                  at the bundle, so the module form produces
     #                  `sensei.exe -m sensei.cli mcp`, which fails at startup
-    #   on PATH        the console script, which is stable across venv changes
+    #   own script     the console script installed next to this interpreter,
+    #                  by absolute path
     #   otherwise      this interpreter plus the module, which always resolves
+    #
+    # Never the bare name `sensei`. Whatever answers to it first on PATH is
+    # what every editor will spawn, and on the machine this was tested on that
+    # was another program's `sensei.cmd` — Copilot CLI, opencode and Kilo all
+    # reported the server "exited before the handshake" until the entry named
+    # this installation's own file.
     if getattr(sys, "frozen", False):
         command, args = _console_binary(sys.executable), ("mcp",)
-    elif shutil.which("sensei"):
-        command, args = "sensei", ("mcp",)
+    elif (script := _own_script()) is not None:
+        command, args = str(script), ("mcp",)
     else:
         command, args = sys.executable, ("-m", "sensei.cli", "mcp")
     return Endpoints(
@@ -175,6 +181,17 @@ def endpoints(host: str | None = None, port: int | None = None) -> Endpoints:
         mcp_ready=mcp_available(),
         opt_in=_opt_ins(),
     )
+
+
+def _own_script() -> Path | None:
+    """The `sensei` console script that belongs to this interpreter, if any."""
+    import sysconfig
+
+    name = "sensei.exe" if sys.platform == "win32" else "sensei"
+    candidates = [Path(sys.executable).with_name(name)]
+    with contextlib.suppress(KeyError, OSError):
+        candidates.append(Path(sysconfig.get_path("scripts")) / name)
+    return next((c for c in candidates if c.is_file()), None)
 
 
 def mcp_available() -> bool:
@@ -552,6 +569,25 @@ def _drop_hook_groups(doc: dict[str, Any], event: str, marker: str, root: str = 
 _SELF_HEAL_MARKER = "hook claude-session-start"
 
 
+def _claude_dir() -> Path:
+    """Claude Code's config directory: $CLAUDE_CONFIG_DIR, else ~/.claude."""
+    configured = os.environ.get("CLAUDE_CONFIG_DIR")
+    return Path(configured).expanduser() if configured else Path.home() / ".claude"
+
+
+def _claude_state() -> Path:
+    """Where Claude Code keeps user-scope MCP servers.
+
+    `~/.claude.json` normally — but with CLAUDE_CONFIG_DIR set it is the
+    `.claude.json` *inside* that directory, and the one in the home directory
+    is never read (checked against Claude Code 2.1.299).
+    """
+    configured = os.environ.get("CLAUDE_CONFIG_DIR")
+    if configured:
+        return Path(configured).expanduser() / ".claude.json"
+    return Path.home() / ".claude.json"
+
+
 def _claude_post_tool_group(ep: Endpoints) -> dict[str, Any]:
     return {
         "matcher": CLAUDE_HOOK_MATCHER,
@@ -667,56 +703,7 @@ def _vscode_claude_env_revert(doc: dict[str, Any]) -> bool:
     return True
 
 
-# ── VS Code + GitHub Copilot ────────────────────────────────────────────────
-
-
-def _copilot_models_apply(doc: list[Any], ep: Endpoints) -> bool:
-    """A "Sensei" bring-your-own-key provider group in chatLanguageModels.json.
-
-    Opt-in: it routes only the models the user picks from that group, and the
-    group needs the user's real provider key, which Sensei forwards upstream.
-    """
-    rest = [g for g in doc if not (isinstance(g, dict) and g.get("name") == "Sensei")]
-    if not ep.wants("vscode-copilot", "route"):
-        if len(rest) == len(doc):
-            return False
-        doc[:] = rest
-        return True
-    group = {
-        "name": "Sensei",
-        "vendor": "customendpoint",
-        "apiType": "messages",
-        # VS Code requires a non-empty key. This placeholder makes the group
-        # load; replace it with your Anthropic key in the Language Models view.
-        "apiKey": "replace-with-your-anthropic-key",
-        "models": [
-            {
-                "id": "claude-sonnet-4-6",
-                "name": "Sensei · Claude Sonnet",
-                "url": f"{ep.openai}/messages",
-                "toolCalling": True,
-                "vision": True,
-                "maxInputTokens": 200000,
-                "maxOutputTokens": 32000,
-            }
-        ],
-    }
-    existing = [g for g in doc if isinstance(g, dict) and g.get("name") == "Sensei"]
-    if existing == [group]:
-        return False
-    doc[:] = [*rest, group]
-    return True
-
-
-def _copilot_models_revert(doc: list[Any]) -> bool:
-    rest = [g for g in doc if not (isinstance(g, dict) and g.get("name") == "Sensei")]
-    if len(rest) == len(doc):
-        return False
-    doc[:] = rest
-    return True
-
-
-# ── Copilot CLI / Gemini hooks ──────────────────────────────────────────────
+# ── Copilot CLI hook ────────────────────────────────────────────────────────
 
 
 def _curl_hook(ep: Endpoints, path: str, exe: str | None = None) -> str:
@@ -724,14 +711,20 @@ def _curl_hook(ep: Endpoints, path: str, exe: str | None = None) -> str:
 
     curl ships with Windows 10+, macOS and every mainstream Linux, starts in
     milliseconds, and when Sensei is not running exits non-zero with nothing on
-    stdout — which both Copilot CLI and Gemini CLI treat as "no change".
+    stdout — which Copilot CLI treats as a failed, non-blocking hook.
     `curl.exe` by name, because in Windows PowerShell `curl` is an alias for
     Invoke-WebRequest.
+
+    The body is read with `-T -`, not `--data-binary @-`: Copilot CLI runs the
+    `powershell` variant on Windows, where `@-` is a parse error ("Unbekanntes
+    Token") — found by running the real CLI. `-T -` means the same in every
+    shell; `-X POST` keeps the method and the empty `Expect:` header stops curl
+    from waiting for a 100-continue on large outputs.
     """
     exe = exe or ("curl.exe" if sys.platform == "win32" else "curl")
     return (
-        f'{exe} -s -m 10 -X POST -H "Content-Type: application/json" '
-        f"--data-binary @- {ep.hook_url(path)}"
+        f'{exe} -s -m 10 -X POST -H "Content-Type: application/json" -H "Expect:" '
+        f"-T - {ep.hook_url(path)}"
     )
 
 
@@ -761,71 +754,12 @@ def _copilot_hooks_apply(doc: dict[str, Any], ep: Endpoints) -> bool:
     return True
 
 
-def _cursor_hooks_apply(doc: dict[str, Any], ep: Endpoints) -> bool:
-    """Cursor's postToolUse may replace the output of MCP tools (only those)."""
-    if doc.get("version") not in (None, 1):
-        return False
-    hooks = doc.get("hooks", {})
-    if not isinstance(hooks, dict):
-        return False
-    entries = hooks.get("postToolUse", [])
-    if not isinstance(entries, list):
-        return False
-    ours = {"command": _curl_hook(ep, "/hooks/cursor/post-tool-use"), "timeout": 15}
-    rest = [e for e in entries if not _is_sensei_hook(e, "/hooks/cursor/post-tool-use")]
-    desired = [*rest, ours]
-    if entries == desired and doc.get("version") == 1:
-        return False
-    doc["version"] = 1
-    doc.setdefault("hooks", {})["postToolUse"] = desired
-    return True
-
-
-def _cursor_hooks_revert(doc: dict[str, Any]) -> bool:
-    entries = _deep_get(doc, ("hooks", "postToolUse"))
-    if not isinstance(entries, list):
-        return False
-    rest = [e for e in entries if not _is_sensei_hook(e, "/hooks/cursor/post-tool-use")]
-    if rest == entries:
-        return False
-    if rest:
-        doc["hooks"]["postToolUse"] = rest
-    else:
-        del doc["hooks"]["postToolUse"]
-        if not doc["hooks"]:
-            del doc["hooks"]
-            if set(doc) == {"version"}:
-                doc.clear()
-    return True
-
-
 def _owned_revert(doc: dict[str, Any]) -> bool:
     """A file Sensei created whole: emptying it lets undo delete it."""
     if not doc:
         return False
     doc.clear()
     return True
-
-
-def _gemini_apply(doc: dict[str, Any], ep: Endpoints) -> bool:
-    changed = _mcp_apply(("mcpServers",))(doc, ep)
-    group = {
-        "matcher": "run_shell_command|grep|search_file_content|glob|web_fetch|google_web_search|mcp_.*",
-        "hooks": [
-            {
-                "type": "command",
-                "name": "sensei-compress",
-                "command": _curl_hook(ep, GEMINI_HOOK_PATH),
-                "timeout": 15000,
-            }
-        ],
-    }
-    return _set_hook_group(doc, "AfterTool", group, GEMINI_HOOK_PATH) or changed
-
-
-def _gemini_revert(doc: dict[str, Any]) -> bool:
-    changed = _mcp_revert(("mcpServers",))(doc)
-    return _drop_hook_groups(doc, "AfterTool", GEMINI_HOOK_PATH) or changed
 
 
 # ── opencode / Kilo plugin ──────────────────────────────────────────────────
@@ -1330,7 +1264,7 @@ REGISTRY: tuple[Integration, ...] = (
         id="claude-code",
         name="Claude Code",
         binaries=("claude",),
-        path=lambda: Path.home() / ".claude" / "settings.json",
+        path=lambda: _claude_dir() / "settings.json",
         project_path=lambda root: root / ".claude" / "settings.local.json",
         apply=_claude_code_apply,
         revert=_claude_code_revert,
@@ -1338,7 +1272,7 @@ REGISTRY: tuple[Integration, ...] = (
             Part(
                 key="mcp",
                 # User-scope MCP servers live here, not in settings.json.
-                path=lambda: Path.home() / ".claude.json",
+                path=_claude_state,
                 project_path=lambda root: root / ".mcp.json",
                 apply=_mcp_apply(("mcpServers",), _mcp_entry_typed("stdio")),
                 revert=_mcp_revert(("mcpServers",)),
@@ -1391,21 +1325,13 @@ REGISTRY: tuple[Integration, ...] = (
         project_path=lambda root: root / ".vscode" / "mcp.json",
         apply=_mcp_apply(("servers",), _mcp_entry_typed("stdio")),
         revert=_mcp_revert(("servers",)),
-        parts=(
-            Part(
-                key="models",
-                fmt="json-list",
-                path=lambda: _vscode_user("Code") / "chatLanguageModels.json",
-                apply=_copilot_models_apply,
-                revert=_copilot_models_revert,
-                only_if_present=True,
-                counts=False,
-            ),
-        ),
-        options=("route",),
-        why="Copilot-hosted models go to GitHub; only bring-your-own-key models can be routed",
-        note="MCP server for Copilot agent mode. `--route` adds a Sensei bring-your-own-key "
-        "model group (needs your Anthropic key in VS Code's Language Models view).",
+        # No routing part. VS Code 1.142 never uses a literal `apiKey` from
+        # chatLanguageModels.json: secret fields are always read as an
+        # `${input:…}` reference into SecretStorage, which no other program can
+        # write. A group Sensei wrote there would load with no key at all.
+        why="Copilot-hosted models go to GitHub; a bring-your-own-key model can be pointed "
+        "at Sensei by hand (Language Models view → Custom Endpoint), not from a file",
+        note="MCP server for Copilot agent mode.",
         verified=False,
     ),
     Integration(
@@ -1430,9 +1356,10 @@ REGISTRY: tuple[Integration, ...] = (
             ),
         ),
         support="hook+mcp",
-        note="MCP server plus a postToolUse hook that compresses tool output. Model "
-        "routing (bring your own key) is per launch: `sensei wrap copilot`.",
-        verified=False,
+        note="MCP server plus a postToolUse hook that compresses tool output. Copilot "
+        "itself already swaps outputs over ~25 KB for a short preview before hooks run, "
+        "so the hook pays off on the mid-sized ones. Model routing (bring your own key) "
+        "is per launch: `sensei wrap copilot`.",
     ),
     Integration(
         id="windsurf",
@@ -1534,7 +1461,6 @@ REGISTRY: tuple[Integration, ...] = (
         support="hook+mcp",
         note="MCP server plus a tool.execute.after plugin that compresses tool output. "
         "A kilo.jsonc with comments is a manual step.",
-        verified=False,
     ),
     Integration(
         id="opencode",
@@ -1555,7 +1481,6 @@ REGISTRY: tuple[Integration, ...] = (
         ),
         support="hook+mcp",
         note="MCP server plus a tool.execute.after plugin that compresses tool output.",
-        verified=False,
     ),
     Integration(
         id="zed",
@@ -1595,12 +1520,14 @@ REGISTRY: tuple[Integration, ...] = (
         name="Gemini CLI",
         binaries=("gemini",),
         path=lambda: Path.home() / ".gemini" / "settings.json",
-        apply=_gemini_apply,
-        revert=_gemini_revert,
-        support="hook+mcp",
-        why="Gemini speaks its own wire format, and Google sign-in cannot be redirected",
-        note="MCP server plus an AfterTool hook that compresses tool output.",
-        verified=False,
+        apply=_mcp_apply(("mcpServers",)),
+        revert=_mcp_revert(("mcpServers",)),
+        # No AfterTool hook. Gemini CLI 0.64 can only block a result ("Tool
+        # result blocked: …", flagged execution_failed) or append to it; a
+        # compressed output delivered as a failure makes the model retry.
+        why="Gemini speaks its own wire format, Google sign-in cannot be redirected, and "
+        "its hooks can block a tool result but not replace it",
+        note="MCP server.",
     ),
     _mcp_tool(
         "antigravity",

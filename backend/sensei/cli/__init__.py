@@ -127,8 +127,8 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_const",
         const=True,
         default=None,
-        help="opt in to base-URL routing for the --only tool (claude-code, codex, "
-        "vscode-copilot); Claude Code then loses Remote Control",
+        help="opt in to base-URL routing for the --only tool (claude-code, codex); "
+        "Claude Code then loses Remote Control",
     )
     p_tools.add_argument(
         "--no-route",

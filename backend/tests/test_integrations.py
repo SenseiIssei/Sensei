@@ -53,7 +53,7 @@ def sandbox(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         ("XDG_CONFIG_HOME", ".config"),
     ):
         monkeypatch.setenv(var, str(fake_home / sub))
-    for var in ("CODEX_HOME", "COPILOT_HOME", "CLINE_DIR"):
+    for var in ("CODEX_HOME", "COPILOT_HOME", "CLINE_DIR", "CLAUDE_CONFIG_DIR"):
         monkeypatch.delenv(var, raising=False)
     return tmp_path
 
@@ -329,7 +329,7 @@ def test_a_source_install_without_the_script_uses_the_module(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delattr(integrations.sys, "frozen", raising=False)
-    monkeypatch.setattr(integrations.shutil, "which", lambda _: None)
+    monkeypatch.setattr(integrations, "_own_script", lambda: None)
 
     assert integrations.endpoints().mcp_args == ("-m", "sensei.cli", "mcp")
 
@@ -350,13 +350,30 @@ def test_the_module_form_it_writes_can_actually_be_run() -> None:
     assert importlib.util.find_spec("sensei.cli.__main__") is not None
 
 
-def test_the_console_script_is_preferred_when_present(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_own_console_script_is_preferred_by_absolute_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.delattr(integrations.sys, "frozen", raising=False)
-    monkeypatch.setattr(integrations.shutil, "which", lambda _: "/usr/local/bin/sensei")
+    script = tmp_path / "venv" / "Scripts" / "sensei.exe"
+    monkeypatch.setattr(integrations, "_own_script", lambda: script)
 
     ep = integrations.endpoints()
-    assert ep.mcp_command == "sensei"
+    assert ep.mcp_command == str(script)
     assert ep.mcp_args == ("mcp",)
+
+
+def test_a_foreign_sensei_on_path_is_never_used(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Found on a real machine: another tool's `sensei.cmd` came first on PATH,
+    and every MCP client that was told to run `sensei mcp` ran that instead."""
+    monkeypatch.delattr(integrations.sys, "frozen", raising=False)
+    monkeypatch.setattr(integrations.shutil, "which", lambda _: r"F:\AI\Other\sensei.cmd")
+    monkeypatch.setattr(integrations.sys, "executable", str(tmp_path / "python.exe"))
+
+    ep = integrations.endpoints()
+    assert ep.mcp_command != "sensei"
+    assert "Other" not in ep.mcp_command
 
 
 class TestToolsThatMovedTheirConfig:

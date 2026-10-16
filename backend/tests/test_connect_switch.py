@@ -33,7 +33,7 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         ("XDG_CONFIG_HOME", ".config"),
     ):
         monkeypatch.setenv(var, str(fake / sub))
-    for var in ("CODEX_HOME", "COPILOT_HOME", "CLINE_DIR"):
+    for var in ("CODEX_HOME", "COPILOT_HOME", "CLINE_DIR", "CLAUDE_CONFIG_DIR"):
         monkeypatch.delenv(var, raising=False)
     return fake
 

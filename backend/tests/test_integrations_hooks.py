@@ -48,7 +48,7 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         ("XDG_CONFIG_HOME", ".config"),
     ):
         monkeypatch.setenv(var, str(fake / sub))
-    for var in ("CODEX_HOME", "COPILOT_HOME", "CLINE_DIR"):
+    for var in ("CODEX_HOME", "COPILOT_HOME", "CLINE_DIR", "CLAUDE_CONFIG_DIR"):
         monkeypatch.delenv(var, raising=False)
     return fake
 
@@ -157,6 +157,21 @@ class TestClaudeCodeHook:
         assert (repo / ".claude" / "settings.local.json").is_file()
         assert (repo / ".mcp.json").is_file()
         assert not (repo / ".claude" / "settings.json").exists(), "the committed file is untouched"
+
+    def test_claude_config_dir_moves_both_files(
+        self, home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """With CLAUDE_CONFIG_DIR set, Claude Code reads settings.json *and*
+        .claude.json from that directory and ignores ~/.claude.json."""
+        custom = tmp_path / "claude-cfg"
+        custom.mkdir()
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(custom))
+
+        integrations.apply_all(only={"claude-code"})
+
+        assert (custom / "settings.json").is_file()
+        assert "sensei" in json.loads((custom / ".claude.json").read_text("utf-8"))["mcpServers"]
+        assert not (home / ".claude.json").exists()
 
     def test_undo_after_claude_rewrote_its_state_file_removes_only_sensei(self, home: Path) -> None:
         """~/.claude.json is rewritten constantly, so its hash never matches on
@@ -335,40 +350,28 @@ def test_kilo_plugin_has_the_default_export_kilo_expects() -> None:
     assert "export default" not in integrations._opencode_plugin(EP)
 
 
-def test_gemini_hook_and_mcp_round_trip() -> None:
+def test_the_hook_command_parses_in_every_shell() -> None:
+    """`--data-binary @-` is a parse error in PowerShell, which is the shell
+    Copilot CLI runs its `powershell` variant in — found with the real CLI."""
+    for exe in ("curl", "curl.exe"):
+        command = integrations._curl_hook(EP, integrations.COPILOT_HOOK_PATH, exe)
+        assert "@" not in command
+        assert " -T - " in command
+
+
+def test_gemini_gets_mcp_only() -> None:
+    gemini = _tool("gemini-cli")
     doc: dict = {"theme": "dark"}
-    assert integrations._gemini_apply(doc, EP)
-    assert doc["mcpServers"]["sensei"]["command"] == "sensei"
-    (group,) = doc["hooks"]["AfterTool"]
-    assert group["hooks"][0]["timeout"] == 15000, "Gemini timeouts are milliseconds"
-    assert "read_file" not in group["matcher"]
-    assert integrations._gemini_revert(doc)
-    assert doc == {"theme": "dark"}
+    assert gemini.apply(doc, EP)
+    assert "hooks" not in doc
+    assert gemini.support == "mcp"
 
 
-def test_cursor_hooks_keep_the_users_entries() -> None:
-    doc = {"version": 1, "hooks": {"postToolUse": [{"command": "./audit.sh"}]}}
-    assert integrations._cursor_hooks_apply(doc, EP)
-    assert doc["hooks"]["postToolUse"][0] == {"command": "./audit.sh"}
-    assert integrations._cursor_hooks_apply(doc, EP) is False
-    assert integrations._cursor_hooks_revert(doc)
-    assert doc == {"version": 1, "hooks": {"postToolUse": [{"command": "./audit.sh"}]}}
-
-
-def test_vscode_copilot_byok_group_is_opt_in() -> None:
-    doc: list = [{"name": "Mine", "vendor": "openai"}]
-    assert integrations._copilot_models_apply(doc, EP) is False
-    routed = Endpoints(
-        anthropic=EP.anthropic,
-        openai=EP.openai,
-        mcp_command="sensei",
-        opt_in=frozenset({"vscode-copilot:route"}),
-    )
-    assert integrations._copilot_models_apply(doc, routed)
-    assert [g["name"] for g in doc] == ["Mine", "Sensei"]
-    assert doc[1]["models"][0]["url"] == "http://127.0.0.1:7000/v1/messages"
-    assert integrations._copilot_models_revert(doc)
-    assert doc == [{"name": "Mine", "vendor": "openai"}]
+def test_vscode_copilot_writes_no_model_group() -> None:
+    """A literal apiKey in chatLanguageModels.json is never used by VS Code."""
+    vscode = _tool("vscode-copilot")
+    assert [p.key for p in vscode.all_parts()] == ["main"]
+    assert "route" not in vscode.options
 
 
 # ── Paths that 0.2 got wrong ────────────────────────────────────────────────

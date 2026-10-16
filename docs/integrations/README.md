@@ -20,7 +20,7 @@ tool allows without breaking any of its features.
 
 | Way | What happens | Used for |
 |---|---|---|
-| **hook** | After each tool call, the tool sends the output (shell, grep, web fetch, MCP) to Sensei. Sensei returns a compressed version before the model sees it. File reads and edits are never touched. | Claude Code, Copilot CLI, Gemini CLI, opencode, Kilo, Cursor (MCP output only) |
+| **hook** | After each tool call, the tool sends the output (shell, grep, web fetch, MCP) to Sensei. Sensei returns a compressed version before the model sees it. File reads and edits are never touched. | Claude Code, Copilot CLI, opencode, Kilo |
 | **route** | The tool's model requests go through the gateway at `http://127.0.0.1:7000`, and the whole prompt is compressed. | Aider, Continue; opt-in for Claude Code, Codex and VS Code Copilot |
 | **mcp** | Sensei's MCP tools are registered: `sensei_compress`, `sensei_retrieve`, `sensei_stats`, plus the proxy for your other MCP servers. | Every tool with an MCP config file |
 
@@ -37,9 +37,9 @@ original whenever it needs it.
 | Claude Desktop | MCP | – | `claude_desktop_config.json` (and the Store/MSIX copy) | Chat traffic cannot be routed without leaving the claude.ai login |
 | [Codex](codex.md) (CLI, IDE, app) | MCP | `--route` | `~/.codex/config.toml` | Tables are edited by name, so the edit survives the Codex app rewriting the file |
 | Cursor | MCP | – | `~/.cursor/mcp.json` | Model calls are made from Cursor's servers |
-| VS Code + Copilot | MCP | `--route` (BYOK group) | `Code/User/mcp.json`, `chatLanguageModels.json` | Routing applies only to bring-your-own-key models |
-| GitHub Copilot CLI | hook + MCP | `sensei wrap copilot` | `~/.copilot/mcp-config.json`, `~/.copilot/hooks/sensei.json` | The hook uses `curl` |
-| Gemini CLI | hook + MCP | – | `~/.gemini/settings.json` | AfterTool hook; replaces the output via `decision: "deny"` + `reason` |
+| VS Code + Copilot | MCP | by hand: Language Models → Custom Endpoint, URL `http://127.0.0.1:7000/v1/messages` | `Code/User/mcp.json` | VS Code only reads model keys from its secret storage, so Sensei cannot write a working model group |
+| GitHub Copilot CLI | hook + MCP | `sensei wrap copilot` | `~/.copilot/mcp-config.json`, `~/.copilot/hooks/sensei.json` | The hook pipes the payload to Sensei with `curl -T -`. Copilot already replaces outputs over ~25 KB with a short preview before hooks run, so the hook pays off on mid-sized outputs |
+| Gemini CLI | MCP | – | `~/.gemini/settings.json` | Its AfterTool hook can block or append to a result, not replace it. A compressed output delivered as "Tool result blocked" makes the model retry, so there is no hook |
 | Antigravity CLI | MCP | – | `~/.gemini/config/mcp_config.json` | Its hooks cannot rewrite tool results |
 | Devin Desktop / Windsurf | MCP | – | `%APPDATA%\devin\mcp_config.json`, `~/.config/devin/` (macOS/Linux), legacy `~/.codeium/windsurf*` | |
 | Cline | MCP | – | `~/.cline/data/settings/`, plus the extension in every VS Code-family editor | |
@@ -59,6 +59,35 @@ reason:
   import Claude Desktop's MCP servers, and Sensei does wire those.
 - **ChatGPT**, **claude.ai connectors** and **Devin cloud** only reach MCP
   servers from the vendor's cloud. See [remote-mcp.md](../remote-mcp.md).
+
+## Verified end to end
+
+These were run for real on Windows 11 with a scripted model server in a
+temporary home directory. Each run checked what the model actually received,
+and was repeated with Sensei stopped:
+
+| Tool | Version | Compression hook | MCP tools reach the model | Sensei stopped |
+|---|---|---|---|---|
+| Claude Code | 2.1.299 | yes (`updatedToolOutput` accepted by the tool's schema check) | yes | original output, tool keeps working |
+| GitHub Copilot CLI | 1.0.98 | yes (`modifiedResult`) | yes | original output |
+| opencode | 1.19.3 | yes (plugin in `plugins/`) | yes | original output |
+| Kilo CLI | 7.8.12 | yes (plugin in `plugin/`, default export) | yes | – |
+| Gemini CLI | 0.64.0 | no — see above | yes | – |
+
+What those runs fixed:
+
+- **The hook command.** `--data-binary @-` is a PowerShell parse error, which
+  is the shell Copilot CLI uses on Windows. The hook now uses `-T -`.
+- **The MCP command.** MCP entries now name Sensei's own executable by
+  absolute path. A bare `sensei` ran whichever program answered to that name
+  first on PATH.
+- **The MCP SDK.** It is pinned below 2.3. mcp 2.3.0 refuses the handshake
+  Copilot CLI falls back to.
+- **`CLAUDE_CONFIG_DIR`.** It is honoured for both `settings.json` and
+  `.claude.json`.
+
+Rows marked best-effort in `sensei setup-tools --status` follow each tool's
+documented format but have not been run like this.
 
 ## Safety
 

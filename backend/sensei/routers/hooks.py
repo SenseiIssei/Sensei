@@ -12,9 +12,13 @@ Endpoints, one per hook dialect:
 
     POST /hooks/claude/post-tool-use   Claude Code PostToolUse (type "http")
     POST /hooks/copilot/post-tool-use  Copilot CLI postToolUse (via curl)
-    POST /hooks/gemini/after-tool      Gemini CLI AfterTool (via curl)
-    POST /hooks/cursor/post-tool-use   Cursor postToolUse, MCP tools only
     POST /hooks/compress               {tool, text} → {text}; opencode/Kilo plugin
+
+Each was run end to end against the real tool (Claude Code 2.1.299, Copilot
+CLI 1.0.98, opencode 1.19.3, Kilo CLI 7.8.12) with a scripted model, checking
+what the model received. Gemini CLI is absent on purpose: its AfterTool hook
+can block a result or append to it, not replace it, and a compressed output
+delivered as "Tool result blocked" makes the model retry the command.
 
 Three rules hold for all of them:
 
@@ -317,74 +321,6 @@ def _copilot(payload: dict[str, Any], _headers: Any) -> dict[str, Any]:
 @router.post("/copilot/post-tool-use")
 async def copilot_post_tool_use(request: Request) -> JSONResponse:
     return await _guarded(request, _copilot)
-
-
-# ── Gemini CLI ──────────────────────────────────────────────────────────────
-
-
-def _gemini(payload: dict[str, Any], _headers: Any) -> dict[str, Any]:
-    tool = str(payload.get("tool_name") or "")
-    response = payload.get("tool_response")
-    if _FILE_TOOLS.match(tool) or "sensei" in tool.lower() or not isinstance(response, dict):
-        return {}
-    if response.get("error"):
-        return {}
-    content = response.get("llmContent")
-    if isinstance(content, list):
-        if not all(isinstance(p, dict) and isinstance(p.get("text"), str) for p in content):
-            return {}  # images or other parts: not something to flatten
-        content = "".join(p["text"] for p in content)
-    if not isinstance(content, str):
-        return {}
-    s = shrink(content, edit_target=not tool.startswith("web"))
-    if s is None:
-        return {}
-    _record("Gemini CLI (hook)", [s])
-    # Gemini's documented way to replace what the model sees: the reason of a
-    # "deny" decision stands in for the tool result.
-    return {"decision": "deny", "reason": s.text}
-
-
-@router.post("/gemini/after-tool")
-async def gemini_after_tool(request: Request) -> JSONResponse:
-    return await _guarded(request, _gemini)
-
-
-# ── Cursor (MCP tools only) ─────────────────────────────────────────────────
-
-
-def _cursor(payload: dict[str, Any], _headers: Any) -> dict[str, Any]:
-    tool = str(payload.get("tool_name") or "")
-    # Cursor can only replace the output of MCP tools; anything else would be
-    # compressed, recorded as saved, and then ignored.
-    if "mcp" not in tool.lower() or "sensei" in tool.lower():
-        return {}
-    raw = payload.get("tool_output")
-    if not isinstance(raw, str):
-        return {}
-    done: list[Shrunk] = []
-
-    def squeeze(text: str) -> str:
-        s = shrink(text)
-        if s is None:
-            return text
-        done.append(s)
-        return s.text
-
-    try:
-        parsed: Any = json.loads(raw)
-    except json.JSONDecodeError:
-        parsed = raw
-    updated = _walk_strings(parsed, squeeze)
-    if not done:
-        return {}
-    _record("Cursor (hook)", done)
-    return {"updated_mcp_tool_output": updated}
-
-
-@router.post("/cursor/post-tool-use")
-async def cursor_post_tool_use(request: Request) -> JSONResponse:
-    return await _guarded(request, _cursor)
 
 
 # ── Generic: the opencode / Kilo plugin ─────────────────────────────────────

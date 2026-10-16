@@ -7,7 +7,6 @@ an output Claude Code would reject for not matching the tool's shape.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -167,35 +166,6 @@ def test_copilot_gets_a_modified_result(client: TestClient, recorded: list[dict[
     assert client.post("/hooks/copilot/post-tool-use", json=payload).json() == {}
 
 
-def test_gemini_replaces_through_the_deny_reason(
-    client: TestClient, recorded: list[dict[str, Any]]
-) -> None:
-    payload = {
-        "hook_event_name": "AfterTool",
-        "tool_name": "run_shell_command",
-        "tool_response": {"llmContent": LOG, "returnDisplay": "..."},
-    }
-    out = client.post("/hooks/gemini/after-tool", json=payload).json()
-    assert out["decision"] == "deny"
-    assert len(out["reason"]) < len(LOG)
-
-    payload["tool_response"] = {"llmContent": LOG, "error": "exit 1"}
-    assert client.post("/hooks/gemini/after-tool", json=payload).json() == {}
-
-
-def test_cursor_only_rewrites_mcp_tools(client: TestClient, recorded: list[dict[str, Any]]) -> None:
-    output = json.dumps({"content": [{"type": "text", "text": LOG}]})
-    out = client.post(
-        "/hooks/cursor/post-tool-use",
-        json={"tool_name": "MCP:github-logs", "tool_output": output},
-    ).json()
-    text = out["updated_mcp_tool_output"]["content"][0]["text"]
-    assert len(text) < len(LOG)
-
-    shell = {"tool_name": "Shell", "tool_output": output}
-    assert client.post("/hooks/cursor/post-tool-use", json=shell).json() == {}
-
-
 def test_generic_endpoint_for_plugins(client: TestClient, recorded: list[dict[str, Any]]) -> None:
     out = client.post(
         "/hooks/compress",
@@ -205,3 +175,10 @@ def test_generic_endpoint_for_plugins(client: TestClient, recorded: list[dict[st
     assert len(out["text"]) < len(LOG)
     assert recorded[0]["tool"] == "opencode (plugin)"
     assert client.post("/hooks/compress", json={"tool": "read", "text": LOG}).json() == {}
+
+
+def test_there_is_no_gemini_or_cursor_endpoint(client: TestClient) -> None:
+    """Both were removed after running the real tools: Gemini CLI can only
+    deliver a replacement as a failure, and Cursor could not be verified."""
+    assert client.post("/hooks/gemini/after-tool", json={}).status_code == 404
+    assert client.post("/hooks/cursor/post-tool-use", json={}).status_code == 404
