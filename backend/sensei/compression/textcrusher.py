@@ -57,6 +57,9 @@ _SALIENT = re.compile(r"\d|[/\\]\w|`|\w\.\w{1,5}\b|\b[A-Z]{2,}\b|[a-z][A-Z]|_\w"
 _STRUCT = re.compile(r"^\s*(?:#|[-*+] |\d+[.)] |```|\||>)")
 
 
+_MAX_POSTING = 64
+
+
 def _shingles(tokens: list[str], k: int = 3) -> set[tuple[str, ...]]:
     return {tuple(tokens[i : i + k]) for i in range(max(1, len(tokens) - k + 1))}
 
@@ -112,16 +115,30 @@ class TextCrusher:
 
         budget = int(sum(len(units[i][0]) for i in prose) * self.ratio)
         keep: set[int] = set()
-        kept_shingles: list[set[tuple[str, ...]]] = []
+        # Near-duplicate check through an index of kept shingles instead of a
+        # comparison with every kept sentence, which was quadratic (39 s on
+        # 1.4 MB). A posting list stops growing at _MAX_POSTING: a shingle that
+        # common says little, and a real near-duplicate shares rare ones too.
+        index: dict[tuple[str, ...], list[int]] = {}
+        sizes: list[int] = []
         used = 0
         for j in sorted(range(len(prose)), key=lambda j: -scores[j]):
             if used >= budget:
                 break
             sh = _shingles(toks[j])
-            if any(len(sh & o) / max(1, len(sh | o)) >= 0.85 for o in kept_shingles):
+            overlap: dict[int, int] = {}
+            for g in sh:
+                for k in index.get(g, ()):
+                    overlap[k] = overlap.get(k, 0) + 1
+            if any(c / max(1, len(sh) + sizes[k] - c) >= 0.85 for k, c in overlap.items()):
                 continue
+            kid = len(sizes)
+            sizes.append(len(sh))
+            for g in sh:
+                posting = index.setdefault(g, [])
+                if len(posting) < _MAX_POSTING:
+                    posting.append(kid)
             keep.add(prose[j])
-            kept_shingles.append(sh)
             used += len(units[prose[j]][0])
 
         out: list[str] = []

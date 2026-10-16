@@ -326,8 +326,8 @@ class TestSmartCrusher:
             data = json.loads(json.dumps(rows))
             out = sc.compress(json.dumps(data))
             if out.startswith("@csv"):
-                expect = [{k: v for k, v in r.items() if v not in ("", None, [], {})} for r in data]
-                assert decode_table(out) == expect, out
+                # Lossless means lossless: nulls, "" and [] come back too.
+                assert decode_table(out) == data, out
 
     def test_large_array_keeps_error_and_outlier_rows(self):
         rows = [

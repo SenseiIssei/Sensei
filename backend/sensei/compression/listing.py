@@ -48,13 +48,18 @@ def _split(path: str) -> tuple[str, str]:
 
 
 class ListingCompressor:
-    def compress(self, text: str, ctx: Context | None = None) -> str:
+    def compress(self, text: str, ctx: Context | None = None, *, edit_target: bool = False) -> str:
         ctx = ctx or Context()
         if any(_LS_LONG.match(ln) for ln in text.split("\n", 20)[:20]):
             return self._ls_long(text)
         lines = text.split("\n")
         if sum(1 for ln in lines if _TREE.match(ln)) >= len(lines) * 0.5:
             return self._cap_plain(lines, ctx) if len(lines) > LOSSY_MIN_LINES else text
+        # A plain list of paths read as a tool result may be a file
+        # (.gitignore, CODEOWNERS, a manifest): it stays byte-exact. `ls -l`
+        # and `tree` output above are never files anyone edits.
+        if edit_target:
+            return text
         grouped = self._group_paths(lines)
         out = grouped if grouped is not None and self._ungroup(grouped) == lines else lines
         if len(out) > LOSSY_MIN_LINES:

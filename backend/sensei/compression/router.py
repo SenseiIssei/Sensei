@@ -29,7 +29,7 @@ from sensei.compression.gitcomp import GitCompressor
 from sensei.compression.htmlcomp import HTMLCompressor
 from sensei.compression.listing import ListingCompressor
 from sensei.compression.logcomp import LogCompressor
-from sensei.compression.markers import Context, ccr_id_for
+from sensei.compression.markers import Context, ccr_id_for, has_marker
 from sensei.compression.search import SearchCompressor
 from sensei.compression.smartcrusher import SmartCrusher
 from sensei.compression.textcomp import TextCompressor
@@ -202,13 +202,62 @@ def _detect_code(text: str) -> bool:
     if text.strip().startswith("```"):
         return True
 
-    lines = text.split("\n", 20)[:20]
+    head = text.split("\n", 400)[:400]
+    if _looks_like_code(head[:20]):
+        return True
+    # A module that opens with a long docstring or licence header has its
+    # first statement past line 20; judge the twenty lines after the preamble.
+    rest = _skip_preamble(head)
+    if rest is not None and _looks_like_code(rest[:20]):
+        return True
+    return _is_makefile(head)
 
+
+def _looks_like_code(lines: list[str]) -> bool:
     if any(_STRONG_CODE_RE.search(line) for line in lines):
         return True
+    return sum(1 for line in lines if _WEAK_CODE_RE.search(line)) >= 2
 
-    matches = sum(1 for line in lines if _WEAK_CODE_RE.search(line))
-    return matches >= 2
+
+def _skip_preamble(lines: list[str]) -> list[str] | None:
+    """The lines after a leading docstring or comment block, or None."""
+    i = 0
+    while i < len(lines) and not lines[i].strip():
+        i += 1
+    if i >= len(lines):
+        return None
+    first = lines[i].strip()
+    for opener, closer in (('"""', '"""'), ("'''", "'''"), ("/*", "*/")):
+        if first.startswith(opener):
+            if closer in first[len(opener) :]:
+                return lines[i + 1 :]
+            for j in range(i + 1, len(lines)):
+                if closer in lines[j]:
+                    return lines[j + 1 :]
+            return None
+    if first.startswith(("#", "//", "--", ";")):
+        j = i
+        while j < len(lines) and (
+            not lines[j].strip() or lines[j].lstrip().startswith(("#", "//", "--", ";"))
+        ):
+            j += 1
+        return lines[j:] if j > i else None
+    return None
+
+
+_MAKE_TARGET = re.compile(r"^[\w./%$()-]+(?: [\w./%$()-]+)*:(?:[^=]|$)")
+
+
+def _is_makefile(lines: list[str]) -> bool:
+    """Make rules: `target: deps` lines followed by tab-indented recipes."""
+    if any(line.startswith(".PHONY") for line in lines):
+        return True
+    targets = sum(
+        1
+        for k, line in enumerate(lines[:-1])
+        if _MAKE_TARGET.match(line) and lines[k + 1].startswith("\t")
+    )
+    return targets >= 2
 
 
 # A file shown with line numbers — Claude Code's Read tool (`   12→code` or
@@ -255,11 +304,10 @@ def _is_prose(text: str) -> bool:
     return total > 0 and prose >= total * 0.5
 
 
-# HTML that large is a fetched page, not a template somebody is about to patch.
-_EDITABLE_HTML_MAX = 30_000
-
 # Types whose compressor works line by line, so the lossless folds run first.
-_LINE_TYPES = frozenset({"logs", "text", "search", "git", "listing", "diff", "config", "disasm"})
+# Diffs are never folded: a repeated `+` block folded into a back-reference
+# would then be trimmed as context by the diff compressor.
+_LINE_TYPES = frozenset({"logs", "text", "search", "git", "listing", "config", "disasm"})
 
 
 def _shape_type(text: str) -> ContentType:
@@ -416,15 +464,13 @@ class ContentRouter:
             return False
         if content_type in (ContentType.code, ContentType.config):
             return True
-        # A JSON object on disk (package.json, tsconfig) is pretty-printed; an
-        # API or MCP response is one line. Only the first is a file to edit.
-        if (
-            content_type is ContentType.json
-            and content.lstrip().startswith("{")
-            and "\n" in content.strip()
-        ):
+        # JSON on disk (package.json, tsconfig, a fixture) is pretty-printed;
+        # an API or MCP response is one line. Only the first is a file to edit.
+        if content_type is ContentType.json and "\n" in content.strip():
             return True
-        if content_type is ContentType.html and len(content) <= _EDITABLE_HTML_MAX:
+        # An HTML page fetched with curl and a template read with cat look the
+        # same, and only one of them is safe to rewrite.
+        if content_type is ContentType.html:
             return True
         return _is_file_view(content)
 
@@ -500,6 +546,11 @@ class ContentRouter:
             if len(compressed) >= len(untouched):
                 compressed, ctx.lossy, ctx.omitted = untouched, False, 0
                 compressor = "passthrough (no gain)"
+
+        # The output is the authority: a step that cut and was then discarded
+        # by fail-open must not be reported as lossy.
+        if ctx.lossy and not has_marker(compressed):
+            ctx.lossy, ctx.omitted = False, 0
 
         compressed_tokens = _estimate_tokens(compressed)
 
@@ -621,33 +672,40 @@ class ContentRouter:
             out = self.code_compressor.compress(content)
             return out if len(out) < len(content) else content
 
-        work = folds.fold(content) if content_type.value in _LINE_TYPES else content
+        # Text that reached the model as a tool result may be a file it edits
+        # next (a README, a template, source the detector did not recognise):
+        # nothing in it is rewritten or folded. Only marked elision of blobs
+        # and minified lines applies, which says exactly what it removed.
+        if content_type is ContentType.text and edit_target:
+            out = dense.elide_dense(content, ctx)
+            return out if len(out) < len(content) else content
+
         match content_type:
             case ContentType.json:
-                out = self.smart_crusher.compress(work, ctx)
+                out = self.smart_crusher.compress(content, ctx)
             case ContentType.search:
-                out = self.search_compressor.compress(work, ctx)
+                out = self.search_compressor.compress(content, ctx)
             case ContentType.diff:
-                out = self.diff_compressor.compress(work, ctx)
+                out = self.diff_compressor.compress(content, ctx)
             case ContentType.git:
-                out = self.git_compressor.compress(work)
+                out = self.git_compressor.compress(content)
             case ContentType.listing:
-                out = self.listing_compressor.compress(work, ctx)
+                out = self.listing_compressor.compress(content, ctx, edit_target=edit_target)
             case ContentType.config:
-                out = self.config_compressor.compress(work, ctx)
+                out = self.config_compressor.compress(content, ctx)
             case ContentType.html:
-                out = self.html_compressor.compress(work, ctx)
+                out = self.html_compressor.compress(content, ctx)
             case ContentType.disasm:
-                out = self.disasm_compressor.compress(work)
+                out = self.disasm_compressor.compress(content)
             case ContentType.logs:
-                out = dense.elide_dense(self.log_compressor.compress(work, ctx), ctx)
+                out = dense.elide_dense(self.log_compressor.compress(content, ctx), ctx)
             case _:
-                out = self._prose(work, ctx)
-        if len(out) >= len(content):
-            # A lossy step that did not pay for itself must not leave a marker
-            # count behind, or the result would claim a cut it does not contain.
-            return work if len(work) < len(content) else content
-        return out
+                out = self._prose(content, ctx)
+        # Folds run last, on what will actually be sent: a back-reference
+        # computed before a lossy step could point at a line that step removed.
+        if content_type.value in _LINE_TYPES:
+            out = folds.fold(out)
+        return out if len(out) < len(content) else content
 
     def _prose(self, text: str, ctx: Context) -> str:
         text = dense.elide_dense(text, ctx)
@@ -668,6 +726,8 @@ class ContentRouter:
             return content
         if content_type is ContentType.json:
             return self.smart_crusher.compress_lossless(content)
+        if edit_target and content_type in (ContentType.text, ContentType.listing):
+            return content
         work = folds.fold(content) if content_type.value in _LINE_TYPES else content
         if content_type is ContentType.search:
             return self.search_compressor.group(work)

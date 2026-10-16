@@ -21,25 +21,6 @@ _ROW_UNSAFE = set(',"\n\r')
 _HEADER_UNSAFE = set(',"\n\r()=')
 
 
-def _strip_empty(value: Any) -> Any:
-    """The one normalisation: keys whose value is null or empty are dropped.
-
-    ``{"email": null}`` and ``{}`` say the same thing to a reader, and API
-    responses are full of both. Everything else — every key, including
-    ``type``, ``url`` and ``self``, and every string at full length — stays.
-    """
-    if isinstance(value, dict):
-        out = {}
-        for k, v in value.items():
-            if v is None or (isinstance(v, (str, list, dict)) and len(v) == 0):
-                continue
-            out[k] = _strip_empty(v)
-        return out
-    if isinstance(value, list):
-        return [_strip_empty(v) for v in value]
-    return value
-
-
 def _is_json_scalar_text(s: str) -> bool:
     if s in ("true", "false", "null"):
         return True
@@ -51,9 +32,16 @@ def _is_json_scalar_text(s: str) -> bool:
 
 
 def _cell(value: Any, header: bool = False) -> str:
-    """One table cell. Raw when unambiguous, JSON otherwise; '' means absent."""
-    if value is None:
+    """One table cell. Raw when unambiguous, JSON otherwise.
+
+    An empty cell means the key is absent from that row; a JSON ``null`` is
+    written as ``null``. Nothing is dropped: an earlier version removed null
+    and empty values and still called the result lossless.
+    """
+    if value is _MISSING:
         return ""
+    if value is None:
+        return "null"
     if isinstance(value, str):
         unsafe = _HEADER_UNSAFE if header else _ROW_UNSAFE
         if (
@@ -177,7 +165,6 @@ class SmartCrusher:
             data = json.loads(json_str)
         except (json.JSONDecodeError, ValueError, RecursionError):
             return json_str
-        data = _strip_empty(data)
         terms = relevance.tokens(ctx.query)
 
         if isinstance(data, list) and self._is_table(data):
@@ -201,7 +188,6 @@ class SmartCrusher:
             data = json.loads(json_str)
         except (json.JSONDecodeError, ValueError, RecursionError):
             return json_str
-        data = _strip_empty(data)
         if isinstance(data, list) and self._is_table(data):
             table = self._lossless_table(data)
             if table is not None:
@@ -249,7 +235,7 @@ class SmartCrusher:
             if "__sensei_marker__" in d:
                 lines.append(d["__sensei_marker__"])
                 continue
-            lines.append(",".join(_cell(d.get(k)) for k in var))
+            lines.append(",".join(_cell(d.get(k, _MISSING)) for k in var))
         return "\n".join(lines)
 
     def _lossless_table(self, rows: list[dict[str, Any]], name: str = "") -> str | None:

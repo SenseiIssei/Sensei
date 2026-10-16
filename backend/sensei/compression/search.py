@@ -24,10 +24,12 @@ from itertools import pairwise
 from sensei.compression import dense
 from sensei.compression.markers import Context, plural
 
-# path:12:content / path-12-content. The path may carry a drive letter
-# (C:\x or C:/x) and must not contain a colon after that. Non-greedy so the
-# first `:digits:` or `-digits-` ends it.
-_WITH_PATH = re.compile(r"^((?:[A-Za-z]:[\\/])?[^:\n]*?)([:-])(\d+)\2(.*)$")
+# path:12:content (a match). The path may carry a drive letter (C:\x, C:/x)
+# and contains no other colon, so the first `:digits:` ends it.
+_MATCH_LINE = re.compile(r"^((?:[A-Za-z]:[\\/])?[^:\n]*?):(\d+):(.*)$")
+# path-12-content (context, from -A/-B/-C). A path can itself contain
+# `-digits-` (`_posts/2024-01-15-launch.md`), so every split is a candidate.
+_CONTEXT_SPLIT = re.compile(r"(?=-(\d+)-)")
 _NO_PATH = re.compile(r"^(\d+)([:-])(.*)$")
 _PATHISH = re.compile(r"^(?:[A-Za-z]:[\\/])?[\w.~@+\-\\/ ]+$")
 _GROUPED_LINE = re.compile(r"^\d+[:-]")
@@ -43,16 +45,40 @@ LONG_LINE = 500
 SINGLE_FILE_LOSSY_CHARS = 12000
 
 
-def _parse(line: str) -> tuple[str, str, str, str] | None:
-    m = _WITH_PATH.match(line)
-    if not m:
+def _valid_path(path: str) -> bool:
+    return (
+        bool(path)
+        and path.strip() == path
+        and _PATHISH.match(path) is not None
+        and ("/" in path or "\\" in path or "." in path)
+    )
+
+
+def _parse(line: str, known: set[str] | None = None) -> tuple[str, str, str, str] | None:
+    """(path, separator, line number, content) of a grep line, or None.
+
+    A `:N:` match line is unambiguous. A `-N-` context line is resolved to a
+    path already seen on a match line when there is one, otherwise to the
+    first split whose last path segment has a file extension.
+    """
+    m = _MATCH_LINE.match(line)
+    if m and _valid_path(m.group(1)):
+        return m.group(1), ":", m.group(2), m.group(3)
+    if "-" not in line:
         return None
-    path = m.group(1)
-    if not path or not _PATHISH.match(path) or path.strip() != path:
-        return None
-    if not ("/" in path or "\\" in path or "." in path):
-        return None
-    return path, m.group(2), m.group(3), m.group(4)
+    fallback: tuple[str, str, str, str] | None = None
+    for c in _CONTEXT_SPLIT.finditer(line):
+        path = line[: c.start()]
+        num = c.group(1)
+        if not _valid_path(path):
+            continue
+        parsed = (path, "-", num, line[c.start() + len(num) + 2 :])
+        if known is not None and path in known:
+            return parsed
+        last = path.replace("\\", "/").rsplit("/", 1)[-1]
+        if fallback is None and "." in last:
+            fallback = parsed
+    return fallback
 
 
 def detect(text: str) -> bool:
@@ -132,9 +158,10 @@ class SearchCompressor:
         # `grep -n pattern one-file`: no path on any line. Only very large
         # ones are cut; a single-file search is usually a deliberate view.
         single = not any(_parse(ln) for ln in lines[:200]) and len(text) >= SINGLE_FILE_LOSSY_CHARS
+        known = {p[0] for ln in lines if (p := _parse(ln)) and p[1] == ":"}
         units: list[tuple[str | None, list[str]]] = []
         for line in lines:
-            parsed = _parse(line)
+            parsed = _parse(line, known)
             path = parsed[0] if parsed else ("" if single and _NO_PATH.match(line) else None)
             if path is not None and hunked and units and units[-1][0] == path:
                 units[-1][1].append(line)
@@ -176,6 +203,18 @@ class SearchCompressor:
                 chosen.add(i)
             keep.update(chosen)
 
+        def matches(i: int) -> int:
+            """Match lines (`:N:`) in a unit; its context lines are not matches."""
+            return max(
+                1,
+                sum(
+                    1
+                    for ln in units[i][1]
+                    if ((p := _parse(ln, known)) and p[1] == ":")
+                    or (single and (m := _NO_PATH.match(ln)) and m.group(2) == ":")
+                ),
+            )
+
         last_kept = {f: max(j for j in by_file[f] if j in keep) for f in kept_files}
         out: list[str] = []
         for i, (path, body) in enumerate(units):
@@ -187,13 +226,13 @@ class SearchCompressor:
                 continue
             out.extend(body)
             if last_kept[path] == i:
-                n = len(by_file[path]) - sum(1 for j in by_file[path] if j in keep)
+                n = sum(matches(j) for j in by_file[path] if j not in keep)
                 if n:
                     where = f" in {path}" if path else ""
                     out.append(ctx.mark(f"{plural(n, 'more match')}{where} omitted", n))
         skipped = [f for f in files if f not in kept_files]
         if skipped:
-            n = sum(len(by_file[f]) for f in skipped)
+            n = sum(matches(j) for f in skipped for j in by_file[f])
             what = f"{plural(n, 'match')} in {plural(len(skipped), 'more file')} omitted"
             out.append(ctx.mark(what, n))
         return "\n".join(out)
@@ -203,8 +242,10 @@ def _group(text: str) -> tuple[str, bool]:
     out: list[str] = []
     current: str | None = None
     changed = False
-    for line in text.split("\n"):
-        parsed = _parse(line)
+    lines = text.split("\n")
+    known = {p[0] for ln in lines if (p := _parse(ln)) and p[1] == ":"}
+    for line in lines:
+        parsed = _parse(line, known)
         if parsed is None:
             if line != "--" and line:
                 # Anything that is not a hit ends the group, so whatever follows

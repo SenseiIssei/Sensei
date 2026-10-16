@@ -120,12 +120,15 @@ class LogCompressor:
     MAX_SAME_DIAG = 2
 
     # Normalize volatile tokens so otherwise-identical lines dedupe together.
+    # Only stand-alone numbers, timestamps and addresses: quoted text and
+    # numbers inside names (`case7`, `mod3.rs`) are what tells lines apart.
     _NORM: ClassVar[list[tuple[re.Pattern[str], str]]] = [
         (re.compile(r"\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}\S*"), "<ts>"),
         (re.compile(r"\b0x[0-9a-fA-F]+\b"), "<hex>"),
-        (re.compile(r"`[^`]*`|'[^']*'|\"[^\"]*\""), "<q>"),
-        (re.compile(r"\d+"), "<n>"),
+        (re.compile(r"\b\d+\b"), "<n>"),
     ]
+    _QUOTED = re.compile(r"`([^`]*)`|'([^']*)'")
+    _EXCEPTION = re.compile(r"^[A-Za-z_][\w.]*(?::(?: |$)|$)")
 
     # Fewer lines than this left after dropping noise: keep the rest whole.
     SMALL = 40
@@ -186,9 +189,18 @@ class LogCompressor:
                 if noise[j] or not self._in_block(lines[j]):
                     break
                 keep[j] = True
-            for j in range(i + 1, min(n, i + 1 + self.MAX_BLOCK)):
+            framed = False
+            j = i + 1
+            while j < min(n, i + 1 + self.MAX_BLOCK):
                 if noise[j] or not self._in_block(lines[j]):
                     break
+                keep[j] = True
+                framed = framed or self.is_frame(lines[j])
+                j += 1
+            # Python ends a traceback with the exception itself, unindented:
+            # `PaymentDeclined: card_declined`. It is the line that matters
+            # most and matches no error keyword when the class is custom.
+            if framed and j < n and self._EXCEPTION.match(lines[j]):
                 keep[j] = True
 
         dropped_diag, absorbed = self._dedupe_diagnostics(lines, keep)
@@ -248,7 +260,14 @@ class LogCompressor:
             j = i + 1
             while j < n and lines[j].strip() and not self._DIAG.match(lines[j]):
                 j += 1
-            signature = f"{m.group(1)}{m.group(2) or ''}: {self._normalize(m.group(3))}"
+            # Errors are never deduplicated: each one is a separate thing to fix.
+            if m.group(1) != "warning":
+                i = j
+                continue
+            message = m.group(3)
+            signature = f"warning{m.group(2) or ''}: " + self._normalize(
+                self._QUOTED.sub("...", message)
+            )
             seen[signature] = seen.get(signature, 0) + 1
             if seen[signature] > self.MAX_SAME_DIAG and j - i > 1:
                 loc = next(
@@ -260,8 +279,11 @@ class LogCompressor:
                     None,
                 )
                 if loc:
-                    label = signature.replace("'", "").replace("<q>", "...")[:80]
-                    dropped.setdefault(label, []).append(loc)
+                    label = signature.replace("'", "")[:80]
+                    # The marker keeps what differs: the name and where it is.
+                    names = [a or b for a, b in self._QUOTED.findall(message)]
+                    where = f"{loc} ({', '.join(names)})" if names else loc
+                    dropped.setdefault(label, []).append(where)
                     # The block and its trailing blank line are accounted for
                     # by the diagnostic marker, not by a generic run marker.
                     for k in range(i, j + (1 if j < n and not lines[j].strip() else 0)):
@@ -284,10 +306,13 @@ class LogCompressor:
         while i < n:
             norm = self._normalize(lines[i])
             j = i + 1
+            # Errors, failures, summaries and diagnostics are never folded into
+            # "similar lines": seven different undeclared names are seven facts.
             while (
                 j < n
                 and norm.strip()
                 and not lines[i].startswith("[sensei: ")
+                and not self._is_signal(lines[i])
                 and self._normalize(lines[j]) == norm
             ):
                 j += 1
@@ -300,6 +325,11 @@ class LogCompressor:
                 result.extend(lines[i:j])
             i = j
         return "\n".join(result)
+
+    def _is_signal(self, line: str) -> bool:
+        return bool(
+            self.IMPORTANT.search(line) or self.SUMMARY.search(line) or self._DIAG.match(line)
+        )
 
     def _normalize(self, line: str) -> str:
         for pat, repl in self._NORM:

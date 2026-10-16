@@ -16,10 +16,9 @@ class TestSmartCrusher:
         crusher = SmartCrusher()
         original = json.dumps({"name": "test", "value": 42, "empty": None, "blank": ""})
         result = crusher.compress(original)
-        data = json.loads(result)
-        assert "name" in data
-        assert "empty" not in data
-        assert "blank" not in data
+        # Minified, nothing dropped: null and "" are values, not noise.
+        assert json.loads(result) == json.loads(original)
+        assert len(result) < len(original)
 
     def test_compress_array_of_dicts(self):
         crusher = SmartCrusher()

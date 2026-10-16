@@ -5,12 +5,11 @@ import json
 from sensei.compression.smartcrusher import SmartCrusher
 
 
-def test_object_removes_null_and_empty():
+def test_object_keeps_null_and_empty():
+    """Dropping them changed the data and was still reported as lossless."""
     sc = SmartCrusher()
-    out = json.loads(
-        sc.compress(json.dumps({"name": "x", "empty": None, "blank": "", "arr": [], "obj": {}}))
-    )
-    assert out == {"name": "x"}
+    data = {"name": "x", "empty": None, "blank": "", "arr": [], "obj": {}}
+    assert json.loads(sc.compress(json.dumps(data))) == data
 
 
 def test_nested_type_and_url_keys_are_kept():
@@ -49,8 +48,8 @@ def test_nested_homogeneous_array_is_a_table():
 
 def test_small_array_compresses_each_item():
     sc = SmartCrusher()
-    out = json.loads(sc.compress(json.dumps([{"id": 1, "x": None}, {"id": 2, "x": None}])))
-    assert out == [{"id": 1}, {"id": 2}]
+    data = [{"id": 1, "x": None}, {"id": 2, "x": None}]
+    assert json.loads(sc.compress(json.dumps(data))) == data
 
 
 def test_invalid_json_passthrough():
