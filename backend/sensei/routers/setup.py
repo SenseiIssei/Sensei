@@ -25,7 +25,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -178,9 +178,24 @@ def _sse(payload: dict[str, Any]) -> bytes:
     return f"data: {json.dumps(payload)}\n\n".encode()
 
 
+def _outcome_rows(outcomes: list[Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": o.tool_id,
+            "name": o.name,
+            "status": o.status,
+            "detail": o.detail,
+            "path": str(o.path) if o.path else None,
+            "manual_snippet": o.manual_snippet,
+        }
+        for o in outcomes
+        if o.status != "not-found"
+    ]
+
+
 @router.get("/tools")
 async def connected_tools() -> dict[str, Any]:
-    """Which AI tools are on this machine, and which are routed through Sensei.
+    """Which AI tools are on this machine, how each is connected, and why not.
 
     Separate from ``/status``, which answers "can Sensei originate a request of
     its own" — a different question with a different answer, and conflating the
@@ -189,21 +204,14 @@ async def connected_tools() -> dict[str, Any]:
     from sensei import autowire, integrations
 
     watcher = autowire.current()
-    opted_out = integrations.declined()
-    rows = await asyncio.to_thread(integrations.status)
+    rows = await asyncio.to_thread(integrations.describe)
+    choice = await asyncio.to_thread(integrations.auto_connect_choice)
     return {
-        "tools": [
-            {
-                "id": i.id,
-                "name": i.name,
-                "installed": installed,
-                "connected": wired,
-                "declined": i.id in opted_out,
-            }
-            for i, installed, wired in rows
-        ],
+        "tools": rows,
         "auto_connect": {
-            "enabled": settings.auto_connect,
+            "enabled": settings.auto_connect and choice is not False,
+            "choice": choice,
+            "setting": settings.auto_connect,
             "running": watcher is not None,
             "interval_seconds": settings.auto_connect_interval_seconds,
             "scans": watcher.scans if watcher else 0,
@@ -211,6 +219,103 @@ async def connected_tools() -> dict[str, Any]:
             "last_error": watcher.last_error if watcher else None,
         },
     }
+
+
+class ToolAction(BaseModel):
+    dry_run: bool = False
+
+
+def _json_only(request: Request) -> None:
+    """State-changing tool routes take JSON only.
+
+    A cross-site form or `text/plain` fetch is a "simple" request that a
+    browser sends without a preflight; `application/json` is not. Together
+    with the Origin guard in security/csrf.py this keeps a web page from
+    rewiring the user's AI tools.
+    """
+    content_type = request.headers.get("content-type", "").lower()
+    if not content_type.startswith("application/json"):
+        raise HTTPException(status_code=415, detail="send Content-Type: application/json")
+
+
+_STATE = [Depends(_json_only)]
+
+
+@router.post("/tools/connect", dependencies=_STATE)
+async def connect_all_tools(req: ToolAction | None = None) -> dict[str, Any]:
+    """ "Connect everything": every detected tool now, and new ones as they appear."""
+    from sensei import integrations
+
+    dry = bool(req and req.dry_run)
+    outcomes = await asyncio.to_thread(integrations.connect_everything, dry_run=dry)
+    return {"outcomes": _outcome_rows(outcomes)}
+
+
+@router.post("/tools/disconnect", dependencies=_STATE)
+async def disconnect_all_tools(req: ToolAction | None = None) -> dict[str, Any]:
+    """ "Disconnect everything": put every file back, and stop connecting."""
+    from sensei import integrations
+
+    dry = bool(req and req.dry_run)
+    outcomes = await asyncio.to_thread(integrations.disconnect_everything, dry_run=dry)
+    return {"outcomes": _outcome_rows(outcomes)}
+
+
+class AutoConnect(BaseModel):
+    enabled: bool
+
+
+@router.put("/tools/auto-connect", dependencies=_STATE)
+async def set_auto_connect(req: AutoConnect) -> dict[str, Any]:
+    from sensei import integrations
+
+    await asyncio.to_thread(integrations.set_auto_connect, req.enabled)
+    return {"enabled": settings.auto_connect and req.enabled}
+
+
+def _known(tool_id: str) -> None:
+    from sensei import integrations
+
+    if tool_id not in integrations.known_ids():
+        raise HTTPException(status_code=404, detail=f"Unknown tool '{tool_id}'")
+
+
+@router.post("/tools/{tool_id}/connect", dependencies=_STATE)
+async def connect_tool(tool_id: str) -> dict[str, Any]:
+    from sensei import integrations
+
+    _known(tool_id)
+    outcomes = await asyncio.to_thread(
+        integrations.apply_all, only={tool_id}, include_undetected=False
+    )
+    return {"outcomes": _outcome_rows(outcomes)}
+
+
+@router.post("/tools/{tool_id}/disconnect", dependencies=_STATE)
+async def disconnect_tool(tool_id: str) -> dict[str, Any]:
+    from sensei import integrations
+
+    _known(tool_id)
+    outcomes = await asyncio.to_thread(integrations.undo_all, only={tool_id})
+    return {"outcomes": _outcome_rows(outcomes)}
+
+
+class RouteChoice(BaseModel):
+    enabled: bool
+
+
+@router.put("/tools/{tool_id}/route", dependencies=_STATE)
+async def set_route(tool_id: str, req: RouteChoice) -> dict[str, Any]:
+    """Opt one tool into (or out of) base-URL routing, then re-apply it."""
+    from sensei import integrations
+
+    _known(tool_id)
+    tool = next((i for i in integrations.REGISTRY if i.id == tool_id), None)
+    if tool is None or "route" not in tool.options:
+        raise HTTPException(status_code=400, detail=f"'{tool_id}' has no routing option")
+    await asyncio.to_thread(integrations.set_option, tool_id, "route", req.enabled)
+    outcomes = await asyncio.to_thread(integrations.apply_all, only={tool_id})
+    return {"outcomes": _outcome_rows(outcomes)}
 
 
 async def _openai_style_models(base: str, key: str) -> tuple[int, list[str]]:

@@ -15,8 +15,8 @@
 #   SENSEI_SETUP_TOOLS=yes|no   skip the question (default: ask, yes)
 #   SENSEI_FROM_SOURCE=1        clone the repository and run install.py instead
 #
-# Everything this does is undone by: sensei autostart off; sensei setup-tools
-# --undo; rm ~/.local/bin/sensei.
+# Everything this does is undone by: sensei autostart off; sensei disconnect;
+# rm ~/.local/bin/sensei.
 
 set -eu
 
@@ -101,12 +101,22 @@ case ":$PATH:" in
     *) say "Add $DIR to your PATH:  export PATH=\"$DIR:\$PATH\"" ;;
 esac
 
-if ask "${SENSEI_AUTOSTART:-}" "Start Sensei automatically when you log in?"; then
-    "$DIR/sensei" autostart on | sed 's/^/  /'
+# Tools first, autostart second. `autostart on` starts the server right away
+# (systemd --now, launchd RunAtLoad), and the server connects newly found tools
+# in the background — so a "no" has to be written down before it starts, or it
+# is overruled thirty seconds later.
+if ask "${SENSEI_SETUP_TOOLS:-}" "Connect the AI tools on this machine (Claude Code, Cursor, Codex, …)?"; then
+    "$DIR/sensei" setup-tools --from-installer | sed 's/^/  /'
+else
+    "$DIR/sensei" setup-tools --auto off >/dev/null 2>&1 || true
+    say "AI tools left alone. Connect them later with: sensei connect"
 fi
 
-if ask "${SENSEI_SETUP_TOOLS:-}" "Connect the AI tools on this machine (Claude Code, Cursor, Codex, …)?"; then
-    "$DIR/sensei" setup-tools | sed 's/^/  /'
+if ask "${SENSEI_AUTOSTART:-}" "Start Sensei automatically when you log in?"; then
+    # Redirected from a file rather than piped: anything the service manager
+    # starts must not inherit the pipe, or `sed` waits for it to close forever.
+    "$DIR/sensei" autostart on >"$tmp/autostart.log" 2>&1 </dev/null || true
+    sed 's/^/  /' "$tmp/autostart.log"
 fi
 
 printf '\n'

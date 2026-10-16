@@ -6,6 +6,7 @@ import type {
   SavingsResponse,
   SetupStatus,
   StatsResponse,
+  ToolOutcome,
   ToolsResponse,
   UpdateStatus,
 } from "@/types";
@@ -50,6 +51,42 @@ export const api = {
 
   async getTools(): Promise<ToolsResponse> {
     return fetchJSON(`${API_BASE}/setup/tools`);
+  },
+
+  /** Every detected tool now, and new ones as they appear. */
+  async connectAllTools(): Promise<{ outcomes: ToolOutcome[] }> {
+    return fetchJSON(`${API_BASE}/setup/tools/connect`, { method: "POST", body: "{}" });
+  },
+
+  /** Put every file back, and stop connecting new tools. */
+  async disconnectAllTools(): Promise<{ outcomes: ToolOutcome[] }> {
+    return fetchJSON(`${API_BASE}/setup/tools/disconnect`, { method: "POST", body: "{}" });
+  },
+
+  async connectTool(id: string): Promise<{ outcomes: ToolOutcome[] }> {
+    return fetchJSON(`${API_BASE}/setup/tools/${encodeURIComponent(id)}/connect`, {
+      method: "POST",
+    });
+  },
+
+  async disconnectTool(id: string): Promise<{ outcomes: ToolOutcome[] }> {
+    return fetchJSON(`${API_BASE}/setup/tools/${encodeURIComponent(id)}/disconnect`, {
+      method: "POST",
+    });
+  },
+
+  async setToolRoute(id: string, enabled: boolean): Promise<{ outcomes: ToolOutcome[] }> {
+    return fetchJSON(`${API_BASE}/setup/tools/${encodeURIComponent(id)}/route`, {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    });
+  },
+
+  async setAutoConnect(enabled: boolean): Promise<{ enabled: boolean }> {
+    return fetchJSON(`${API_BASE}/setup/tools/auto-connect`, {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    });
   },
 
   /** `force` asks GitHub now; without it the server only answers from its

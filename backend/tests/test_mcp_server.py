@@ -99,6 +99,18 @@ class TestRetrieve:
         restored = await call(server, "sensei_retrieve", ccr_id=compressed["ccr_id"])
         assert restored == BIG_JSON
 
+    async def test_finds_an_id_stored_by_another_process(self, server, tmp_path):
+        """The hook endpoint and the gateway run in the server process; the
+        MCP server is a separate process an editor spawned earlier. An id
+        minted over there after this one started must still be found."""
+        from sensei.compression.ccr import CCRStore
+
+        await call(server, "sensei_stats")  # builds this process's store first
+        elsewhere = CCRStore(cache_dir=tmp_path / "ccr")
+        ccr_id = elsewhere.store("the exact original", "short", "text")
+
+        assert await call(server, "sensei_retrieve", ccr_id=ccr_id) == "the exact original"
+
     async def test_an_unknown_id_explains_why_rather_than_returning_nothing(self, server):
         out = json.loads(await call(server, "sensei_retrieve", ccr_id="does-not-exist"))
         assert "no entry" in out["error"]
