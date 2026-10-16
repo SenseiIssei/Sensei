@@ -176,18 +176,49 @@ export interface UpdateStatus {
   error?: string;
 }
 
+export type ToolState =
+  | "connected"
+  | "declined"
+  | "not-connected"
+  | "not-installed"
+  | "unsupported";
+
 export interface ConnectedTool {
   id: string;
   name: string;
   installed: boolean;
   connected: boolean;
   declined: boolean;
+  /** What connecting does: "hook+mcp", "route", "mcp", … or "none". */
+  support?: string;
+  /** Why something is missing — e.g. why routing is impossible. */
+  why?: string;
+  note?: string;
+  verified?: boolean;
+  /** Opt-in features this tool offers, e.g. ["route"]. */
+  options?: string[];
+  enabled_options?: string[];
+  needs_restart?: boolean;
+  state?: ToolState;
+}
+
+export interface ToolOutcome {
+  id: string;
+  name: string;
+  status: "applied" | "unchanged" | "manual" | "failed";
+  detail: string;
+  path: string | null;
+  manual_snippet: string;
 }
 
 export interface ToolsResponse {
   tools: ConnectedTool[];
   auto_connect: {
     enabled: boolean;
+    /** What the user chose: true, false, or null (never asked → on). */
+    choice?: boolean | null;
+    /** SENSEI_AUTO_CONNECT; when false nothing is connected automatically. */
+    setting?: boolean;
     running: boolean;
     interval_seconds: number;
     scans: number;

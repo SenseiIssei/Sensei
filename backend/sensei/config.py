@@ -338,6 +338,22 @@ class Settings(BaseSettings):
     auto_connect: bool = True
     auto_connect_interval_seconds: int = 30
 
+    # ── Integrations: tool-output hooks and remote MCP (integrations area) ──
+    # Claude Code, Copilot CLI, Gemini CLI, Cursor and the opencode/Kilo plugin
+    # POST tool output to /hooks/* and get a compressed version back. Every
+    # hook fails open: off, slow or broken, the tool keeps its original output.
+    hook_compression: bool = True
+    # Outputs shorter than this go through untouched: below a couple of
+    # thousand characters the retrieve hint costs about what compression saves.
+    hook_min_chars: int = 2000
+    # Replace an output only if this share of its tokens would be saved.
+    hook_min_saving: float = 0.15
+    # Glob results longer than this are cut, with the full list retrievable.
+    hook_max_paths: int = 300
+    # Bearer token for `sensei mcp --transport streamable-http`. Empty means
+    # generated on first use and kept in ~/.sensei/mcp-token (owner-only).
+    mcp_http_token: str = ""
+
     # Agent: read-only tools sandboxed to agent_root; bounded ReAct loop.
     agent_root: str = "."
     agent_max_steps: int = 6

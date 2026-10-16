@@ -38,7 +38,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     # Paths that don't require auth
     PUBLIC_PATHS: ClassVar[set[str]] = {"/", "/health", "/docs", "/openapi.json", "/redoc"}
-    PUBLIC_PREFIXES = ("/api/health", "/api/auth/")
+    # /hooks/ answers only loopback callers that are not web pages (see
+    # routers/hooks.py), and the hook runners that call it have no way to
+    # present a Sensei token — a 401 there would silently disable compression.
+    PUBLIC_PREFIXES = ("/api/health", "/api/auth/", "/hooks/")
 
     async def dispatch(self, request: Request, call_next):
         if not settings.auth_enabled:

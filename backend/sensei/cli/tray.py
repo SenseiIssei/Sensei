@@ -18,6 +18,7 @@ include.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import threading
 import time
@@ -68,6 +69,36 @@ def _url(path: str = "/app/") -> str:
     return f"http://{host}:{settings.port}{path}"
 
 
+def _already_running() -> bool:
+    """Is a Sensei already answering on this port?
+
+    The installer starts the tray after an update, and install.ps1 used to
+    start a second one right behind it. The second could not bind the port,
+    so its server thread died quietly — and left an icon in the tray whose
+    menu drove nothing.
+    """
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(_url("/health"), timeout=1.0) as resp:  # noqa: S310
+            return resp.status == 200 and b"version" in resp.read(512)
+    except Exception:
+        return False
+
+
+def _summary(outcomes: list[Any], verb: str) -> str:
+    changed = sorted({o.name for o in outcomes if o.status == "applied"})
+    manual = sorted({o.name for o in outcomes if o.status == "manual"})
+    if not changed and not manual:
+        return f"Nothing to {verb} — everything already was."
+    text = f"{verb.capitalize()}ed: {', '.join(changed)}." if changed else ""
+    if manual:
+        text += f" Needs a manual step: {', '.join(manual)} (see the dashboard)."
+    if changed and verb == "connect":
+        text += " Restart those tools to pick it up."
+    return text.strip()
+
+
 def run(port: int | None = None, open_browser: bool = True) -> int:
     """Serve in a background thread and hold the tray icon on the main one."""
     try:
@@ -84,6 +115,12 @@ def run(port: int | None = None, open_browser: bool = True) -> int:
 
     if port:
         settings.port = port
+
+    if _already_running():
+        print(f"Sensei is already running at {_url('')}")
+        if open_browser:
+            webbrowser.open(_url())
+        return 0
 
     dist = _frontend_dist()
     if dist:
@@ -111,12 +148,44 @@ def run(port: int | None = None, open_browser: bool = True) -> int:
     def open_dashboard(*_: Any) -> None:
         webbrowser.open(_url())
 
-    def wire_tools(*_: Any) -> None:
-        from sensei.cli import setup_tools
+    from sensei import autowire, integrations
 
+    def connect_all(icon: Any, *_: Any) -> None:
         # In a thread: this touches the filesystem and can take a moment, and
         # blocking here freezes the menu.
-        threading.Thread(target=setup_tools.run, daemon=True).start()
+        def work() -> None:
+            try:
+                icon.notify(_summary(integrations.connect_everything(), "connect"), "Sensei")
+            except Exception as exc:
+                icon.notify(f"Could not connect tools: {exc}", "Sensei")
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def disconnect_all(icon: Any, *_: Any) -> None:
+        def work() -> None:
+            try:
+                outcomes = integrations.disconnect_everything()
+                icon.notify(
+                    _summary(outcomes, "disconnect")
+                    + " New tools will not be connected until you choose Connect everything.",
+                    "Sensei",
+                )
+            except Exception as exc:
+                icon.notify(f"Could not disconnect tools: {exc}", "Sensei")
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def auto_connecting(*_: Any) -> bool:
+        try:
+            return integrations.auto_connect_allowed()
+        except Exception:
+            return False
+
+    def toggle_auto(*_: Any) -> None:
+        integrations.set_auto_connect(not auto_connecting())
+
+    def open_connections(*_: Any) -> None:
+        webbrowser.open(_url("/app/#/connections"))
 
     from sensei.cli import system
 
@@ -159,13 +228,29 @@ def run(port: int | None = None, open_browser: bool = True) -> int:
         f"Sensei {__version__} — {_url('')}",
         menu=pystray.Menu(
             pystray.MenuItem("Open dashboard", open_dashboard, default=True),
-            pystray.MenuItem("Connect my AI tools", wire_tools),
+            pystray.MenuItem("Connections…", open_connections),
+            pystray.MenuItem("Connect everything", connect_all),
+            pystray.MenuItem("Disconnect everything", disconnect_all),
+            pystray.MenuItem(
+                "Connect new tools automatically", toggle_auto, checked=auto_connecting
+            ),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem("Start at login", toggle_autostart, checked=starts_at_login),
             pystray.MenuItem("Check for updates", check_updates),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit Sensei", quit_sensei),
         ),
     )
+
+    def tools_connected(names: list[str]) -> None:
+        with contextlib.suppress(Exception):
+            icon.notify(
+                f"Connected {', '.join(names)} to Sensei. Restart "
+                f"{'it' if len(names) == 1 else 'them'} to pick this up.",
+                "Sensei",
+            )
+
+    autowire.subscribe(tools_connected)
 
     if open_browser:
         open_dashboard()

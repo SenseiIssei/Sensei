@@ -59,6 +59,27 @@ def _pipeline() -> tuple[ContentRouter, CCRStore]:
     return _router, _store
 
 
+def _lookup(ccr_id: str, *, compressed: bool = False) -> str | None:
+    """Find a stored text, including one stored after this process started.
+
+    The store's index is read from disk once, when it is built. This process
+    is spawned by an editor and lives for the whole session, while the ids it
+    is asked about are minted elsewhere — by the gateway, or by the tool-output
+    hook in the server process — after it started. Without a second look every
+    one of those came back "no entry", and the retrieve hint attached to a
+    compressed output pointed at nothing.
+    """
+    global _store
+    router, store = _pipeline()
+    text = store.retrieve_compressed(ccr_id) if compressed else store.retrieve(ccr_id)
+    if text is None:
+        # Re-read the index; the router keeps its compiled state.
+        _store = store = CCRStore(cache_dir=store.cache_dir)
+        router.ccr_store = store
+        text = store.retrieve_compressed(ccr_id) if compressed else store.retrieve(ccr_id)
+    return text
+
+
 def _page(text: str, offset: int, limit: int) -> tuple[str, int | None]:
     """One page of ``text`` from ``offset``, cut at a line break when possible.
 
@@ -210,8 +231,7 @@ def build_server(hub: Any | None = None) -> Any:
             max_chars: page size; omit to get everything from offset on.
             view: "original" (exact bytes) or "compressed" (the shorter form).
         """
-        _, store = _pipeline()
-        text = store.retrieve_compressed(ccr_id) if view == "compressed" else store.retrieve(ccr_id)
+        text = _lookup(ccr_id, compressed=view == "compressed")
         if text is None:
             return json.dumps(
                 {
@@ -354,17 +374,228 @@ def _shrink_result(hub: Any, server: str, text: str, is_error: bool) -> str:
     )
 
 
-def run(transport: str = "stdio", host: str = "127.0.0.1", port: int = 7001) -> int:
+# ── HTTP transports: who may connect ────────────────────────────────────────
+
+_LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "[::1]")
+
+
+def _token_path() -> Any:
+    from sensei.config import SENSEI_HOME
+
+    return SENSEI_HOME / "mcp-token"
+
+
+def http_token(*, create: bool = True) -> str | None:
+    """The bearer token remote MCP clients must send.
+
+    From SENSEI_MCP_HTTP_TOKEN when set, otherwise generated once and kept in
+    ~/.sensei/mcp-token, readable only by its owner. A random tunnel hostname
+    is not a secret — it shows up in certificate-transparency logs within
+    minutes — so the token is what actually keeps strangers out.
+    """
+    import os
+    import secrets
+
+    if settings.mcp_http_token:
+        return settings.mcp_http_token
+    path = _token_path()
+    try:
+        existing = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        existing = ""
+    if existing or not create:
+        return existing or None
+    token = secrets.token_urlsafe(32)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(token + "\n")
+    return token
+
+
+def _host_only(value: str) -> str:
+    """`example.com:443` → `example.com`; `[::1]:7001` → `[::1]`."""
+    value = value.strip().lower()
+    if value.startswith("["):
+        return value.split("]", 1)[0] + "]"
+    return value.rsplit(":", 1)[0] if value.count(":") == 1 else value
+
+
+class Guard:
+    """ASGI wrapper: bearer token, Host allowlist, no foreign web pages.
+
+    * **Token** — every HTTP request needs ``Authorization: Bearer <token>``,
+      compared in constant time. ``--no-auth`` is accepted only on loopback.
+    * **Host** — the Host header must be loopback or a hostname the user named
+      with ``--allow-host`` (the tunnel's). That is the MCP spec's defence
+      against DNS rebinding: a page on evil.example that re-resolves its own
+      name to 127.0.0.1 still sends ``Host: evil.example``.
+    * **Origin** — when a browser sends one, it must be loopback or allowed.
+      Non-browser clients send none and are judged by the token alone.
+    """
+
+    def __init__(
+        self,
+        app: Any,
+        *,
+        token: str | None,
+        allow_hosts: tuple[str, ...] = (),
+        allow_origins: tuple[str, ...] = (),
+    ) -> None:
+        self.app = app
+        self.token = token
+        self.hosts = {*_LOOPBACK_HOSTS, *(_host_only(h) for h in allow_hosts)}
+        self.origins = {o.rstrip("/").lower() for o in allow_origins}
+
+    def _origin_ok(self, origin: str) -> bool:
+        from urllib.parse import urlparse
+
+        if origin.rstrip("/").lower() in self.origins:
+            return True
+        host = (urlparse(origin).hostname or "").lower()
+        return host in ("127.0.0.1", "localhost", "::1")
+
+    def _problem(self, headers: dict[str, str]) -> tuple[int, str] | None:
+        import hmac
+
+        if _host_only(headers.get("host", "")) not in self.hosts:
+            return 421, "unknown Host — add it with --allow-host"
+        if headers.get("origin") and not self._origin_ok(headers["origin"]):
+            return 403, "cross-origin requests are not allowed"
+        if self.token is not None:
+            scheme, _, value = headers.get("authorization", "").partition(" ")
+            if scheme.lower() != "bearer" or not hmac.compare_digest(
+                value.strip().encode(), self.token.encode()
+            ):
+                return 401, "missing or wrong bearer token"
+        return None
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+        headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope["headers"]}
+        problem = self._problem(headers)
+        if problem is None:
+            await self.app(scope, receive, send)
+            return
+        status, detail = problem
+        body = json.dumps({"error": detail}).encode()
+        extra = [(b"www-authenticate", b'Bearer realm="sensei"')] if status == 401 else []
+        await send(
+            {
+                "type": "http.response.start",
+                "status": status,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body)).encode()),
+                    *extra,
+                ],
+            }
+        )
+        await send({"type": "http.response.body", "body": body})
+
+
+def _is_loopback_bind(host: str) -> bool:
+    return host in ("127.0.0.1", "localhost", "::1")
+
+
+def http_app(
+    transport: str = "streamable-http",
+    host: str = "127.0.0.1",
+    *,
+    token: str | None,
+    allow_hosts: tuple[str, ...] = (),
+    allow_origins: tuple[str, ...] = (),
+    proxy_tools: bool = True,
+) -> Any:
+    """The guarded ASGI app for an HTTP transport. Separate from run() for tests."""
+    hub = None
+    if not proxy_tools:
+        from sensei.mcp_proxy import ProxyHub
+
+        hub = ProxyHub(servers={})
+    server = build_server(hub)
+
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    # Guard checks Host and Origin first; the SDK's own check would reject
+    # every tunnel hostname, so it is told about the same allowlist.
+    security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[
+            "127.0.0.1:*",
+            "localhost:*",
+            "[::1]:*",
+            *(_host_only(h) for h in allow_hosts),
+            *(f"{_host_only(h)}:*" for h in allow_hosts),
+        ],
+        allowed_origins=["http://127.0.0.1:*", "http://localhost:*", *allow_origins],
+    )
+    if transport == "sse":
+        inner = server.sse_app(transport_security=security, host=host)
+    else:
+        inner = server.streamable_http_app(transport_security=security, host=host)
+    return Guard(inner, token=token, allow_hosts=allow_hosts, allow_origins=allow_origins)
+
+
+def run(
+    transport: str = "stdio",
+    host: str = "127.0.0.1",
+    port: int = 7001,
+    *,
+    no_auth: bool = False,
+    allow_hosts: tuple[str, ...] = (),
+    allow_origins: tuple[str, ...] = (),
+    proxy_tools: bool | None = None,
+    show_token: bool = False,
+) -> int:
     """Run the MCP server. Blocks until the client disconnects (stdio) or ^C."""
     # stdio is the transport MCP clients spawn a server with, so anything
     # written to stdout that isn't a protocol message corrupts the stream.
     logging.basicConfig(level=logging.WARNING)
-    server = build_server()
+    if show_token:
+        print(http_token() or "")
+        return 0
     if transport == "stdio":
-        server.run(transport="stdio")
-    else:
-        # Loopback by default: the SDK then also enables DNS-rebinding
-        # protection, so a web page cannot drive these tools from a browser.
-        print(f"Sensei MCP ({transport}) on http://{host}:{port}/mcp", file=sys.stderr)
-        server.run(transport=transport, host=host, port=port)  # type: ignore[arg-type]
+        build_server().run(transport="stdio")
+        return 0
+
+    exposed = bool(allow_hosts) or not _is_loopback_bind(host)
+    if no_auth and exposed:
+        print(
+            "Refusing --no-auth on anything reachable from another machine. Drop "
+            "--no-auth and give the client the token (sensei mcp --show-token).",
+            file=sys.stderr,
+        )
+        return 2
+
+    # Exposed through a tunnel, the proxy tools would let a remote agent drive
+    # every local MCP server in mcp-servers.json — a filesystem server included.
+    # Off for remote use unless asked for by name.
+    with_proxy = proxy_tools if proxy_tools is not None else not exposed
+    token = None if no_auth else http_token()
+    app = http_app(
+        transport,
+        host,
+        token=token,
+        allow_hosts=allow_hosts,
+        allow_origins=allow_origins,
+        proxy_tools=with_proxy,
+    )
+
+    import uvicorn
+
+    path = "/sse" if transport == "sse" else "/mcp"
+    print(f"Sensei MCP ({transport}) on http://{host}:{port}{path}", file=sys.stderr)
+    if token:
+        where = "SENSEI_MCP_HTTP_TOKEN" if settings.mcp_http_token else str(_token_path())
+        print(
+            f"Clients must send 'Authorization: Bearer <token>' (token in {where}; "
+            "print it with: sensei mcp --show-token)",
+            file=sys.stderr,
+        )
+    if not with_proxy:
+        print("Proxy tools (sensei_find_tools / sensei_call_tool) are off.", file=sys.stderr)
+    uvicorn.run(app, host=host, port=port, log_level="warning")
     return 0
