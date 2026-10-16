@@ -361,8 +361,11 @@ def prepare(
                         new = wire.set_path(new, t.path, ccr.resolve(retrieve_args[t.call_id]))
                     group = [new]
                 else:
-                    new = builder.message(msg, tally)
-                    if settings.gateway_dedup:
+                    # `gateway_preserve_cache`: only the newest message is
+                    # compressed; with the live zone it then stays compressed.
+                    keep = settings.gateway_preserve_cache and i != last
+                    new = msg if keep else builder.message(msg, tally)
+                    if settings.gateway_dedup and not keep:
                         for t in wire.tool_texts(api, new):
                             if t.is_error or t.text.startswith("[sensei: "):
                                 continue

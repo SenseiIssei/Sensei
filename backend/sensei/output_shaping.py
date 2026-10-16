@@ -16,6 +16,13 @@ So the instruction is appended to the **last user message** instead — the fres
 bytes at the end of the conversation, which were never part of the cached prefix
 and change every turn anyway. Same effect on the model, no effect on the cache.
 
+Through the gateway (``sensei/gateway/pipeline.py``) it goes one step further:
+the instruction is its own block (Anthropic) or message (Chat, Responses) after
+the new turn's content, and the live zone replays it on every later request.
+Adding it and then dropping it next turn would be a history edit: a cache miss
+for that turn's tokens, and on current Claude models a changed prefix for every
+thinking block produced after it. Kept, it is a few cached tokens per turn.
+
 ## Why there is a holdout
 
 An intervention that changes model behaviour cannot be measured by turning it on
