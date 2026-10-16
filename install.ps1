@@ -59,30 +59,43 @@ Write-Host ""
 Write-Host "  Sensei - fewer tokens for the AI tools you already use" -ForegroundColor White
 Write-Host ""
 
+$headers = @{ "User-Agent" = "sensei-installer" }
+if ($env:GITHUB_TOKEN) { $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN" }
 if ($env:SENSEI_VERSION) {
-    $tag = "v" + $env:SENSEI_VERSION.TrimStart("v")
-    $release = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/tags/$tag" -Headers @{ "User-Agent" = "sensei-installer" }
+    # A pinned version needs no API call: the release workflow fixes the asset
+    # names. The API allows 60 unauthenticated requests an hour per IP, and a
+    # shared NAT or CI runner can use that up before this script ever runs.
+    $ver = $env:SENSEI_VERSION.TrimStart("v")
+    $tagName = "v$ver"
+    $base = "https://github.com/$repo/releases/download/$tagName"
+    $setupName = "sensei-setup-$ver.exe"
+    $setupUrl = "$base/$setupName"
+    $sumsUrl = "$base/SHA256SUMS"
 } else {
-    $release = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest" -Headers @{ "User-Agent" = "sensei-installer" }
+    $release = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest" -Headers $headers
+    $setup = $release.assets | Where-Object { $_.name -like "sensei-setup-*.exe" } | Select-Object -First 1
+    $sums = $release.assets | Where-Object { $_.name -eq "SHA256SUMS" } | Select-Object -First 1
+    if (-not $setup -or -not $sums) { throw "Release $tagName has no Windows installer." }
+    $tagName = $release.tag_name
+    $setupName = $setup.name
+    $setupUrl = $setup.browser_download_url
+    $sumsUrl = $sums.browser_download_url
 }
-$setup = $release.assets | Where-Object { $_.name -like "sensei-setup-*.exe" } | Select-Object -First 1
-$sums = $release.assets | Where-Object { $_.name -eq "SHA256SUMS" } | Select-Object -First 1
-if (-not $setup -or -not $sums) { throw "Release $($release.tag_name) has no Windows installer." }
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ("sensei-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $tmp | Out-Null
 try {
-    $exe = Join-Path $tmp $setup.name
-    Say "Downloading $($setup.name)"
-    Invoke-WebRequest $setup.browser_download_url -OutFile $exe -UseBasicParsing
-    $sumsText = (Invoke-WebRequest $sums.browser_download_url -UseBasicParsing).Content
+    $exe = Join-Path $tmp $setupName
+    Say "Downloading $($setupName)"
+    Invoke-WebRequest $setupUrl -OutFile $exe -UseBasicParsing
+    $sumsText = (Invoke-WebRequest $sumsUrl -UseBasicParsing).Content
     if ($sumsText -is [byte[]]) { $sumsText = [Text.Encoding]::UTF8.GetString($sumsText) }
 
-    $line = ($sumsText -split "`n") | Where-Object { $_.Trim().EndsWith($setup.name) } | Select-Object -First 1
-    if (-not $line) { throw "SHA256SUMS does not list $($setup.name) - refusing to install." }
+    $line = ($sumsText -split "`n") | Where-Object { $_.Trim().EndsWith($setupName) } | Select-Object -First 1
+    if (-not $line) { throw "SHA256SUMS does not list $($setupName) - refusing to install." }
     $expected = ($line.Trim() -split "\s+")[0].ToLower()
     $actual = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
-    if ($expected -ne $actual) { throw "Checksum mismatch for $($setup.name): expected $expected, got $actual" }
+    if ($expected -ne $actual) { throw "Checksum mismatch for $($setupName): expected $expected, got $actual" }
     Ok "Checksum verified"
 
     $tasks = @()
@@ -98,7 +111,7 @@ try {
     $proc = Start-Process -FilePath $exe -ArgumentList "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", $taskArg -PassThru
     $proc.WaitForExit()
     if ($proc.ExitCode -ne 0) { throw "The installer exited with code $($proc.ExitCode)." }
-    Ok "Installed Sensei $($release.tag_name)"
+    Ok "Installed Sensei $tagName"
 } finally {
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 }
