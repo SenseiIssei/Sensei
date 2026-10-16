@@ -43,7 +43,7 @@ class LogCompressor:
     SUMMARY = re.compile(
         r"(\b\d+\s+(?:passed|failed|errors?|warnings?|skipped|tests?|suites?)\b|={3,}|"
         r"\btest result:|\bTests?:\s|\bTest Suites:|\bbuild (?:succeeded|failed|success|complete)\b|"
-        r"\bfinished\b|\bdone\b|\bsummary\b|^(?:ok|FAIL|PASS)\s+\S+\s+[\d.]+m?s\b)",
+        r"\bfinished\b|\bsummary\b|^(?:ok|FAIL|PASS)\s+\S+\s+[\d.]+m?s\b)",
         re.IGNORECASE,
     )
     # Lines that are progress, never signal — even when a test is named
@@ -59,9 +59,14 @@ class LogCompressor:
         r"Unpacking|Blocking|Documenting|Installing|Collecting|Building wheel|Using cached|"
         r"Requirement already satisfied|Resolved|Prepared|Audited|Installed)\s"
         r"|npm (?:http|timing|sill|verb)\s"
+        r"|#\d+ (?:DONE [\d.]+s|CACHED)$|#\d+ (?:sha256:|extracting |resolve |transferring )"
         r"|\s*[~^]+\s*$"  # Python 3.11+ caret underlines
         r")"
     )
+    # A leading CI timestamp (GitHub Actions, GitLab) and a BuildKit step
+    # number with its elapsed seconds.
+    _PREFIX = re.compile(r"^\d{4}-\d{2}-\d{2}T[\d:.]+Z?\s+(?:#\d+ (?:[\d.]+ )?)?|^#\d+ [\d.]+ ")
+
     # Stack-frame continuation lines worth keeping next to an error.
     FRAME = re.compile(r'^\s*(at |File "|in |\| |#\d+ |\.\.\. |--> |-->)')
 
@@ -105,7 +110,13 @@ class LogCompressor:
         if n < 10:
             return text
 
-        noise = [bool(self.NOISE.match(line)) for line in lines]
+        # Classify on the line without its CI timestamp and BuildKit step
+        # prefix: `2026-10-14T18:22:02Z #12 2.822 Collecting x` is pip progress.
+        bare = [self._PREFIX.sub("", line, count=1) for line in lines]
+        noise = [
+            bool(self.NOISE.match(b) or self.NOISE.match(line))
+            for b, line in zip(bare, lines, strict=True)
+        ]
         signal = [
             not noise[i] and bool(self.IMPORTANT.search(line) or self.SUMMARY.search(line))
             for i, line in enumerate(lines)
