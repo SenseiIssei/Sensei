@@ -35,7 +35,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         if: matrix.accelerator
         with:
           toolchain: stable
@@ -75,7 +75,7 @@ jobs:
             --check benchmarks/results/agent_corpus.json --max-drop 1 --repeats 3 \
             --out ../agent-${{ matrix.accelerator && 'rust' || 'python' }}.json
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: benchmark-${{ matrix.accelerator && 'rust' || 'python' }}
           path: |
@@ -121,7 +121,7 @@ jobs:
         working-directory: backend
         run: python -m benchmarks.refresh --check
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: quality
           path: quality.json
@@ -134,7 +134,7 @@ jobs:
     needs: benchmark
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: results
           merge-multiple: true
@@ -185,7 +185,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: results
           merge-multiple: true
@@ -295,7 +295,7 @@ jobs:
         env:
           SENSEI_BENCH_HOME: ${{ runner.temp }}/sensei-bench
         run: python -m benchmarks.agent_bench --headroom --repeats 3 --out ../headroom.json
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: headroom
           path: headroom.json
