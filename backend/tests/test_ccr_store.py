@@ -72,6 +72,18 @@ def test_ids_from_a_model_never_leave_the_directory(tmp_path: Path, bad: object)
     assert CCRStore(cache).retrieve(bad) is None  # type: ignore[arg-type]
 
 
+def test_an_odd_id_is_neither_written_nor_deleted_by(tmp_path: Path) -> None:
+    secret = tmp_path / "secret.json"
+    secret.write_text("{}", encoding="utf-8")
+    os.utime(secret, (1, 1))
+    store = CCRStore(tmp_path / "cache", ttl_hours=0)
+    store.store("text", "t", ccr_id="../secret")
+    time.sleep(0.02)
+    assert store.retrieve("../secret") is None
+    assert secret.read_text(encoding="utf-8") == "{}"
+    assert list((tmp_path / "cache").iterdir()) == []
+
+
 def test_a_damaged_file_is_a_miss_not_a_crash(tmp_path: Path) -> None:
     (tmp_path / "half.json").write_text('{"original": "cut of', encoding="utf-8")
     (tmp_path / "list.json").write_text("[]", encoding="utf-8")

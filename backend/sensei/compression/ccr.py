@@ -64,6 +64,7 @@ class CCRStore:
     def __init__(self, cache_dir: Path | str | None = None, ttl_hours: int | None = None):
         self.cache_dir = Path(cache_dir) if cache_dir is not None else settings.ccr_cache_path
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self._root = os.path.realpath(self.cache_dir)
         ttl = ttl_hours if ttl_hours is not None else settings.ccr_ttl_hours
         self.ttl_seconds = ttl * 3600
         self._lock = threading.Lock()
@@ -181,6 +182,18 @@ class CCRStore:
 
     # ---- internals ----------------------------------------------------------
 
+    def _path(self, ccr_id: str) -> Path | None:
+        """The file for an id, or None if the id could name anything else.
+
+        The one place an id becomes a path: ids come from a model's tool call.
+        """
+        if not isinstance(ccr_id, str) or not _ID.fullmatch(ccr_id):
+            return None
+        full = os.path.normpath(os.path.join(self._root, f"{ccr_id}.json"))
+        if not full.startswith(self._root + os.sep):
+            return None
+        return Path(full)
+
     def _live(self, ccr_id: str) -> dict[str, Any] | None:
         entry = self._get(ccr_id)
         if entry is None:
@@ -202,9 +215,12 @@ class CCRStore:
 
     def _expire(self, ccr_id: str) -> bool:
         """Remove a file that is (still) too old. It may just have been rewritten."""
+        path = self._path(ccr_id)
+        if path is None:
+            return False
         try:
-            age = time.time() - (self.cache_dir / f"{ccr_id}.json").stat().st_mtime
-        except (OSError, ValueError):
+            age = time.time() - path.stat().st_mtime
+        except OSError:
             return False
         if age <= self.ttl_seconds:
             return False
@@ -220,9 +236,9 @@ class CCRStore:
         return self._read(ccr_id)
 
     def _read(self, ccr_id: str) -> dict[str, Any] | None:
-        if not isinstance(ccr_id, str) or not _ID.fullmatch(ccr_id):
+        path = self._path(ccr_id)
+        if path is None:
             return None
-        path = self.cache_dir / f"{ccr_id}.json"
         try:
             entry = json.loads(_patiently(lambda: path.read_text(encoding="utf-8")))
         except (OSError, ValueError):
@@ -256,15 +272,15 @@ class CCRStore:
 
     def _persist_entry(self, entry: dict[str, Any]) -> None:
         """Write an entry so that another process sees all of it or none of it."""
-        if not _ID.fullmatch(entry["id"]):
+        path = self._path(entry["id"])
+        if path is None:
             logger.warning("Not persisting a CCR entry with an unusable id")
             return
         try:
             data = json.dumps(entry, ensure_ascii=False).encode("utf-8")
         except UnicodeEncodeError:  # half a surrogate pair: keep it as an escape
             data = json.dumps(entry).encode("ascii")
-        path = self.cache_dir / f"{entry['id']}.json"
-        partial = self.cache_dir / f"{entry['id']}.{os.getpid()}-{threading.get_ident()}.tmp"
+        partial = path.with_suffix(f".{os.getpid()}-{threading.get_ident()}.tmp")
         try:
             # Originals are tool output: source, logs, whatever a command said.
             fd = os.open(partial, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -283,6 +299,7 @@ class CCRStore:
         """Remove an entry from memory and disk."""
         with self._lock:
             self._drop_hot(ccr_id)
-        if _ID.fullmatch(ccr_id):
+        path = self._path(ccr_id)
+        if path is not None:
             with contextlib.suppress(OSError):
-                (self.cache_dir / f"{ccr_id}.json").unlink(missing_ok=True)
+                path.unlink(missing_ok=True)
