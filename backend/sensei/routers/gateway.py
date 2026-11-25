@@ -1489,7 +1489,11 @@ async def _passthrough(path: str, request: Request) -> Response:
 
 
 # Registered last, so every endpoint above wins.
-@router.api_route("/v1/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+@router.api_route(
+    "/v1/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    include_in_schema=False,
+)
 async def relay_other(path: str, request: Request) -> Any:
     """Endpoints Sensei does not compress, relayed as they are."""
     if path.split("/", 1)[0] not in _RELAYED or not _RELAY_PATH.fullmatch(path):
