@@ -2,3 +2,7 @@
 # earlier commit of the benchmarks PR, renamed since. History is not rewritten, so
 # the finding stays in that commit and is acknowledged here, exactly and only there.
 cb9c37272490d9412153bb1958c98cdb97e8dc26:backend/tests/test_benchmarks.py:generic-api-key:222
+# An automation service whose name contains the letters a-p-i, listed in the webhook
+# router's first docstring, matches generic-api-key. The line is prose and is still
+# in the file today; gitleaks only reports the commit that added it.
+05e0e009a01944a9a53022df7cf03bd4b0d3f0bf:backend/sensei/routers/webhook.py:generic-api-key:2
