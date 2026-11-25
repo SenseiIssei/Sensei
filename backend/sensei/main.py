@@ -5,9 +5,8 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
 from sensei import __version__
 from sensei.agents.memory import MemoryStore
@@ -20,8 +19,8 @@ from sensei.routers.conversations import init_conversations_deps
 from sensei.routers.gateway import init_gateway_deps
 from sensei.routers.stats import init_stats_deps
 from sensei.security.auth import AuthMiddleware
-from sensei.security.csrf import OriginGuard
-from sensei.security.rate_limit import rate_limiter
+from sensei.security.csrf import HostGuard, OriginGuard
+from sensei.security.rate_limit import RateLimitMiddleware
 from sensei.security.sessions import SessionManager
 
 logging.basicConfig(
@@ -165,39 +164,15 @@ app.add_middleware(
 # Auth middleware
 app.add_middleware(AuthMiddleware)
 
-# Refuse cross-site state changes on /api (a web page POSTing to loopback).
+# Refuse cross-site state changes (a web page POSTing to loopback).
 app.add_middleware(OriginGuard)
 
+# Refuse requests for a foreign name (DNS rebinding). Outermost but for the
+# rate limiter, so nothing behind it has to think about it.
+app.add_middleware(HostGuard)
 
-# Rate limiting middleware
-@app.middleware("http")
-async def rate_limit_middleware(request: Request, call_next):
-    if not settings.rate_limit_enabled:
-        return await call_next(request)
-
-    # Skip rate limiting for health checks and docs
-    path = request.url.path
-    if path in ("/", "/health", "/docs", "/openapi.json", "/redoc"):
-        return await call_next(request)
-
-    client_id = request.client.host if request.client else "unknown"
-    allowed, remaining, retry_after = rate_limiter.check(client_id)
-
-    if not allowed:
-        return JSONResponse(
-            status_code=429,
-            content={"error": "Rate limit exceeded", "retry_after": retry_after},
-            headers={
-                "Retry-After": str(retry_after),
-                "X-RateLimit-Remaining": "0",
-                "X-RateLimit-Limit": str(settings.rate_limit_requests),
-            },
-        )
-
-    response = await call_next(request)
-    response.headers["X-RateLimit-Remaining"] = str(remaining)
-    response.headers["X-RateLimit-Limit"] = str(settings.rate_limit_requests)
-    return response
+# Rate limiting
+app.add_middleware(RateLimitMiddleware)
 
 
 # Health check

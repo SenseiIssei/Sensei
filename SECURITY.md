@@ -58,5 +58,11 @@ If you run Sensei anywhere but your own laptop:
 - set `SENSEI_AUTH_ENABLED=true` and a strong `SENSEI_AUTH_TOKEN`
 - leave `SENSEI_CODE_EXEC_ENABLED=false` unless you need `run_python`, and
   understand that it runs in a subprocess, not a container
-- set `SENSEI_JWT_SECRET` explicitly rather than relying on the generated one
+- give clients the token as `X-Sensei-Token`; it is checked on the API, the
+  gateway and the chat WebSocket, and never forwarded to a provider
+- without auth, name the public host in `SENSEI_ALLOWED_HOSTS`; requests for other
+  public names are refused, because that is what DNS rebinding looks like
+- `SENSEI_JWT_SECRET` is generated once into `~/.sensei/jwt-secret`; set it
+  yourself when several servers share accounts
+- back up `~/.sensei/local-key` separately from the vault it opens
 - keep `SENSEI_DATA_ENCRYPTION_ENABLED=true`

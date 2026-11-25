@@ -5,7 +5,7 @@ Thank you for your interest in contributing to Sensei! This is a community-drive
 ## Development Setup
 
 ### Prerequisites
-- Python 3.11, 3.12 or 3.13 (CI tests all three on Linux, macOS and Windows)
+- Python 3.11 to 3.14 (CI tests all four on Linux, macOS and Windows)
 - Node.js 24+
 - Rust stable (only if you touch the optional accelerator)
 - Git
@@ -82,9 +82,10 @@ This is the part of Sensei that people install it for, so it has an extra bar:
 python backend/benchmarks/compression_benchmark.py
 ```
 
-Report the aggregate before and after in your PR. Nightly CI fails if aggregate
-savings drop below 75%, and it separately asserts that the Rust and Python
-paths produce identical output.
+Report the aggregate before and after in your PR. Nightly CI fails if that
+six-sample aggregate drops below 75%, if the agent corpus loses more than a point
+or any fact, and if the Rust and Python paths produce different output. None of
+these numbers is what a user saves; see [docs/benchmarks.md](docs/benchmarks.md).
 
 ## Pull Request Process
 
@@ -136,9 +137,8 @@ git push origin feat/your-feature
 - **Compression algorithms** — Better heuristics for code, JSON, prose
 - **Model provider integrations** — New providers, better error handling
 - **UI/UX** — Frontend improvements, accessibility, mobile, Claude-like client
-- **Training** — Sensei-1 model fine-tuning, data collection, evaluation
-- **Multi-channel** — Discord/Telegram/Slack bot integrations (OpenClaw-style)
-- **Security** — AES-256 encryption, audit logging, SSO, RBAC
+- **Evaluation**: paired runs of real tasks with and without Sensei ([ROADMAP.md](ROADMAP.md), item 1)
+- **Security**: review of the gateway, the MCP server and the installers
 - **Testing** — More test coverage, E2E tests, performance benchmarks
 - **Documentation** — Tutorials, guides, API docs, translations
 

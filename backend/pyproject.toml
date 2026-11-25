@@ -143,10 +143,13 @@ ignore = [
 "sensei/main.py" = ["E402"]
 # Tests may assert, use fixtures with shadowing names, and hardcode credentials.
 "tests/*.py" = ["S101", "S104", "S105", "S106", "S311", "ASYNC230"]
+# conftest redirects the home directory before Sensei is imported.
+"tests/conftest.py" = ["E402"]
 "benchmarks/*.py" = ["S101"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 filterwarnings = [
     # Surface our own deprecations as failures; keep third-party noise visible.

@@ -9,7 +9,7 @@
 # Sensei at login and to connect the AI tools it finds.
 #
 # Settings, as environment variables:
-#   SENSEI_VERSION=0.2.0        a specific release instead of the latest
+#   SENSEI_VERSION=0.3.0        a specific release instead of the latest
 #   SENSEI_INSTALL_DIR=DIR      where the binary goes (default ~/.local/bin)
 #   SENSEI_AUTOSTART=yes|no     skip the question (default: ask, yes)
 #   SENSEI_SETUP_TOOLS=yes|no   skip the question (default: ask, yes)

@@ -44,6 +44,11 @@ ENV PATH="/opt/venv/bin:$PATH" \
 
 # Create non-root user for security
 RUN useradd -m -u 1000 sensei && chown -R sensei:sensei /app
+
+# A named volume takes its owner from the directory it is mounted over. Without
+# these, Docker creates them as root and the server cannot write its own data.
+RUN install -d -o sensei -g sensei -m 700 \
+    /home/sensei/.sensei /home/sensei/.sensei/memory /home/sensei/.sensei/sessions
 USER sensei
 
 EXPOSE 7000

@@ -5,7 +5,13 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from threading import Lock
 
+from starlette.datastructures import MutableHeaders
+from starlette.requests import HTTPConnection
+from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
 from sensei.config import settings
+from sensei.security.urls import is_loopback
 
 
 @dataclass
@@ -86,3 +92,66 @@ class RateLimiter:
 
 # Global rate limiter instance
 rate_limiter = RateLimiter()
+
+
+_UNLIMITED = frozenset({"/", "/health", "/docs", "/openapi.json", "/redoc"})
+_FORWARDED = ("x-forwarded-for", "forwarded", "x-real-ip")
+
+
+def _is_own_agent(conn: HTTPConnection) -> bool:
+    """A coding agent on this machine, using the gateway or the hooks.
+
+    The limit protects a server other people can reach. Counted against an
+    agent it did harm: one Claude Code session with a few subagents makes more
+    than 60 model calls and tool calls a minute, all from 127.0.0.1, and
+    request 61 came back as 429 from Sensei rather than from the provider.
+    Behind a reverse proxy everybody is 127.0.0.1, so a forwarded request is
+    not exempt.
+    """
+    if not conn.url.path.startswith(("/v1/", "/hooks/")):
+        return False
+    if any(name in conn.headers for name in _FORWARDED):
+        return False
+    return is_loopback(conn.client.host if conn.client else None)
+
+
+class RateLimitMiddleware:
+    """Plain ASGI, so a response that breaks off reaches the client as broken."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or not settings.rate_limit_enabled:
+            await self.app(scope, receive, send)
+            return
+        conn = HTTPConnection(scope)
+        if scope["path"] in _UNLIMITED or _is_own_agent(conn):
+            await self.app(scope, receive, send)
+            return
+
+        allowed, remaining, retry_after = rate_limiter.check(
+            conn.client.host if conn.client else "unknown"
+        )
+        limit = str(settings.rate_limit_requests)
+        if not allowed:
+            refusal = JSONResponse(
+                status_code=429,
+                content={"error": "Rate limit exceeded", "retry_after": retry_after},
+                headers={
+                    "Retry-After": str(retry_after),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Limit": limit,
+                },
+            )
+            await refusal(scope, receive, send)
+            return
+
+        async def with_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers["X-RateLimit-Remaining"] = str(remaining)
+                headers["X-RateLimit-Limit"] = limit
+            await send(message)
+
+        await self.app(scope, receive, with_headers)

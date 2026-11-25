@@ -60,7 +60,7 @@ Then open <http://localhost:7000/app/>. That's it.
   `sensei-setup-*.exe` (Windows installer), `.dmg` (macOS), `.AppImage` /
   `.deb` / `.rpm` (Linux), or the bare binary in a `.tar.gz` / `.zip`.
 - **pip**, from the release's wheel (Python 3.11+):
-  `pipx install https://github.com/SenseiIssei/Sensei/releases/download/v0.2.0/sensei_gateway-0.2.0-py3-none-any.whl`
+  `pipx install https://github.com/SenseiIssei/Sensei/releases/download/v0.3.0/sensei_gateway-0.3.0-py3-none-any.whl`
 - **From source:** `git clone https://github.com/SenseiIssei/Sensei && cd Sensei && pip install -e "backend[mcp,tray]"`
 - **Docker:** `docker compose up -d`, then open <http://localhost:7000/app/>.
 
@@ -310,15 +310,15 @@ and an optional local-model fallback.
 
 | | Sensei | Typical gateway (LiteLLM, Portkey…) | Typical compressor |
 |---|---|---|---|
-| Compresses tool output before it is sent | ✅ grep, diffs, git, tests, builds, listings, JSON, logs, HTML, disassembly | — | ✅ |
-| Keeps agents' exact-match edits working | ✅ file reads stay byte-exact | n/a | rarely considered |
-| Original always retrievable | ✅ by id — the gateway answers `sensei_retrieve` itself | — | sometimes |
+| Compresses tool output before it is sent | ✅ grep, diffs, git, tests, builds, listings, JSON, logs, HTML, disassembly | through a plugin ([LiteLLM](https://docs.litellm.ai/docs/proxy/headroom) and [Portkey](https://portkey.ai/docs/integrations/guardrails/headroom.md) can call Headroom) | ✅ |
+| Keeps agents' exact-match edits working | ✅ file reads, and what you type or paste, stay byte-exact | n/a | some |
+| Original always retrievable | ✅ by id, for 24 hours, through the gateway or MCP | — | sometimes |
 | OpenAI Chat, **Responses** and Anthropic APIs | ✅ incl. `count_tokens`, `/compact` | ✅ | varies |
 | Prompt-cache hit rate shown next to savings | ✅ | some | — |
 | MCP proxy with compressed, paged results | ✅ | some proxy MCP, few compress | some reduce the tool list |
 | Retries + local-model fallback | ✅ | ✅ | — |
-| Keeps the prompt cache hitting | ✅ append-only history (live zone) | — | rarely considered |
-| Wires up your installed tools, reversibly | ✅ 25 tools, one switch | — | some |
+| Keeps the prompt cache hitting | ✅ append-only history (live zone) | — | some |
+| Wires up your installed tools, reversibly | ✅ 25 tools, one switch; five compress by themselves (Claude Code, Copilot CLI, opencode, Kilo, Aider), the others get MCP or `--route` | — | some |
 | Telemetry | **none, ever** | varies | varies |
 | Price | **free, MIT, everything included** | free core, paid extras common | free core, paid extras common |
 
@@ -344,9 +344,10 @@ and an optional local-model fallback.
     only new messages are compressed, so the prompt cache keeps hitting, thinking
     signatures stay valid, and per-request CPU drops about tenfold. Cache misses
     are attributed (cold start, TTL, prefix change) in the stats.
-  - **Server-side `sensei_retrieve`:** every lossy cut carries a marker. When the
-    model asks for the original, the gateway answers it and continues the call
-    itself, streams included.
+  - **`sensei_retrieve`:** every lossy cut carries a marker. When the model asks
+    for the original, the gateway puts it into the next request. With
+    `SENSEI_GATEWAY_RETRIEVE_INTERCEPT` it answers in the middle of the call,
+    streams included, and the client never sees the round.
   - **Tool compaction:** tool schemas lose their annotation-only keywords. On
     FastMCP-generated tools that removes about a third of the schema tokens.
   - **Tool search (opt-in):** Anthropic's `defer_loading` for long tool lists.
@@ -396,7 +397,9 @@ directly — no base URL to change:
 { "mcpServers": { "sensei": { "command": "sensei", "args": ["mcp"] } } }
 ```
 
-The agent gets `sensei_compress`, `sensei_retrieve` and `sensei_stats`.
+The agent gets `sensei_compress`, `sensei_retrieve` and `sensei_stats`, and, if you
+name directories in `SENSEI_MCP_FILE_ROOTS`, `sensei_read_file`: large logs and JSON
+files arrive compressed instead of whole.
 
 **And it can front your other MCP servers.** Every server an agent connects to
 puts its whole tool list into the context on every turn. List them in
@@ -429,11 +432,12 @@ This matters more than the token savings, so it's worth being specific.
 
 | | |
 |---|---|
-| 🔒 **Runs only on your machine** | Sensei listens on `127.0.0.1`. Nothing on your network can reach it unless you deliberately change that. |
+| 🔒 **Runs only on your machine** | Sensei listens on `127.0.0.1`. Nothing on your network can reach it unless you deliberately change that, and web pages in your browser are refused. |
 | 🚫 **No telemetry, ever** | No analytics, no crash reporting, no "anonymous usage data". Not in any build, not behind any flag. |
 | 📡 **No third-party requests** | The interface loads no fonts, scripts or trackers from anyone. This is checked automatically on every commit. |
-| 💾 **The savings history is a local file** | `SENSEI_SAVINGS_PERSIST` writes counters and a model name per request to a SQLite file next to Sensei. No prompt text, no responses, and nothing leaves the machine. Delete the file, or turn it off. |
-| 🔑 **Your key stays yours** | Sensei forwards your API key to the provider you chose and to nobody else. It's encrypted on disk, never written in plain text. |
+| 💾 **The savings history is a local file** | `SENSEI_SAVINGS_PERSIST` writes counters and a model name per request to a SQLite file in `~/.sensei`. No prompt text, no responses, and nothing leaves the machine. Delete the file, or turn it off. |
+| **Originals expire** | What was compressed is kept in `~/.sensei/cache` for 24 hours (512 MB at most) so the model can ask for it. It is plain text, readable by your account only. |
+| 🔑 **Your key stays yours** | Sensei forwards your API key to the provider you chose and to nobody else. It's encrypted on disk with a random key only your account can read. |
 | ✂️ **Secrets stripped** | Optionally, Sensei removes passwords, tokens and keys from prompts before they leave your computer. |
 | 📴 **Works offline** | If the server isn't running, the interface still opens and tells you how to start it. |
 
@@ -448,8 +452,7 @@ This matters more than the token savings, so it's worth being specific.
 
 For logs and JSON — the bulk of what coding tools send — no. Sensei rewrites
 that text into a denser form containing the same facts, rather than summarising
-it. For prose it removes filler ("it is important to note that" → nothing),
-which is the kind of text a model ignores anyway.
+it. Code, configuration and what you type or paste are not touched at all.
 
 If the model ever does need the original, it can ask for it: Sensei keeps a
 local copy of everything it compressed and hands it back on request.
@@ -564,7 +567,7 @@ answers when the provider stays down — marked with `X-Sensei-Fallback`.
 
 **SmartCrusher — JSON.** An array of objects with the same keys repeats every key
 name on every element. It's rewritten as a header plus rows, which is what a CSV
-is, and drops redundant link/self/href keys. Lossless.
+is. Lossless: every key and value is still there.
 
 ```
 [{"id":1,"name":"a","url":"…"},{"id":2,"name":"b","url":"…"}, …20 more]
@@ -583,18 +586,20 @@ UUIDs, so a thousand near-identical worker lines become one with a count.
 
 **CodeCompressor — source.** Strips comments, docstrings, blank lines and
 trailing whitespace with a linear, string-aware scanner: `"#16a34a"` and
-`"https://…"` inside literals are data and survive. Code that reaches the model
-as a *tool result* — a file an agent may edit next by exact string match — is
-left byte-exact unless `SENSEI_CODE_COMPRESSION=aggressive`.
+`"https://…"` inside literals are data and survive. Off where it matters: code in
+a *tool result* or in *your own message*, which an agent may edit next by exact
+string match, is left byte-exact unless `SENSEI_CODE_COMPRESSION=aggressive`.
 
 **DisasmCompressor — objdump, GDB, radare2, Ghidra, IDA.** Drops the opcode-byte
 column, flow-arrow gutters and runs of padding instructions; keeps every
 address, mnemonic, operand and label. 42–56% on typical listings.
 
 **TextCompressor — prose.** Phrase substitution ("in order to" → "to"), filler
-removal, boilerplate sentence stripping, and line-level dedupe. It runs on prose
-only, never on shell output. `SENSEI_COMPRESSION_PROSE=extractive` swaps in a
-query-aware extractive compressor instead.
+removal, boilerplate sentence stripping, and line-level dedupe. It changes
+wording and leaves no marker, so it does not run on anything by default: turn it
+on for your own messages with `SENSEI_GATEWAY_REWRITE_USER_TEXT` or for system
+prompts with `SENSEI_GATEWAY_COMPRESS_SYSTEM`. `SENSEI_COMPRESSION_PROSE=extractive`
+swaps in a query-aware extractive compressor instead.
 
 **SearchCompressor — grep and rg.** Hits are grouped under their file, as
 `rg --heading` prints them. That step is lossless and is verified by expanding it
@@ -628,12 +633,15 @@ id and gets it back. Compression is therefore never destructive in practice.
 <summary><b>MCP server, in detail</b></summary>
 
 `sensei mcp` speaks the Model Context Protocol over stdio, which covers the
-tools that don't let you redirect a base URL — and the case where an agent wants
-to compress one specific blob rather than route its whole conversation.
+tools that don't let you redirect a base URL, and the case where an agent wants
+to read one large file without putting all of it into the conversation. A `text`
+argument has to be written out by the model first, so it saves nothing by itself
+and is not counted on the dashboard.
 
 | Tool | What it does |
 |---|---|
-| `sensei_compress` | Compress text. Returns the compressed form, a `ccr_id`, the token counts and the percentage saved. Optionally force a compressor with `content_type`. |
+| `sensei_compress` | Compress a `text`. Returns the compressed form, a `ccr_id` and the token counts. Optionally force a compressor with `content_type`. |
+| `sensei_read_file` | Read a text file by absolute path and return it compressed, paged when long. Only over stdio, only inside `SENSEI_MCP_FILE_ROOTS` (empty by default, then the tool does not exist), never hidden files. Code stays byte-exact. |
 | `sensei_retrieve` | Exchange a `ccr_id` for the byte-identical original. |
 | `sensei_stats` | Totals saved, plus CCR cache state. |
 
@@ -839,7 +847,14 @@ the port is authorised. Everything else follows from that:
 
 - Binds to `127.0.0.1`. Exposing it is a deliberate act, and `sensei doctor`
   reports it as a failure if you do it without enabling auth.
-- API keys live in an encrypted vault (AES-256-GCM), not in `.env`.
+- A web page in your browser can reach loopback too. Cross-site requests to
+  `/api`, `/v1` and the chat WebSocket are refused, and without auth so is a
+  request for a public host name (DNS rebinding; `SENSEI_ALLOWED_HOSTS`).
+- With `SENSEI_AUTH_ENABLED`, clients send the token as `X-Sensei-Token` next to
+  their own provider key. It is never passed on.
+- API keys live in an encrypted vault (AES-256-GCM), not in `.env`. The key is a
+  random file in `~/.sensei`: it protects a copy of the vault, not a login that
+  can read both.
 - Optional DLP redaction strips API keys, tokens, private keys, JWTs and
   optionally PII from prompts before they leave the machine.
 - Optional per-user auth, JWT sessions, OIDC SSO, and RBAC on admin endpoints.
@@ -964,8 +979,8 @@ MCP proxy is meant to sit in front of servers like it.
 ## Contributing
 
 Issues and PRs welcome — [CONTRIBUTING.md](CONTRIBUTING.md) has the setup, and
-[docs/ROADMAP-NEXT.md](docs/ROADMAP-NEXT.md) is the queue: what's planned, in
-what order, and why.
+[ROADMAP.md](ROADMAP.md) is the plan: what comes next, in what order, why, and
+how to tell that it is done.
 
 <div align="center">
 <sub>MIT · built by <a href="https://github.com/SenseiIssei">@SenseiIssei</a></sub>

@@ -22,7 +22,7 @@ _MAGIC = b"SENSEI_VAULT:"
 
 class KeyVault:
     def __init__(self, path: Path | str | None = None, password: str | None = None):
-        self.path = Path(path) if path is not None else Path(settings.vault_file)
+        self.path = Path(path) if path is not None else settings.vault_path
         pw = settings.vault_password if password is None else password
         if pw:
             key = hashlib.sha256(b"sensei-vault:" + pw.encode("utf-8")).digest()

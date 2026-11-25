@@ -15,7 +15,7 @@ from sensei.config import settings
 
 class AuditLog:
     def __init__(self, path: Path | str | None = None):
-        self.path = Path(path) if path is not None else Path(settings.audit_file)
+        self.path = Path(path) if path is not None else settings.audit_path
         self._lock = threading.Lock()
 
     def record(self, event: str, **fields: Any) -> None:

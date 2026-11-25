@@ -479,6 +479,7 @@ class ContentRouter:
         force_type: ContentType | None = None,
         *,
         edit_target: bool = False,
+        verbatim: bool = False,
         query: str = "",
     ) -> CompressionResult:
         """Compress a single content block.
@@ -493,6 +494,10 @@ class ContentRouter:
                 unless ``SENSEI_CODE_COMPRESSION=aggressive``: a model that
                 never saw a comment writes an ``old_string`` without it, the
                 edit fails, and the retry costs more than the compression saved.
+            verbatim: The text is what a person typed or pasted. Like
+                ``edit_target``, and the passes that run on everything else
+                (terminal codes, line endings, invisible characters, long
+                blobs) stay out of it too.
             query: What the model is looking for, when the caller knows (the
                 user's last message, the tool call's arguments). Lossy
                 compressors prefer to keep what matches it; it never makes
@@ -506,13 +511,18 @@ class ContentRouter:
         # byte — stripping first and storing the result would quietly make the
         # "original" a thing that never existed.
         untouched = content
+        edit_target = edit_target or verbatim
 
         content_type = force_type or self.detect_type(content)
         original_tokens = _estimate_tokens(content)
         protect = self._protected(content, content_type, edit_target)
 
         store = self.ccr_store if (self.enable_caching and self.ccr_store) else None
-        ctx = Context(ccr_id=ccr_id_for(untouched) if store else None, query=query or "")
+        ctx = Context(
+            ccr_id=ccr_id_for(untouched) if store else None,
+            query=query or "",
+            verbatim=verbatim,
+        )
 
         # Before compressing, not after: every compressor below is line- and
         # word-oriented and none of them looks at individual characters, so a
@@ -526,9 +536,9 @@ class ContentRouter:
             compressed = content
             compressor = "passthrough (edit target)"
         else:
-            if content_type is not ContentType.json:
+            if content_type is not ContentType.json and not verbatim:
                 content = folds.render_terminal(content)
-            if settings.strip_invisible:
+            if settings.strip_invisible and not verbatim:
                 content, findings = invisible.clean(
                     content,
                     is_code=content_type is ContentType.code,
@@ -609,9 +619,10 @@ class ContentRouter:
     ) -> tuple[list[dict[str, str]], list[CompressionResult]]:
         """Compress a list of chat messages.
 
-        Preserves system messages uncompressed (they're usually short and
-        need to stay exact for prompt caching). Compresses user and assistant
-        message content.
+        System messages stay as they are. In the others only recognised machine
+        output shrinks (logs, search results, JSON, listings): what was typed or
+        pasted and what the model answered keep their wording and their code,
+        unless ``SENSEI_GATEWAY_REWRITE_USER_TEXT`` asks for more.
 
         Returns:
             Tuple of (compressed_messages, compression_results)
@@ -631,7 +642,7 @@ class ContentRouter:
                 compressed_msgs.append(msg)
                 continue
 
-            result = self.compress(content)
+            result = self.compress(content, verbatim=not settings.gateway_rewrite_user_text)
             results.append(result)
 
             compressed_msgs.append(
@@ -675,6 +686,8 @@ class ContentRouter:
         # next (a README, a template, source the detector did not recognise):
         # nothing in it is rewritten or folded. Only marked elision of blobs
         # and minified lines applies, which says exactly what it removed.
+        if content_type is ContentType.text and ctx.verbatim:
+            return content
         if content_type is ContentType.text and edit_target:
             out = dense.elide_dense(content, ctx)
             return out if len(out) < len(content) else content

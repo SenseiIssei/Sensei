@@ -239,6 +239,8 @@ class Retriever:
         self.usage = Usage()
         self._live_sniff: UsageSniffer | None = None
         self._open: list[httpx.Response] = []
+        # Set when a provider stream ended early; the relay passes that on.
+        self.broken: Exception | None = None
 
     async def aclose(self) -> None:
         """Close every upstream response this request opened, whatever happened."""
@@ -530,6 +532,7 @@ class Retriever:
                 yield rest, name, data
         except httpx.HTTPError as err:
             logger.warning("Upstream stream broke off: %s", err)
+            self.broken = err
         finally:
             add_usage(self.usage, sniff.close())
             self._live_sniff = None

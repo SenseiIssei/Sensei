@@ -135,7 +135,7 @@ class SettingsUpdate(BaseModel):
 
 
 def _persist_env(updates: dict[str, str]) -> None:
-    """Upsert ``KEY=value`` lines in the repo .env (created if missing)."""
+    """Upsert ``KEY=value`` lines in the .env (created if missing)."""
     lines: list[str] = []
     if ENV_PATH.exists():
         lines = ENV_PATH.read_text(encoding="utf-8").splitlines()
@@ -151,6 +151,7 @@ def _persist_env(updates: dict[str, str]) -> None:
     for key, value in updates.items():
         if key not in seen:
             out.append(f"{key}={value}")
+    ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
     ENV_PATH.write_text("\n".join(out) + "\n", encoding="utf-8")
 
 

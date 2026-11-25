@@ -21,7 +21,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
+from pathlib import Path
 from typing import Any
 
 from sensei import __version__
@@ -32,17 +34,71 @@ from sensei.config import settings
 logger = logging.getLogger(__name__)
 
 INSTRUCTIONS = """\
-Sensei compresses text before it reaches a model, typically removing 60-95% of
-the tokens in JSON, logs and tool output.
+Sensei makes long machine output shorter and keeps the original retrievable.
 
-Use `sensei_compress` on anything large you are about to include in context —
-command output, file dumps, API responses, build logs. It returns the compressed
-text plus a `ccr_id`.
+`sensei_compress` shortens a text you pass on somewhere else. Do not retype text
+that is already in this conversation into it: that costs more than it saves.
 
-If the compressed form turns out to be missing something you need, call
-`sensei_retrieve` with that `ccr_id` to get the exact original back. Do that
-rather than guessing or asking the user to paste it again.
+Compressed output carries a `ccr_id` (also in `[sensei: ... ccr=<id>]` markers).
+If something you need is missing, call `sensei_retrieve` with that id to get the
+exact original. Do that rather than guessing or asking the user to paste it again.
 """
+
+FILE_INSTRUCTIONS = """
+Use `sensei_read_file` instead of reading a large log, JSON dump or CSV whole when
+you want to read it rather than edit it: only the compressed form enters the
+conversation.
+"""
+
+# A file larger than this is not something to put into a conversation at all.
+_MAX_FILE = 32 * 1024 * 1024
+
+
+def file_roots() -> list[Path]:
+    """The directories `sensei_read_file` may read from. None by default."""
+    roots = []
+    for item in settings.mcp_file_roots.split(os.pathsep):
+        if item.strip():
+            try:
+                roots.append(Path(item.strip()).expanduser().resolve())
+            except OSError:
+                logger.warning("SENSEI_MCP_FILE_ROOTS: cannot use %r", item)
+    return roots
+
+
+def _read_file(path: str, roots: list[Path]) -> tuple[str | None, str | None]:
+    """(text, error). Only text, only inside a root, never a hidden file.
+
+    The path comes from a model that may be following instructions it read
+    somewhere, and the client may have allowed every call in advance. So links
+    are resolved first, a network path is refused before anything touches it (on
+    Windows opening one sends the user's credentials to that host), and whatever
+    starts with a dot stays closed: .env, .ssh, .git.
+    """
+    outside = f"{path!r} is outside the directories in SENSEI_MCP_FILE_ROOTS"
+    if path.replace("\\", "/").startswith("//"):
+        return None, outside
+    if not Path(path).is_absolute():
+        return None, f"give an absolute path, not {path!r}"
+    try:
+        target = Path(path).resolve()
+        root = next((r for r in roots if target.is_relative_to(r)), None)
+        if root is None:
+            return None, outside
+        if any(part.startswith(".") for part in target.relative_to(root).parts):
+            return None, f"{path!r} is hidden; hidden files are not read"
+        if not target.is_file():
+            return None, f"no file at {path!r}"
+        size = target.stat().st_size
+        if size > _MAX_FILE:
+            return None, f"{size:,} bytes is too large (limit {_MAX_FILE:,}); read a part of it"
+        raw = target.read_bytes()
+    except (OSError, ValueError) as exc:
+        return None, f"cannot read {path!r}: {getattr(exc, 'strerror', None) or exc}"
+    if b"\0" in raw[:8192]:
+        return None, f"{path!r} is not a text file"
+    return raw.decode("utf-8-sig", errors="replace"), None
+
 
 # Built once — ContentRouter compiles patterns and, when present, loads the
 # Rust accelerator. Rebuilding it per call would dominate the cost of a small
@@ -108,8 +164,11 @@ view="compressed")`, or fetch the exact original with `view="original"`.
 """
 
 
-def build_server(hub: Any | None = None) -> Any:
+def build_server(hub: Any | None = None, *, local_files: bool = True) -> Any:
     """Construct the MCP server. Imported lazily so `mcp` stays optional.
+
+    ``local_files`` lets `sensei_compress` read a file. Over stdio the client is
+    the process that started us and can read it anyway; over HTTP it is not.
 
     ``hub`` is a :class:`sensei.mcp_proxy.ProxyHub`; when it is omitted the
     configured servers file is read, and with no servers configured the proxy
@@ -137,17 +196,19 @@ def build_server(hub: Any | None = None) -> Any:
         hub = ProxyHub.from_config()
     proxying = bool(hub.servers)
 
+    roots = file_roots() if local_files else []
+    instructions = INSTRUCTIONS + (FILE_INSTRUCTIONS if roots else "")
     mcp = server_class(
-        name="sensei", instructions=INSTRUCTIONS + (PROXY_INSTRUCTIONS if proxying else "")
+        name="sensei", instructions=instructions + (PROXY_INSTRUCTIONS if proxying else "")
     )
 
     @mcp.tool(
         name="sensei_compress",
         description=(
-            "Compress text before putting it in context. Best on JSON, logs and "
-            "tool output, where it typically removes 60-95% of tokens without "
-            "losing information. Returns the compressed text and a ccr_id that "
-            "sensei_retrieve can exchange for the exact original."
+            "Compress a text, with a ccr_id that sensei_retrieve exchanges for the "
+            "exact original. How much it saves depends on the content: a lot on "
+            "logs, JSON and repetitive output, nothing on prose. Not for text that "
+            "is already in the conversation."
         ),
     )
     def sensei_compress(text: str, content_type: str | None = None) -> str:
@@ -155,7 +216,7 @@ def build_server(hub: Any | None = None) -> Any:
 
         Args:
             text: the content to compress.
-            content_type: force a compressor instead of detecting one —
+            content_type: force a compressor instead of detecting one:
                 json, code, logs or text. Leave unset unless detection is wrong.
         """
         if not text:
@@ -173,28 +234,13 @@ def build_server(hub: Any | None = None) -> Any:
                     {"error": f"unknown content_type {content_type!r}; use one of: {valid}"}
                 )
 
+        # Not recorded as a saving. The model wrote this text out as an argument
+        # and paid for it in output tokens before we saw it: whatever comes back,
+        # nothing was saved, and counting it made the total a little less true
+        # with every call.
         result = router.compress(text, force_type=forced)
 
-        # Record it, exactly as the gateway does for a proxied request.
-        #
-        # This did not happen, and the omission was invisible in the worst way:
-        # compression worked, the caller got its shorter text, and the dashboard
-        # kept showing the number from before. For a tool the user cannot route
-        # through the gateway — Claude Code's desktop app pins its own endpoint,
-        # so MCP is the only path there is — that meant every token saved went
-        # unreported, in the one product whose promise is showing you the total.
-        from sensei.savings import get_savings_tracker
-
-        get_savings_tracker().record(
-            {
-                "prompt_tokens_before": result.original_tokens,
-                "prompt_tokens_after": result.compressed_tokens,
-                "tokens_saved": result.tokens_saved,
-                "blocks_compressed": 1,
-            },
-            tool="MCP",
-        )
-
+        # Not ASCII-escaped: that would turn one CJK character into six.
         return json.dumps(
             {
                 "compressed": result.compressed,
@@ -204,8 +250,32 @@ def build_server(hub: Any | None = None) -> Any:
                 "compressed_tokens": result.compressed_tokens,
                 "tokens_saved": result.tokens_saved,
                 "percent_saved": round((1 - result.ratio) * 100, 1),
-            }
+            },
+            ensure_ascii=False,
         )
+
+    if roots:
+
+        @mcp.tool(
+            name="sensei_read_file",
+            description=(
+                "Read a large text file compressed: logs, JSON, CSV, command output "
+                "you want to read, not code you will edit. A long one arrives as a "
+                "first page plus a ccr_id for sensei_retrieve. Only inside: "
+                + ", ".join(str(r) for r in roots)
+            ),
+        )
+        def sensei_read_file(path: str) -> str:
+            """Read and compress a file.
+
+            Args:
+                path: absolute path of the text file.
+            """
+            content, error = _read_file(path, roots)
+            if content is None:
+                return json.dumps({"error": error}, ensure_ascii=False)
+            # Code and configuration stay byte-exact: it may be edited after all.
+            return _compressed_page(content, edit_safe=True, label="MCP")
 
     @mcp.tool(
         name="sensei_retrieve",
@@ -334,11 +404,16 @@ def _shrink_result(hub: Any, server: str, text: str, is_error: bool) -> str:
     if is_error or len(text) < 100:
         return text
 
-    router, store = _pipeline()
     # Code from a filesystem-style server may be edited next by exact match,
     # so it stays byte-exact unless the server opts in with "compressCode".
     spec = hub.servers.get(server)
     edit_safe = not (isinstance(spec, dict) and spec.get("compressCode"))
+    return _compressed_page(text, edit_safe=edit_safe, label=f"MCP:{server}"[:64])
+
+
+def _compressed_page(text: str, *, edit_safe: bool, label: str) -> str:
+    """Compress a text and hand back its first page, with an id for the rest."""
+    router, store = _pipeline()
     result = router.compress(text, edit_target=edit_safe)
 
     from sensei.savings import get_savings_tracker
@@ -350,7 +425,7 @@ def _shrink_result(hub: Any, server: str, text: str, is_error: bool) -> str:
             "tokens_saved": result.tokens_saved,
             "blocks_compressed": 1,
         },
-        tool=f"MCP:{server}"[:64],
+        tool=label,
     )
 
     view = result.compressed
@@ -515,7 +590,7 @@ def http_app(
         from sensei.mcp_proxy import ProxyHub
 
         hub = ProxyHub(servers={})
-    server = build_server(hub)
+    server = build_server(hub, local_files=False)
 
     from mcp.server.transport_security import TransportSecuritySettings
 
