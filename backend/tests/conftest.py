@@ -13,6 +13,39 @@ tests were fine; the isolation was missing.
 
 from __future__ import annotations
 
+import atexit
+import os
+import shutil
+import tempfile
+
+# Before anything of Sensei's is imported: several modules work out the home
+# directory once, when they load. Running the suite used to leave entries in the
+# real `~/.cursor/mcp.json` (pointing Cursor at a virtualenv's sensei.exe) and
+# read whatever configuration the developer's own Sensei and shell had.
+_FAKE_HOME = tempfile.mkdtemp(prefix="sensei-tests-home-")
+atexit.register(shutil.rmtree, _FAKE_HOME, ignore_errors=True)
+for _name in ("HOME", "USERPROFILE"):
+    os.environ[_name] = _FAKE_HOME
+for _name, _sub in (
+    ("APPDATA", "AppData/Roaming"),
+    ("LOCALAPPDATA", "AppData/Local"),
+    ("XDG_CONFIG_HOME", ".config"),
+    ("XDG_DATA_HOME", ".local/share"),
+):
+    os.environ[_name] = os.path.join(_FAKE_HOME, *_sub.split("/"))
+    os.makedirs(os.environ[_name], exist_ok=True)
+for _name in list(os.environ):
+    if _name.startswith("SENSEI_") or _name in (
+        "ANTHROPIC_BASE_URL",
+        "ANTHROPIC_API_KEY",
+        "OPENAI_BASE_URL",
+        "OPENAI_API_KEY",
+        "CLAUDE_CONFIG_DIR",
+        "CODEX_HOME",
+        "COPILOT_HOME",
+    ):
+        del os.environ[_name]
+
 import pytest
 
 from sensei import config as config_mod
