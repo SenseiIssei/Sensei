@@ -129,6 +129,89 @@ class TestWhatPeopleWriteArrives:
         assert json.loads(sent[0].content)["messages"][0]["content"] != PASTED
 
 
+class TestRetrievedOriginals:
+    """An original the model fetched must arrive, or it fetches it again and again."""
+
+    LOG = "\n".join(
+        f"2026-11-25 12:00:{i % 60:02d} INFO worker-{i % 7}: heartbeat ok" for i in range(400)
+    )
+
+    @staticmethod
+    def _tools(api: str, name: str) -> list[dict]:
+        if api == "openai":
+            return [{"type": "function", "function": {"name": name, "parameters": {}}}]
+        return [{"name": name, "input_schema": {"type": "object"}}]
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "sensei_retrieve",
+            "mcp__sensei__sensei_retrieve",
+            "sensei__sensei_retrieve",
+            "sensei-sensei_retrieve",
+            "mcp__sensei__sensei_compress",
+            "mcp__sensei__sensei_call_tool",
+        ],
+    )
+    def test_anthropic(self, client, upstream, name) -> None:
+        sent, _ = upstream
+        call = {"type": "tool_use", "id": "t1", "name": name, "input": {"ccr_id": "0" * 16}}
+        other = {"type": "tool_use", "id": "t2", "name": "Bash", "input": {}}
+        results = [
+            {"type": "tool_result", "tool_use_id": "t1", "content": self.LOG},
+            {"type": "tool_result", "tool_use_id": "t2", "content": "x\n" + self.LOG},
+        ]
+        messages = [
+            {"role": "user", "content": "go"},
+            {"role": "assistant", "content": [call, other]},
+            {"role": "user", "content": results},
+        ]
+        body = {"model": "m", "messages": messages, "tools": self._tools("anthropic", name)}
+        client.post("/v1/messages", json=body, headers=ANTHROPIC)
+        blocks = json.loads(sent[0].content)["messages"][2]["content"]
+        assert blocks[0]["content"] == self.LOG
+        assert len(blocks[1]["content"]) < len(self.LOG) / 2, "the other result still shrinks"
+
+    def test_openai_chat(self, client, upstream) -> None:
+        sent, _ = upstream
+        name = "mcp__sensei__sensei_retrieve"
+        call = {"id": "c1", "type": "function", "function": {"name": name, "arguments": "{}"}}
+        messages = [
+            {"role": "user", "content": "go"},
+            {"role": "assistant", "content": None, "tool_calls": [call]},
+            {"role": "tool", "tool_call_id": "c1", "content": self.LOG},
+        ]
+        body = {"model": "m", "messages": messages, "tools": self._tools("openai", name)}
+        client.post("/v1/chat/completions", json=body, headers=OPENAI)
+        assert json.loads(sent[0].content)["messages"][2]["content"] == self.LOG
+
+    def test_responses(self, client, upstream) -> None:
+        sent, _ = upstream
+        name = "mcp__sensei__sensei_retrieve"
+        items = [
+            {"role": "user", "content": "go"},
+            {"type": "function_call", "call_id": "c1", "name": name, "arguments": "{}"},
+            {"type": "function_call_output", "call_id": "c1", "output": self.LOG},
+        ]
+        client.post("/v1/responses", json={"model": "m", "input": items}, headers=OPENAI)
+        assert json.loads(sent[0].content)["input"][2]["output"] == self.LOG
+
+    def test_a_tool_that_only_sounds_like_it(self, client, upstream) -> None:
+        sent, _ = upstream
+        call = {"type": "tool_use", "id": "t1", "name": "notsensei_retrieve_all", "input": {}}
+        messages = [
+            {"role": "user", "content": "go"},
+            {"role": "assistant", "content": [call]},
+            {
+                "role": "user",
+                "content": [{"type": "tool_result", "tool_use_id": "t1", "content": self.LOG}],
+            },
+        ]
+        client.post("/v1/messages", json={"model": "m", "messages": messages}, headers=ANTHROPIC)
+        content = json.loads(sent[0].content)["messages"][2]["content"][0]["content"]
+        assert len(content) < len(self.LOG) / 2
+
+
 class TestNothingInsideSenseiFailsTheTurn:
     @pytest.mark.parametrize(
         ("path", "headers"), [("/v1/messages", ANTHROPIC), ("/v1/chat/completions", OPENAI)]

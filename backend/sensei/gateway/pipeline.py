@@ -135,6 +135,10 @@ class _Builder:
         self.api = api
         self.compress_text = compress_text
         self.ccr_on = ccr_on
+        # Calls of Sensei's own MCP tools. Their results are what the model asked
+        # for after (or instead of) compression: shortening them again hands it
+        # the marker it was trying to get behind, every time it asks.
+        self.own_calls: set[str] = set()
 
     def text(self, value: Any, tally: _Tally, *, edit_target: bool) -> Any:
         if not isinstance(value, str):
@@ -188,6 +192,9 @@ class _Builder:
                         {**block, "text": self.text(block.get("text"), tally, edit_target=exact)}
                     )
                 elif block.get("type") == "tool_result":
+                    if str(block.get("tool_use_id")) in self.own_calls:
+                        out.append(block)
+                        continue
                     inner = block.get("content")
                     if isinstance(inner, str):
                         inner = self.text(inner, tally, edit_target=True)
@@ -203,6 +210,8 @@ class _Builder:
             if role == "assistant":
                 return msg
             if role in ("system", "developer") and not settings.gateway_compress_system:
+                return msg
+            if str(msg.get("tool_call_id")) in self.own_calls:
                 return msg
             edit_target = exact_role(role)
             content = msg.get("content")
@@ -235,6 +244,8 @@ class _Builder:
                 }
             return msg
         if kind in wire.RESPONSES_TOOL_OUTPUTS:
+            if str(msg.get("call_id")) in self.own_calls:
+                return msg
             output = msg.get("output")
             if isinstance(output, str):
                 return {**msg, "output": self.text(output, tally, edit_target=True)}
@@ -323,11 +334,8 @@ def prepare(
     raw_tools = body.get("tools")
     tool_list = raw_tools if isinstance(raw_tools, list) else []
     may_touch_tools = bool(tool_list) and (not oauth or settings.gateway_oauth_tool_changes)
-    inject = (
-        settings.gateway_retrieve_tool
-        and may_touch_tools
-        and ccr.TOOL_NAME not in ccr.tool_names(api, tool_list)
-    )
+    client_has_tool = ccr.TOOL_NAME in ccr.tool_names(api, tool_list)
+    inject = settings.gateway_retrieve_tool and may_touch_tools and not client_has_tool
 
     if api == "anthropic":
         system_material: Any = body.get("system")
@@ -369,8 +377,10 @@ def prepare(
     for msg in stripped:
         for call in wire.tool_calls(api, msg):
             names[call.call_id] = call.name
-            if call.name == ccr.TOOL_NAME:
+            if call.name == ccr.TOOL_NAME and not client_has_tool:
                 retrieve_args[call.call_id] = call.args
+            elif ccr.is_own_tool(call.name):
+                builder.own_calls.add(call.call_id)
 
     shaped = -1
     last = len(stripped) - 1
@@ -418,6 +428,8 @@ def prepare(
                     new = msg if keep else builder.message(msg, tally)
                     if settings.gateway_dedup and not keep:
                         for t in wire.tool_texts(api, new):
+                            if t.call_id in builder.own_calls:
+                                continue
                             if t.is_error or t.text.startswith("[sensei: "):
                                 continue
                             replaced = index.apply(t.text)
