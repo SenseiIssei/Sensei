@@ -52,6 +52,9 @@ class Context:
     query: str = ""
     lossy: bool = False
     omitted: int = 0
+    # A person's own words: nothing outside recognised machine output changes,
+    # not even a blob or a line ending.
+    verbatim: bool = False
     notes: list[str] = field(default_factory=list)
 
     def mark(self, what: str, count: int = 1) -> str:

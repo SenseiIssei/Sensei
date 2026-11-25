@@ -102,19 +102,31 @@ def _savings(before: int, after: int, saved: int, blocks: int) -> dict[str, Any]
     }
 
 
-def exact_role(role: Any) -> bool:
-    """Must text from this role reach the model as it was written?
+VERBATIM = "verbatim"
 
-    Tool results always: the model edits what it read by exact string match.
-    What a person typed or pasted, too. "Keep the three spaces" loses its point
-    when the spaces are collapsed, pasted code loses its comments and TODOs, and
-    Cline, Aider and Continue put file contents and tool output into user
-    messages, where their edits are matched against the same bytes. Logs, search
-    results and listings in there still compress; prose and code do not.
+
+def untouched_role(role: Any) -> bool:
+    """Instructions, wherever in the conversation a client puts them."""
+    return role in ("system", "developer") and not settings.gateway_compress_system
+
+
+def exact_role(role: Any) -> bool | str:
+    """How exactly text from this role must reach the model.
+
+    Tool results: code and files as they were read, because the model edits them
+    by exact string match (``True``). What a person typed or pasted: every byte
+    (``VERBATIM``). "Keep the three spaces" loses its point when the spaces are
+    collapsed, pasted code loses its comments and TODOs, and Cline, Aider and
+    Continue put file contents and tool output into user messages, where their
+    edits are matched against the same bytes, line endings included. Logs, search
+    results and listings in there still compress; prose and code do not. A role
+    nobody told us about counts as a person's.
     """
     if role in ("tool", "function"):
         return True
-    return role == "user" and not settings.gateway_rewrite_user_text
+    if role in ("system", "developer"):
+        return False  # only reached when compressing them was asked for
+    return False if settings.gateway_rewrite_user_text else VERBATIM
 
 
 def is_oauth(headers: dict[str, str]) -> bool:
@@ -140,7 +152,7 @@ class _Builder:
         # the marker it was trying to get behind, every time it asks.
         self.own_calls: set[str] = set()
 
-    def text(self, value: Any, tally: _Tally, *, edit_target: bool) -> Any:
+    def text(self, value: Any, tally: _Tally, *, edit_target: bool | str) -> Any:
         if not isinstance(value, str):
             return value
         new, before, after, saved, blocks = self.compress_text(value, edit_target=edit_target)
@@ -155,7 +167,7 @@ class _Builder:
         return new
 
     def parts(
-        self, parts: list[Any], tally: _Tally, *, edit_target: bool, types: tuple[str, ...]
+        self, parts: list[Any], tally: _Tally, *, edit_target: bool | str, types: tuple[str, ...]
     ) -> list[Any]:
         out = []
         for part in parts:
@@ -175,7 +187,7 @@ class _Builder:
         if not isinstance(msg, dict):
             return msg
         if self.api == "anthropic":
-            if msg.get("role") == "assistant":
+            if msg.get("role") == "assistant" or untouched_role(msg.get("role")):
                 return msg
             content = msg.get("content")
             exact = exact_role(msg.get("role", "user"))

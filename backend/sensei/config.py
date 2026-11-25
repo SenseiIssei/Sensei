@@ -10,6 +10,8 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from sensei.atomic import copy_new
+
 # Where per-user data lives, for every Sensei process on the machine: settings,
 # keys, conversations, the savings ledger and the CCR store. The tray server runs
 # from its install directory and an editor starts `sensei mcp` in whatever
@@ -85,23 +87,23 @@ def _former_homes() -> list[Path]:
 def adopt(target: Path, legacy_name: str) -> None:
     """Copy a file or directory from where it used to be, once.
 
-    Copied, not moved, and only when there is nothing at the new place, so it can
-    never overwrite anything and the old version still finds its data.
+    Copied, not moved, whole or not at all, and only when there is nothing at the
+    new place. A note is left that it was done: whoever deletes their vault or
+    accounts later must not get the old ones back.
     """
-    if target.exists():
+    note = target.parent / ".adopted" / target.name
+    if target.exists() or note.exists():
         return
-    for place in _former_homes():
-        old = place / legacy_name
-        try:
-            if old.is_dir() and any(old.iterdir()):
-                shutil.copytree(old, target)
-                return
-            if old.is_file():
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(old, target)
-                return
-        except OSError:  # unreadable, or another process got there first
-            continue
+    try:
+        for place in _former_homes():
+            old = place / legacy_name
+            if (old.is_dir() and any(old.iterdir())) or old.is_file():
+                copy_new(old, target)
+                break
+        note.parent.mkdir(parents=True, exist_ok=True)
+        note.touch()
+    except OSError:  # unreadable or no room: nothing is in place, try again next time
+        return
 
 
 # The defaults these settings ship with. Compared against, rather than assumed:
@@ -527,6 +529,10 @@ class Settings(BaseSettings):
     # Bearer token for `sensei mcp --transport streamable-http`. Empty means
     # generated on first use and kept in ~/.sensei/mcp-token (owner-only).
     mcp_http_token: str = ""
+    # Directories whose files `sensei_read_file` may read over stdio MCP, joined
+    # like PATH. Empty means the tool is not offered: a model should not gain
+    # file access because a compression tool was installed.
+    mcp_file_roots: str = ""
 
     # Agent: read-only tools sandboxed to agent_root; bounded ReAct loop.
     agent_root: str = "."
@@ -566,9 +572,9 @@ class Settings(BaseSettings):
     log_file: str = ""
     cors_origins: str = "http://localhost:5173,http://localhost:7000"
     # Public names Sensei may be reached under without auth (comma-separated,
-    # "*" for any). Loopback, IP addresses, single-label and private names
-    # (.local, .lan, .internal, .home.arpa) always work. Everything else is
-    # refused, because that is what a DNS-rebinding web page looks like.
+    # "*" for any). localhost and IP addresses always work, and over a network
+    # single-label and private names (.local, .lan, .internal, .home.arpa) too.
+    # The rest is refused: that is what a DNS-rebinding web page looks like.
     allowed_hosts: str = ""
 
     # Security

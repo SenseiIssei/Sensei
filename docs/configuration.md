@@ -268,6 +268,7 @@ Webhooks and external channels.
 | `SENSEI_HOOK_MIN_SAVING` | `0.15` |
 | `SENSEI_JWT_EXPIRY_HOURS` | `168` |
 | `SENSEI_JWT_SECRET` | _(empty)_ |
+| `SENSEI_MCP_FILE_ROOTS` | _(empty)_ |
 | `SENSEI_MCP_HTTP_TOKEN` | _(empty)_ |
 | `SENSEI_MCP_PAGE_CHARS` | `12000` |
 | `SENSEI_MCP_SERVERS_FILE` | _(empty)_ |

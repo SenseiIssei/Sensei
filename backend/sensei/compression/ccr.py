@@ -9,8 +9,9 @@ import threading
 import time
 import uuid
 from collections import OrderedDict
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from sensei.config import settings
 
@@ -28,6 +29,22 @@ _HOT_BYTES = 8 * 1024 * 1024
 # and then once per this many: an editor that only runs `sensei mcp` has no
 # server, and so no purge loop, to do it.
 _SWEEP_EVERY = 200
+
+_ATTEMPTS = 8
+_T = TypeVar("_T")
+
+
+def _patiently(action: Callable[[], _T]) -> _T:
+    """Windows refuses to open a file that is being replaced, and the other way
+    round, for the moment it takes. Wait that moment out."""
+    for attempt in range(_ATTEMPTS):
+        try:
+            return action()
+        except PermissionError:
+            if attempt == _ATTEMPTS - 1:
+                raise
+            time.sleep(0.002 * (attempt + 1))
+    raise AssertionError("unreachable")
 
 
 class CCRStore:
@@ -149,8 +166,7 @@ class CCRStore:
         kept: list[tuple[float, int, str]] = []
         for ccr_id, stat in self._files():
             if now - stat.st_mtime > self.ttl_seconds:
-                self._evict(ccr_id)
-                evicted += 1
+                evicted += self._expire(ccr_id)
             else:
                 kept.append((stat.st_mtime, stat.st_size, ccr_id))
         limit = max(1, settings.ccr_max_mb) * 1024 * 1024
@@ -169,10 +185,31 @@ class CCRStore:
         entry = self._get(ccr_id)
         if entry is None:
             return None
-        if time.time() - entry["stored_at"] > self.ttl_seconds:
-            self._evict(ccr_id)
-            return None
-        return entry
+        if not self._expired(entry):
+            return entry
+        # Ours is old. Another process may have stored the same output since, so
+        # the file decides, and it goes only if it is old as well.
+        with self._lock:
+            self._drop_hot(ccr_id)
+        entry = self._read(ccr_id)
+        if entry is not None and not self._expired(entry):
+            return entry
+        self._expire(ccr_id)
+        return None
+
+    def _expired(self, entry: dict[str, Any]) -> bool:
+        return time.time() - entry["stored_at"] > self.ttl_seconds
+
+    def _expire(self, ccr_id: str) -> bool:
+        """Remove a file that is (still) too old. It may just have been rewritten."""
+        try:
+            age = time.time() - (self.cache_dir / f"{ccr_id}.json").stat().st_mtime
+        except (OSError, ValueError):
+            return False
+        if age <= self.ttl_seconds:
+            return False
+        self._evict(ccr_id)
+        return True
 
     def _get(self, ccr_id: str) -> dict[str, Any] | None:
         with self._lock:
@@ -185,8 +222,9 @@ class CCRStore:
     def _read(self, ccr_id: str) -> dict[str, Any] | None:
         if not isinstance(ccr_id, str) or not _ID.fullmatch(ccr_id):
             return None
+        path = self.cache_dir / f"{ccr_id}.json"
         try:
-            entry = json.loads((self.cache_dir / f"{ccr_id}.json").read_text(encoding="utf-8"))
+            entry = json.loads(_patiently(lambda: path.read_text(encoding="utf-8")))
         except (OSError, ValueError):
             return None
         if not isinstance(entry, dict) or not {"original", "compressed", "stored_at"} <= set(entry):
@@ -232,10 +270,10 @@ class CCRStore:
             fd = os.open(partial, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(fd, "wb") as fh:
                 fh.write(data)
-            os.replace(partial, path)
+            _patiently(lambda: os.replace(partial, path))
         except OSError as e:
-            # On Windows the rename fails while a reader has the file open. The
-            # entry under that id is the same original, so there is no loss.
+            # If a reader kept the file open all the same: the entry under that
+            # id is the same original, so there is no loss.
             with contextlib.suppress(OSError):
                 partial.unlink(missing_ok=True)
             if not path.exists():

@@ -3,37 +3,36 @@
 from __future__ import annotations
 
 import logging
-import os
 import secrets
 from functools import lru_cache
 from pathlib import Path
 
 from sensei import config as config_mod
+from sensei.atomic import publish_new
 
 logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=16)
-def _read_or_create(path: Path) -> str:
+def _read_or_create(path: Path) -> str | None:
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        # Exclusive: of two processes starting at once, one makes it.
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
-        return path.read_text(encoding="ascii").strip()
-    except OSError as exc:
-        logger.warning("Cannot keep %s (%s): a new one is used until restart", path.name, exc)
-        return secrets.token_hex(32)
-    with os.fdopen(fd, "w", encoding="ascii") as fh:
-        value = secrets.token_hex(32)
-        fh.write(value)
+        if not path.exists():
+            publish_new(secrets.token_hex(32).encode("ascii"), path)
+        value = path.read_text(encoding="ascii").strip()
+        bytes.fromhex(value)
+    except (OSError, ValueError) as exc:
+        logger.warning("Cannot use %s (%s)", path, exc)
+        return None
+    if len(value) < 64:
+        logger.warning("%s is not a key this program made; delete it to get a new one", path)
+        return None
     return value
 
 
-def local_secret(name: str) -> str:
-    """The secret called ``name``, made on first use and readable only by its owner."""
-    value = _read_or_create(config_mod.SENSEI_HOME / name)
-    if not value:  # cut off while it was being written
-        _read_or_create.cache_clear()
-        raise RuntimeError(f"{config_mod.SENSEI_HOME / name} is empty; delete it and start again")
-    return value
+def local_secret(name: str) -> str | None:
+    """The secret called ``name``, made on first use and readable only by its owner.
+
+    None when it cannot be kept. The caller decides what that means: nothing may
+    be encrypted with a key that is gone after a restart.
+    """
+    return _read_or_create(config_mod.SENSEI_HOME / name)

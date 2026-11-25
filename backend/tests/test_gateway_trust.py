@@ -410,8 +410,6 @@ class TestNobodyElseGetsIn:
             ("localhost:7000", True),
             ("[::1]:7000", True),
             ("192.168.1.20:7000", True),
-            ("backend:7000", True),
-            ("desk.local:7000", True),
             ("host.docker.internal:7000", True),
             ("", True),
             ("evil.example:7000", False),

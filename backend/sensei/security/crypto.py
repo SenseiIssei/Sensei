@@ -48,8 +48,12 @@ class LocalCrypto:
             machine = self._derive_machine_key()
             self._key = machine  # what XOR data was written with
             if _HAS_AES:
-                self._legacy_aes = AESGCM(hashlib.sha256(machine).digest())
-                key = bytes.fromhex(local_secret("local-key"))
+                stored = local_secret("local-key")
+                if stored:
+                    self._legacy_aes = AESGCM(hashlib.sha256(machine).digest())
+                    key = bytes.fromhex(stored)
+                else:  # nowhere to keep one: what 0.3 did, and readable again
+                    key = machine
         else:
             self._key = key
         # AES needs exactly 32 bytes; hash whatever we were given.

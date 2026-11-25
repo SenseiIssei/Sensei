@@ -32,8 +32,8 @@
 - The store of originals no longer loads everything into every process. 3,000
   entries: opening 42.7 s and 153 MB before, under 1 ms after (cold files,
   Windows with Defender).
-- `sensei_compress` reads files by path, makes no promises, and books only what
-  was saved.
+- The MCP server makes no promises and books only what was saved. New, off unless
+  `SENSEI_MCP_FILE_ROOTS` names directories: `sensei_read_file`.
 - `SENSEI_JWT_SECRET` works from `.env`; sign-ins survive a restart.
 - The accelerator wheel carries the release version instead of 0.1.0.
 - Running the test suite no longer edits `~/.cursor/mcp.json`.

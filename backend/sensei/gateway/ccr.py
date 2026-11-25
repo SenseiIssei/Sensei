@@ -171,7 +171,9 @@ def tool_definition(api: str) -> dict[str, Any]:
 
 # Clients name an MCP server's tools in their own way: `mcp__sensei__sensei_retrieve`
 # (Claude Code), `sensei__sensei_retrieve`, `sensei-sensei_retrieve`, or bare.
-_OWN_TOOL = re.compile(r"(?:^|[^a-z])sensei_(?:retrieve|compress|call_tool|find_tools)$", re.I)
+_OWN_TOOL = re.compile(
+    r"(?:^|[^a-z])sensei_(?:retrieve|compress|read_file|call_tool|find_tools)$", re.I
+)
 
 
 def is_own_tool(name: str) -> bool:

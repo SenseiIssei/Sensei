@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 USERS_FILE: Path | None = None
 
 
+# Only when no secret can be kept on disk.
+_PROCESS_SECRET = secrets.token_hex(32)
+
+
 def _users_file() -> Path:
     return USERS_FILE or settings.users_path
 
@@ -32,7 +36,7 @@ def _users_file() -> Path:
 def _jwt_key() -> bytes:
     """Was read from the process environment only, so SENSEI_JWT_SECRET in .env
     did nothing, and was random without it: every restart signed everyone out."""
-    return (settings.jwt_secret or local_secret("jwt-secret")).encode()
+    return (settings.jwt_secret or local_secret("jwt-secret") or _PROCESS_SECRET).encode()
 
 
 class UserRegister(BaseModel):

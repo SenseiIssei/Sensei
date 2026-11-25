@@ -397,8 +397,9 @@ directly — no base URL to change:
 { "mcpServers": { "sensei": { "command": "sensei", "args": ["mcp"] } } }
 ```
 
-The agent gets `sensei_compress` (reads a large log or JSON file and returns it
-compressed), `sensei_retrieve` and `sensei_stats`.
+The agent gets `sensei_compress`, `sensei_retrieve` and `sensei_stats`, and, if you
+name directories in `SENSEI_MCP_FILE_ROOTS`, `sensei_read_file`: large logs and JSON
+files arrive compressed instead of whole.
 
 **And it can front your other MCP servers.** Every server an agent connects to
 puts its whole tool list into the context on every turn. List them in
@@ -639,7 +640,8 @@ and is not counted on the dashboard.
 
 | Tool | What it does |
 |---|---|
-| `sensei_compress` | Read a text file by absolute `path` (stdio only, 32 MB) or take a `text`, and return the compressed form, a `ccr_id` and the token counts. Code in a file stays byte-exact. Optionally force a compressor with `content_type`. |
+| `sensei_compress` | Compress a `text`. Returns the compressed form, a `ccr_id` and the token counts. Optionally force a compressor with `content_type`. |
+| `sensei_read_file` | Read a text file by absolute path and return it compressed, paged when long. Only over stdio, only inside `SENSEI_MCP_FILE_ROOTS` (empty by default, then the tool does not exist), never hidden files. Code stays byte-exact. |
 | `sensei_retrieve` | Exchange a `ccr_id` for the byte-identical original. |
 | `sensei_stats` | Totals saved, plus CCR cache state. |
 

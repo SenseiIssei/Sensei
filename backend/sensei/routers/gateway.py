@@ -38,7 +38,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit
 import anyio
 import httpx
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
 
 from sensei.compression.router import ContentRouter
 from sensei.config import settings
@@ -194,7 +194,7 @@ def _savings_headers(savings: dict[str, Any]) -> dict[str, str]:
 # ─── compression of request bodies ───────────────────────────────────────────
 
 
-def _compress_text(text: Any, *, edit_target: bool = False) -> tuple[Any, int, int, int, int]:
+def _compress_text(text: Any, *, edit_target: bool | str = False) -> tuple[Any, int, int, int, int]:
     """Compress a single string; return (text, before, after, saved, blocks).
 
     Fails open: a compressor that trips over an input costs the saving on that
@@ -203,7 +203,9 @@ def _compress_text(text: Any, *, edit_target: bool = False) -> tuple[Any, int, i
     if not isinstance(text, str) or len(text) < _MIN_COMPRESS_LEN:
         return text, 0, 0, 0, 0
     try:
-        r = _router().compress(text, edit_target=edit_target)
+        r = _router().compress(
+            text, edit_target=bool(edit_target), verbatim=edit_target == pipeline.VERBATIM
+        )
     except Exception as exc:
         logger.warning("Compression failed, sending the block as it is: %s", type(exc).__name__)
         return text, 0, 0, 0, 0
@@ -233,7 +235,7 @@ async def _prepare(api: str, body: dict[str, Any], **kwargs: Any) -> pipeline.Pr
 
 
 def _compress_part_list(
-    parts: list[Any], tally: _Tally, *, edit_target: bool, types: tuple[str, ...]
+    parts: list[Any], tally: _Tally, *, edit_target: bool | str, types: tuple[str, ...]
 ) -> list[Any]:
     """Compress the text parts of a content list; images, audio and files pass."""
     out = []
@@ -289,7 +291,7 @@ def compress_request_messages(
 
 
 def _compress_anthropic_content(
-    content: Any, *, edit_target: bool = False
+    content: Any, *, edit_target: bool | str = False
 ) -> tuple[Any, int, int, int, int]:
     """Compress an Anthropic ``content`` value (string or list of blocks)."""
     if isinstance(content, str):
@@ -341,7 +343,7 @@ def compress_anthropic_request(
     new_messages = []
     last_idx = len(messages) - 1
     for idx, msg in enumerate(messages):
-        if preserve and idx != last_idx:
+        if (preserve and idx != last_idx) or pipeline.untouched_role(msg.get("role")):
             new_messages.append(msg)  # keep the cached prefix byte-exact
             continue
         new_content, *counts = _compress_anthropic_content(
@@ -478,11 +480,17 @@ _FORWARD_HEADERS = frozenset(
 
 
 def _client_headers(request: Request) -> dict[str, str]:
-    return {
-        name: value
-        for name, value in request.headers.items()
-        if name in _FORWARD_HEADERS or name.startswith(_FORWARD_PREFIXES)
-    }
+    out: dict[str, str] = {}
+    for name, value in request.headers.items():
+        if name not in _FORWARD_HEADERS and not name.startswith(_FORWARD_PREFIXES):
+            continue
+        # A title with an umlaut in it is not worth failing a request over, and
+        # httpx sends header values as ASCII.
+        if not value.isascii():
+            continue
+        # Two `anthropic-beta` lines are one list.
+        out[name] = f"{out[name]},{value}" if name == "anthropic-beta" and name in out else value
+    return out
 
 
 def _query(request: Request) -> str:
@@ -794,9 +802,11 @@ async def _forward(
         and settings.gateway_retrieve_intercept
         and not from_fallback
     ):
+        # Another request, so not under the key that says "the same request".
+        more_headers = {k: v for k, v in up_headers.items() if k != "idempotency-key"}
 
         async def send_more(next_payload: dict[str, Any]) -> httpx.Response | None:
-            more, _ = await _send(base_url, path, next_payload, up_headers)
+            more, _ = await _send(base_url, path, next_payload, more_headers)
             return more
 
         retriever = Retriever(
@@ -1401,16 +1411,35 @@ _RELAY_PATH = re.compile(r"[A-Za-z0-9_][\w.:@-]*(?:/[A-Za-z0-9_][\w.:@-]*)*", re
 _RELAY_MAX_BODY = 512 * 1024 * 1024
 
 
-def _has_own_key(request: Request) -> bool:
+def _own_api_key(request: Request) -> str:
     key = request.headers.get("x-api-key") or ""
-    return bool(_incoming_bearer(request) or (key and not _is_sensei_token(key)))
+    return "" if _is_sensei_token(key) else key
+
+
+def _has_own_key(request: Request) -> bool:
+    return bool(_incoming_bearer(request) or _own_api_key(request))
 
 
 def _speaks_anthropic(path: str, request: Request) -> bool:
     if path.split("/", 1)[0] in ("messages", "complete"):
         return True
-    key = request.headers.get("x-api-key") or _incoming_bearer(request) or ""
-    return "anthropic-version" in request.headers or key.startswith("sk-ant-")
+    keys = (_own_api_key(request), _incoming_bearer(request) or "")
+    return "anthropic-version" in request.headers or any(k.startswith("sk-ant-") for k in keys)
+
+
+def _models_in(obj: Any) -> set[str]:
+    """Every ``model`` in a body: a batch names one per request in it."""
+    found: set[str] = set()
+    stack = [obj]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, dict):
+            if isinstance(item.get("model"), str):
+                found.add(item["model"])
+            stack.extend(item.values())
+        elif isinstance(item, list):
+            stack.extend(item)
+    return found
 
 
 async def _passthrough(path: str, request: Request) -> Response:
@@ -1429,13 +1458,24 @@ async def _passthrough(path: str, request: Request) -> Response:
             {},
         )
     headers: dict[str, str] | None
+    tool = _client_name(request)
     if _speaks_anthropic(path, request):
-        base_url = settings.anthropic_api_base_url
+        api, base_url = "anthropic", settings.anthropic_api_base_url
         headers = _anthropic_headers(request) or {}
     else:
-        base_url = APIModelProvider().base_url
-        headers = _openai_headers(request, _incoming_bearer(request) or "")
+        api, base_url = "openai", APIModelProvider().base_url
+        bearer = _incoming_bearer(request)
+        if bearer is None:
+            return _error(
+                401,
+                "This endpoint needs Authorization: Bearer <key>.",
+                "authentication_error",
+                {},
+            )
+        headers = _openai_headers(request, bearer)
     headers.pop("content-type", None)
+    if request.method == "POST" and (refused := _over_budget(tool, api)):
+        return refused
     content_type = request.headers.get("content-type", "")
     content = await request.body()
     if len(content) > _RELAY_MAX_BODY:
@@ -1456,9 +1496,16 @@ async def _passthrough(path: str, request: Request) -> Response:
                     {},
                 )
             body, _, reason = _apply_policy(body)
+            for model in sorted(_models_in(body)):
+                reason = reason or check_policy({"model": model})
             if reason:
                 return _error(403, reason, "blocked_by_policy", {})
             content = _encode(body)
+    from sensei.audit import get_audit_log
+
+    get_audit_log().record(
+        "gateway.relay", api=api, method=request.method, endpoint=path.split("/", 1)[0], tool=tool
+    )
 
     client = _pooled_client(base_url)
     upstream_request = client.build_request(
@@ -1469,6 +1516,22 @@ async def _passthrough(path: str, request: Request) -> Response:
     except httpx.TransportError as exc:
         logger.warning("Relay to %s failed: %s", base_url, exc)
         return _error(502, f"Upstream request failed: {exc}", "upstream_error", {})
+    media_type = resp.headers.get("content-type")
+    if resp.status_code >= 400:
+        # Read here rather than streamed: whoever called may throw this answer
+        # away, and a response nobody reads keeps its connection for good.
+        try:
+            failed = await resp.aread()
+        except httpx.HTTPError as err:
+            return _error(502, f"Upstream response broke off: {err}", "upstream_error", {})
+        finally:
+            await resp.aclose()
+        return Response(
+            content=failed,
+            status_code=resp.status_code,
+            media_type=media_type,
+            headers=_upstream_headers(resp),
+        )
 
     async def relay():
         try:
@@ -1483,7 +1546,7 @@ async def _passthrough(path: str, request: Request) -> Response:
     return StreamingResponse(
         relay(),
         status_code=resp.status_code,
-        media_type=resp.headers.get("content-type"),
+        media_type=media_type,
         headers=_upstream_headers(resp),
     )
 
@@ -1496,6 +1559,9 @@ async def _passthrough(path: str, request: Request) -> Response:
 )
 async def relay_other(path: str, request: Request) -> Any:
     """Endpoints Sensei does not compress, relayed as they are."""
+    if path.endswith("/") and not path.endswith("//"):
+        # What the framework would have done if this route did not match first.
+        return RedirectResponse(str(request.url.replace(path=request.url.path[:-1])), 307)
     if path.split("/", 1)[0] not in _RELAYED or not _RELAY_PATH.fullmatch(path):
         return _error(404, "Unknown /v1 endpoint", "not_found", {})
     return await _passthrough(path, request)

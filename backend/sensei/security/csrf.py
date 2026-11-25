@@ -36,6 +36,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from sensei.config import settings
+from sensei.security.urls import is_loopback
 
 _UNSAFE = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _LOOPBACK = frozenset({"127.0.0.1", "localhost", "::1", "[::1]"})
@@ -81,16 +82,23 @@ async def _refuse(scope: Any, send: Any, status: int, message: str) -> None:
     await send({"type": "http.response.body", "body": body})
 
 
-# Names only a resolver you control answers for. A public attacker can get a
-# certificate and a zone for neither of these.
-_PRIVATE_SUFFIXES = (".localhost", ".local", ".internal", ".lan", ".home.arpa")
+# How a container reaches the machine it runs on; Docker Desktop delivers that
+# on loopback.
+_CONTAINER_NAMES = frozenset(
+    {"host.docker.internal", "gateway.docker.internal", "host.containers.internal"}
+)
+# Names only a local resolver answers for.
+_PRIVATE_SUFFIXES = (".local", ".internal", ".lan", ".home.arpa")
 
 
-def host_allowed(host_header: str) -> bool:
-    """Can a request for this host not have come from a rebound public name?
+def host_allowed(host_header: str, local_address: str = "127.0.0.1") -> bool:
+    """Can a request for this host not have come from a rebound name?
 
-    IP addresses and single-label names ("localhost", a compose service name)
-    cannot be rebound: the browser would have to be *on* that origin already.
+    An IP address or "localhost" cannot be rebound. A single-label or private
+    name (a compose service, `desk.local`) cannot by anybody on the internet, but
+    can by whoever runs the Wi-Fi, and then it arrives on loopback: there these
+    names mean nothing anyway, so they count only when the connection
+    (``local_address`` is our end of it) came in over a network.
     """
     host = host_header.strip().lower()
     if not host:
@@ -99,7 +107,9 @@ def host_allowed(host_header: str) -> bool:
         return True
     host = host.rsplit(":", 1)[0] if ":" in host else host
     host = host.rstrip(".")
-    if "." not in host or host.endswith(_PRIVATE_SUFFIXES):
+    if host == "localhost" or host.endswith(".localhost") or host in _CONTAINER_NAMES:
+        return True
+    if not is_loopback(local_address) and ("." not in host or host.endswith(_PRIVATE_SUFFIXES)):
         return True
     try:
         ipaddress.ip_address(host)
@@ -125,7 +135,8 @@ class HostGuard:
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
         if scope.get("type") in ("http", "websocket") and not settings.auth_enabled:
             host = _headers(scope).get("host", "")
-            if not host_allowed(host):
+            local = (scope.get("server") or ("127.0.0.1", None))[0]
+            if not host_allowed(host, str(local)):
                 await _refuse(
                     scope,
                     send,
