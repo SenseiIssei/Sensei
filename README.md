@@ -435,7 +435,7 @@ This matters more than the token savings, so it's worth being specific.
 | 🚫 **No telemetry, ever** | No analytics, no crash reporting, no "anonymous usage data". Not in any build, not behind any flag. |
 | 📡 **No third-party requests** | The interface loads no fonts, scripts or trackers from anyone. This is checked automatically on every commit. |
 | 💾 **The savings history is a local file** | `SENSEI_SAVINGS_PERSIST` writes counters and a model name per request to a SQLite file in `~/.sensei`. No prompt text, no responses, and nothing leaves the machine. Delete the file, or turn it off. |
-| 🧺 **Originals expire** | What was compressed is kept in `~/.sensei/cache` for 24 hours (512 MB at most) so the model can ask for it. It is plain text, readable by your account only. |
+| **Originals expire** | What was compressed is kept in `~/.sensei/cache` for 24 hours (512 MB at most) so the model can ask for it. It is plain text, readable by your account only. |
 | 🔑 **Your key stays yours** | Sensei forwards your API key to the provider you chose and to nobody else. It's encrypted on disk with a random key only your account can read. |
 | ✂️ **Secrets stripped** | Optionally, Sensei removes passwords, tokens and keys from prompts before they leave your computer. |
 | 📴 **Works offline** | If the server isn't running, the interface still opens and tells you how to start it. |

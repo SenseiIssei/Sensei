@@ -137,8 +137,8 @@ git push origin feat/your-feature
 - **Compression algorithms** — Better heuristics for code, JSON, prose
 - **Model provider integrations** — New providers, better error handling
 - **UI/UX** — Frontend improvements, accessibility, mobile, Claude-like client
-- **Evaluation** — paired runs of real tasks with and without Sensei ([ROADMAP.md](ROADMAP.md), item 1)
-- **Security** — review of the gateway, the MCP server and the installers
+- **Evaluation**: paired runs of real tasks with and without Sensei ([ROADMAP.md](ROADMAP.md), item 1)
+- **Security**: review of the gateway, the MCP server and the installers
 - **Testing** — More test coverage, E2E tests, performance benchmarks
 - **Documentation** — Tutorials, guides, API docs, translations
 
