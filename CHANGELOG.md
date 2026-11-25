@@ -1,5 +1,53 @@
 # Changelog
 
+## [Unreleased]
+
+### Worth knowing before you update
+
+- **What you type and paste is no longer rewritten**, and neither is the system
+  prompt. Prose lost words and spaces, pasted code lost comments and docstrings,
+  without a marker. `SENSEI_GATEWAY_REWRITE_USER_TEXT` and
+  `SENSEI_GATEWAY_COMPRESS_SYSTEM` bring it back. On 499 replayed turns the
+  difference is 0.01 points of the bill (1.18 % before, 1.17 % after).
+- **Data moved to `~/.sensei`**: settings (`.env`), key vault, conversations,
+  sessions, accounts, audit log, knowledge base, watch list. They were relative
+  to the working directory, and in the downloadable binary the settings were in
+  the system temp directory. Existing files are copied over once.
+- **A public host name needs `SENSEI_ALLOWED_HOSTS` or auth.** Without either it
+  is refused (DNS rebinding).
+- With docker compose, data is in the `sensei-home` volume.
+
+### Fixed
+
+- Originals fetched through MCP were compressed again by the gateway, so the
+  model could never get them.
+- Half an emoji in a prompt, or an exception in a compressor, was a 500. Blocks
+  and requests now fail open; redaction and the block-list still apply.
+- A provider stream that broke off looked complete to the client.
+- 60 requests a minute from local agents were answered with 429 by Sensei.
+- `OpenAI-Organization`, `OpenAI-Project`, `Idempotency-Key`, client headers and
+  the query string now reach the provider. Other `/v1` endpoints are relayed with
+  the caller's own key instead of 404.
+- Compressing one large log no longer stops every other stream.
+- The store of originals no longer loads everything into every process. 3,000
+  entries: opening 42.7 s and 153 MB before, under 1 ms after (cold files,
+  Windows with Defender).
+- `sensei_compress` reads files by path, makes no promises, and books only what
+  was saved.
+- `SENSEI_JWT_SECRET` works from `.env`; sign-ins survive a restart.
+- The accelerator wheel carries the release version instead of 0.1.0.
+- Running the test suite no longer edits `~/.cursor/mcp.json`.
+
+### Security
+
+- A web page could spend the configured key through `/v1`, use the chat
+  WebSocket and read the answers, or rebind DNS and read everything.
+- With auth on, the WebSocket was open, and the Sensei token was forwarded to the
+  provider when a client sent it as its bearer.
+- `/tmp/.env` was read by the Linux and macOS binaries.
+- The vault key was derived from `user@hostname`. It is random now; old vaults
+  still open.
+
 ## [0.3.0] — 2026-10-16
 
 The release that makes Sensei connect itself to every AI tool it finds, handle
