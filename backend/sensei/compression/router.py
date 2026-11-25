@@ -609,9 +609,10 @@ class ContentRouter:
     ) -> tuple[list[dict[str, str]], list[CompressionResult]]:
         """Compress a list of chat messages.
 
-        Preserves system messages uncompressed (they're usually short and
-        need to stay exact for prompt caching). Compresses user and assistant
-        message content.
+        System messages stay as they are. In the others only recognised machine
+        output shrinks (logs, search results, JSON, listings): what was typed or
+        pasted and what the model answered keep their wording and their code,
+        unless ``SENSEI_GATEWAY_REWRITE_USER_TEXT`` asks for more.
 
         Returns:
             Tuple of (compressed_messages, compression_results)
@@ -631,7 +632,7 @@ class ContentRouter:
                 compressed_msgs.append(msg)
                 continue
 
-            result = self.compress(content)
+            result = self.compress(content, edit_target=not settings.gateway_rewrite_user_text)
             results.append(result)
 
             compressed_msgs.append(
