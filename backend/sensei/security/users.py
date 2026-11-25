@@ -10,18 +10,29 @@ import hashlib
 import hmac
 import json
 import logging
-import os
 import secrets
 import time
 from pathlib import Path
 
 from pydantic import BaseModel, EmailStr, Field
 
+from sensei.config import settings
+from sensei.security.local_secret import local_secret
+
 logger = logging.getLogger(__name__)
 
-USERS_FILE = Path(os.environ.get("SENSEI_USERS_FILE", ".sensei_users.json"))
-JWT_SECRET = os.environ.get("SENSEI_JWT_SECRET", secrets.token_hex(32))
-JWT_EXPIRY_HOURS = int(os.environ.get("SENSEI_JWT_EXPIRY_HOURS", "168"))  # 7 days
+# Tests point this somewhere else; None means what the settings say.
+USERS_FILE: Path | None = None
+
+
+def _users_file() -> Path:
+    return USERS_FILE or settings.users_path
+
+
+def _jwt_key() -> bytes:
+    """Was read from the process environment only, so SENSEI_JWT_SECRET in .env
+    did nothing, and was random without it: every restart signed everyone out."""
+    return (settings.jwt_secret or local_secret("jwt-secret")).encode()
 
 
 class UserRegister(BaseModel):
@@ -58,17 +69,19 @@ def _verify_password(password: str, salt: str, expected_hash: str) -> bool:
 
 
 def _load_users() -> dict[str, dict]:
-    if not USERS_FILE.exists():
+    path = _users_file()
+    if not path.exists():
         return {}
     try:
-        return json.loads(USERS_FILE.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return {}
 
 
 def _save_users(users: dict[str, dict]) -> None:
-    USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    USERS_FILE.write_text(json.dumps(users, indent=2), encoding="utf-8")
+    path = _users_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(users, indent=2), encoding="utf-8")
 
 
 def _create_token(user_id: str, email: str, role: str = "user") -> str:
@@ -76,12 +89,12 @@ def _create_token(user_id: str, email: str, role: str = "user") -> str:
         "sub": user_id,
         "email": email,
         "role": role,
-        "exp": int(time.time()) + JWT_EXPIRY_HOURS * 3600,
+        "exp": int(time.time()) + settings.jwt_expiry_hours * 3600,
         "iat": int(time.time()),
     }
     payload_json = json.dumps(payload, separators=(",", ":"))
     payload_b64 = _b64_encode(payload_json)
-    sig = hmac.new(JWT_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+    sig = hmac.new(_jwt_key(), payload_b64.encode(), hashlib.sha256).hexdigest()
     return f"{payload_b64}.{sig}"
 
 
@@ -106,9 +119,7 @@ def verify_token(token: str) -> dict | None:
         if len(parts) != 2:
             return None
         payload_b64, sig = parts
-        expected_sig = hmac.new(
-            JWT_SECRET.encode(), payload_b64.encode(), hashlib.sha256
-        ).hexdigest()
+        expected_sig = hmac.new(_jwt_key(), payload_b64.encode(), hashlib.sha256).hexdigest()
         if not secrets.compare_digest(sig, expected_sig):
             return None
         payload = json.loads(_b64_decode(payload_b64))
@@ -128,8 +139,6 @@ def register_user(email: str, password: str, name: str) -> tuple[TokenResponse |
     user_id = secrets.token_hex(16)
     salt = secrets.token_hex(16)
     password_hash = _hash_password(password, salt)
-
-    from sensei.config import settings
 
     admins = {e.strip().lower() for e in settings.admin_emails.split(",") if e.strip()}
     role = "admin" if email_lower in admins else "user"
@@ -175,8 +184,6 @@ def provision_sso_user(email: str, name: str = "") -> TokenResponse:
     """Just-in-time provision (or sync) an SSO user and issue a Sensei token."""
     users = _load_users()
     email_lower = email.lower()
-
-    from sensei.config import settings
 
     admins = {e.strip().lower() for e in settings.admin_emails.split(",") if e.strip()}
     role = "admin" if email_lower in admins else "user"

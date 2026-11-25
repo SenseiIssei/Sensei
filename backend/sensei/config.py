@@ -1,19 +1,108 @@
 from __future__ import annotations
 
+import os
+import re
+import shutil
+import sys
+import tempfile
 from pathlib import Path
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Load .env from the repo root regardless of the process working directory, so
-# the settings API and the server agree on one file.
-ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
-
-# Where per-user data lives, for every Sensei process on the machine. Already
-# the home of the integrations manifest and its backups; the savings ledger and
-# the CCR store join it so the tray server and an editor-spawned `sensei mcp`
-# are looking at the same numbers.
+# Where per-user data lives, for every Sensei process on the machine: settings,
+# keys, conversations, the savings ledger and the CCR store. The tray server runs
+# from its install directory and an editor starts `sensei mcp` in whatever
+# project is open, so anything relative to the working directory is a different
+# place each time.
 SENSEI_HOME = Path.home() / ".sensei"
+
+_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _frozen() -> bool:
+    return bool(getattr(sys, "frozen", False))
+
+
+def _is_checkout() -> bool:
+    return not _frozen() and (_ROOT / "backend" / "pyproject.toml").is_file()
+
+
+def env_path() -> Path:
+    """The one ``.env`` the settings API and every process agree on.
+
+    The repository's in a checkout, ``~/.sensei/.env`` in an installed Sensei. It
+    used to be two directories above this file everywhere. In the one-file binary
+    that is the system temp directory: settings saved there are gone when it is
+    cleaned, and on a shared machine `/tmp/.env` is writable by anybody, who
+    could point Sensei, and the keys it forwards, at a server of their own.
+    """
+    return _ROOT / ".env" if _is_checkout() else SENSEI_HOME / ".env"
+
+
+ENV_PATH = env_path()
+
+
+# What the settings page of 0.3 and older wrote into that temp directory. Taken
+# over once, on Windows, where it is private to the user, and only these keys.
+_CARRIED_OVER = re.compile(
+    r"SENSEI_(?:API_PROVIDER|MODEL_PROVIDER|COMPRESSION_ENABLED|OLLAMA_MODEL|[A-Z]+_API_MODEL)=.*"
+)
+
+
+def carry_over_env(target: Path, temp_dir: Path) -> None:
+    old = temp_dir / ".env"
+    if target.exists() or not old.is_file():
+        return
+    try:
+        lines = [x.strip() for x in old.read_text(encoding="utf-8").splitlines()]
+        keep = [x for x in lines if _CARRIED_OVER.fullmatch(x)]
+        if keep:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("\n".join(keep) + "\n", encoding="utf-8")
+    except (OSError, UnicodeDecodeError):  # pragma: no cover - unreadable temp file
+        pass
+
+
+if _frozen() and os.name == "nt":  # pragma: no cover - only in the binary
+    carry_over_env(ENV_PATH, Path(tempfile.gettempdir()))
+
+
+def _former_homes() -> list[Path]:
+    """Where 0.3 and older may have left files whose paths were relative.
+
+    Not simply the working directory: `sensei up` in a freshly cloned repository
+    must not adopt a user database or watch list that came with it.
+    """
+    places = [Path.home()]
+    if _frozen():
+        places.insert(0, Path(sys.executable).parent)
+    if _is_checkout():
+        places[:0] = [_ROOT / "backend", _ROOT]
+    return places
+
+
+def adopt(target: Path, legacy_name: str) -> None:
+    """Copy a file or directory from where it used to be, once.
+
+    Copied, not moved, and only when there is nothing at the new place, so it can
+    never overwrite anything and the old version still finds its data.
+    """
+    if target.exists():
+        return
+    for place in _former_homes():
+        old = place / legacy_name
+        try:
+            if old.is_dir() and any(old.iterdir()):
+                shutil.copytree(old, target)
+                return
+            if old.is_file():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(old, target)
+                return
+        except OSError:  # unreadable, or another process got there first
+            continue
+
 
 # The defaults these settings ship with. Compared against, rather than assumed:
 # a value that differs is one the user chose, and it is used verbatim.
@@ -38,8 +127,6 @@ def _adopt_legacy_ledger(target: Path) -> None:
     if not legacy.is_file():
         return
     try:
-        import shutil
-
         shutil.copy2(legacy, target)
         for suffix in ("-wal", "-shm"):
             side = legacy.with_name(legacy.name + suffix)
@@ -450,7 +537,7 @@ class Settings(BaseSettings):
     # default; falls back to the rule-based TextCompressor if disabled, the
     # checkpoint is missing, or torch/transformers aren't installed.
     learned_compressor_enabled: bool = False
-    learned_compressor_path: str = "G:/Projects/Sensei/models/sensei-compressor"
+    learned_compressor_path: str = ""
     learned_keep_threshold: float = 0.5
     learned_max_length: int = 256
 
@@ -519,6 +606,12 @@ class Settings(BaseSettings):
     webhook_enabled: bool = False
     webhook_token: str = ""
 
+    # Local accounts. The signing secret is generated and kept in
+    # ~/.sensei/jwt-secret unless set, so sign-ins survive a restart.
+    users_file: str = ".sensei_users.json"
+    jwt_secret: str = ""
+    jwt_expiry_hours: int = 168
+
     # RBAC: when enabled, admin-only endpoints (settings, audit, purge) require a
     # user JWT with the admin role. admin_emails (comma-separated) get that role
     # at registration. Off by default so local/self-hosted use needs no auth.
@@ -563,17 +656,45 @@ class Settings(BaseSettings):
         p.mkdir(parents=True, exist_ok=True)
         return p
 
+    def _moved(self, value: str, default: str, name: str) -> Path:
+        """Like `_shared`, bringing along what an older version left behind."""
+        p = self._shared(value, default, name)
+        if value == default:
+            adopt(p, default)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return p
+
     @property
     def memory_path(self) -> Path:
-        p = Path(self.memory_dir)
+        p = self._moved(self.memory_dir, ".sensei_memory", "memory")
         p.mkdir(parents=True, exist_ok=True)
         return p
 
     @property
     def session_path(self) -> Path:
-        p = Path(self.session_dir)
+        p = self._moved(self.session_dir, ".sensei_sessions", "sessions")
         p.mkdir(parents=True, exist_ok=True)
         return p
+
+    @property
+    def vault_path(self) -> Path:
+        return self._moved(self.vault_file, ".sensei_vault.json", "vault.json")
+
+    @property
+    def users_path(self) -> Path:
+        return self._moved(self.users_file, ".sensei_users.json", "users.json")
+
+    @property
+    def audit_path(self) -> Path:
+        return self._moved(self.audit_file, ".sensei_audit.jsonl", "audit.jsonl")
+
+    @property
+    def rag_path(self) -> Path:
+        return self._moved(self.rag_file, ".sensei_rag.json", "rag.json")
+
+    @property
+    def watch_path(self) -> Path:
+        return self._moved(self.watch_file, ".sensei_watch.json", "watch.json")
 
     @property
     def mcp_servers_path(self) -> Path:

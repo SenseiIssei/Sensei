@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   sensei-backend:
     build:
@@ -10,9 +8,11 @@ services:
     env_file:
       - .env
     volumes:
-      - sensei-cache:/app/.sensei_cache
-      - sensei-memory:/app/.sensei_memory
-      - sensei-sessions:/app/.sensei_sessions
+      # Everything Sensei keeps: vault, ledger, cache, accounts, knowledge base.
+      - sensei-home:/home/sensei/.sensei
+      # Volumes from 0.3 and older, at the place their content belongs now.
+      - sensei-memory:/home/sensei/.sensei/memory
+      - sensei-sessions:/home/sensei/.sensei/sessions
       - ./models:/models:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7000/health')"]
@@ -57,7 +57,7 @@ services:
       - sensei-net
 
 volumes:
-  sensei-cache:
+  sensei-home:
   sensei-memory:
   sensei-sessions:
   ollama-models:

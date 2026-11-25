@@ -102,7 +102,7 @@ def get_prose_compressor() -> LearnedTextCompressor | None:
     _loaded = True
     if not settings.learned_compressor_enabled:
         return None
-    path = Path(settings.learned_compressor_path)
+    path = Path(settings.learned_compressor_path or "models/sensei-compressor")
     if not path.exists():
         logger.warning(
             "Learned compressor enabled but no checkpoint at %s; using rule-based.", path

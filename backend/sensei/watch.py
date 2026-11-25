@@ -26,7 +26,7 @@ from sensei.config import settings
 
 class WatchStore:
     def __init__(self, path: Path | str | None = None):
-        self.path = Path(path) if path is not None else Path(settings.watch_file)
+        self.path = Path(path) if path is not None else settings.watch_path
         self._lock = threading.Lock()
         self._watches: list[dict[str, Any]] = []
         self._load()

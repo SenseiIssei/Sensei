@@ -57,7 +57,7 @@ def chunk_text(text: str, target: int = 600) -> list[str]:
 
 class DocumentStore:
     def __init__(self, path: Path | str | None = None, embedder: Any = None):
-        self.path = Path(path) if path is not None else Path(settings.rag_file)
+        self.path = Path(path) if path is not None else settings.rag_path
         self._lock = threading.Lock()
         self._chunks: list[dict[str, Any]] = []  # {doc, text, tokens, vec?}
         self._embedder = embedder

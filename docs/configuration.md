@@ -160,7 +160,7 @@ The pipeline that saves the tokens.
 | `SENSEI_GATEWAY_TOOL_SEARCH_MIN_TOOLS` | `12` |
 | `SENSEI_HOOK_COMPRESSION` | `true` |
 | `SENSEI_LEARNED_COMPRESSOR_ENABLED` | `false` |
-| `SENSEI_LEARNED_COMPRESSOR_PATH` | `G:/Projects/Sensei/models/sensei-compressor` |
+| `SENSEI_LEARNED_COMPRESSOR_PATH` | _(empty)_ |
 | `SENSEI_LEARNED_KEEP_THRESHOLD` | `0.5` |
 | `SENSEI_LEARNED_MAX_LENGTH` | `256` |
 | `SENSEI_OUTPUT_SHAPER` | `false` |
@@ -261,6 +261,8 @@ Webhooks and external channels.
 | `SENSEI_HOOK_MAX_PATHS` | `300` |
 | `SENSEI_HOOK_MIN_CHARS` | `2000` |
 | `SENSEI_HOOK_MIN_SAVING` | `0.15` |
+| `SENSEI_JWT_EXPIRY_HOURS` | `168` |
+| `SENSEI_JWT_SECRET` | _(empty)_ |
 | `SENSEI_MCP_HTTP_TOKEN` | _(empty)_ |
 | `SENSEI_MCP_PAGE_CHARS` | `12000` |
 | `SENSEI_MCP_SERVERS_FILE` | _(empty)_ |
@@ -274,6 +276,7 @@ Webhooks and external channels.
 | `SENSEI_UPDATE_CHECK` | `false` |
 | `SENSEI_UPSTREAM_RETRIES` | `2` |
 | `SENSEI_UPSTREAM_RETRY_MAX_WAIT` | `8.0` |
+| `SENSEI_USERS_FILE` | `.sensei_users.json` |
 
 ## Notes on a few that matter
 

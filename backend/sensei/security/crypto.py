@@ -5,11 +5,15 @@ import logging
 import os
 from pathlib import Path
 
+from sensei.security.local_secret import local_secret
+
 logger = logging.getLogger(__name__)
 
 # Authenticated AES-256-GCM for local data at rest, with a zero-dependency XOR
-# fallback when the `cryptography` package isn't installed. The machine-derived
-# key ties data to this machine; GCM additionally detects tampering.
+# fallback when the `cryptography` package isn't installed. The key is random and
+# kept in ~/.sensei/local-key, readable by its owner only. That protects a copy of
+# the data that travels without the key (a backup, a synced folder, a disk image
+# of another directory), not a login that can read both.
 
 try:  # pragma: no cover - depends on whether `cryptography` is installed
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -27,22 +31,32 @@ _TAG_XOR = b"X"
 class LocalCrypto:
     """Local data encryption for at-rest protection.
 
-    Uses **AES-256-GCM** (authenticated) when ``cryptography`` is available,
-    deriving a 256-bit key from a machine-specific id + app salt. Falls back to
-    an XOR stream cipher (obfuscation only) so installs without the optional
-    dependency keep working. Legacy XOR files written by older versions are
-    still readable.
+    Uses **AES-256-GCM** (authenticated) when ``cryptography`` is available.
+    Falls back to an XOR stream cipher (obfuscation only) so installs without
+    the optional dependency keep working.
+
+    Up to 0.3 the key was a hash of ``user@hostname``: anybody who knew those two
+    could decrypt the data, and a container with a new hostname could not. Data
+    written that way is still readable, and is written with the new key next time.
     """
 
     SALT = b"sensei_local_data_protection_v1"
 
     def __init__(self, key: bytes | None = None):
-        self._key = key if key is not None else self._derive_machine_key()
+        self._legacy_aes = None
+        if key is None:
+            machine = self._derive_machine_key()
+            self._key = machine  # what XOR data was written with
+            if _HAS_AES:
+                self._legacy_aes = AESGCM(hashlib.sha256(machine).digest())
+                key = bytes.fromhex(local_secret("local-key"))
+        else:
+            self._key = key
         # AES needs exactly 32 bytes; hash whatever we were given.
-        self._aes = AESGCM(hashlib.sha256(self._key).digest()) if _HAS_AES else None
+        self._aes = AESGCM(hashlib.sha256(key).digest()) if _HAS_AES and key else None
 
     def _derive_machine_key(self) -> bytes:
-        """Derive a machine-specific key from environment (robust on headless hosts)."""
+        """The key up to 0.3, for reading what it wrote (robust on headless hosts)."""
         node = (
             os.uname().nodename
             if hasattr(os, "uname")
@@ -76,7 +90,12 @@ class LocalCrypto:
         """Decrypt a blob produced by ``encrypt`` (or legacy untagged XOR)."""
         if data[:1] == _TAG_AES and self._aes is not None:
             nonce, ct = data[1:13], data[13:]
-            return self._aes.decrypt(nonce, ct, None).decode("utf-8")
+            try:
+                return self._aes.decrypt(nonce, ct, None).decode("utf-8")
+            except Exception:
+                if self._legacy_aes is None:
+                    raise
+                return self._legacy_aes.decrypt(nonce, ct, None).decode("utf-8")
         if data[:1] == _TAG_XOR:
             return self._xor(data[1:]).decode("utf-8")
         # Legacy: untagged XOR payload (pre-AES versions).
