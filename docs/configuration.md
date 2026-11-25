@@ -120,6 +120,7 @@ The pipeline that saves the tokens.
 | Variable | Default |
 |---|---|
 | `SENSEI_CCR_CACHE_DIR` | `.sensei_cache` |
+| `SENSEI_CCR_MAX_MB` | `512` |
 | `SENSEI_CCR_TTL_HOURS` | `24` |
 | `SENSEI_CODE_COMPRESSION` | `safe` |
 | `SENSEI_COMPRESSION_ENABLED` | `true` |
@@ -127,7 +128,7 @@ The pipeline that saves the tokens.
 | `SENSEI_COMPRESSION_PROSE` | `rules` |
 | `SENSEI_GATEWAY_CACHE_TTL_SECONDS` | `300` |
 | `SENSEI_GATEWAY_CCR_MIN_SAVED_TOKENS` | `50` |
-| `SENSEI_GATEWAY_COMPRESS_SYSTEM` | `true` |
+| `SENSEI_GATEWAY_COMPRESS_SYSTEM` | `false` |
 | `SENSEI_GATEWAY_DEDUP` | `true` |
 | `SENSEI_GATEWAY_DEDUP_MIN_CHARS` | `200` |
 | `SENSEI_GATEWAY_DEDUP_MIN_LINES` | `4` |
@@ -146,6 +147,7 @@ The pipeline that saves the tokens.
 | `SENSEI_GATEWAY_RETRIEVE_MAX_CHARS` | `60000` |
 | `SENSEI_GATEWAY_RETRIEVE_MAX_ROUNDS` | `3` |
 | `SENSEI_GATEWAY_RETRIEVE_TOOL` | `true` |
+| `SENSEI_GATEWAY_REWRITE_USER_TEXT` | `false` |
 | `SENSEI_GATEWAY_STALE_READS` | `true` |
 | `SENSEI_GATEWAY_STATE_DB` | _(empty)_ |
 | `SENSEI_GATEWAY_STATE_PERSIST` | `true` |
@@ -247,6 +249,7 @@ Webhooks and external channels.
 
 | Variable | Default |
 |---|---|
+| `SENSEI_ALLOWED_HOSTS` | _(empty)_ |
 | `SENSEI_API_BASE_URL` | _(empty)_ |
 | `SENSEI_API_KEY` | _(empty)_ |
 | `SENSEI_API_MODEL` | _(empty)_ |

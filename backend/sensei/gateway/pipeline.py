@@ -102,6 +102,21 @@ def _savings(before: int, after: int, saved: int, blocks: int) -> dict[str, Any]
     }
 
 
+def exact_role(role: Any) -> bool:
+    """Must text from this role reach the model as it was written?
+
+    Tool results always: the model edits what it read by exact string match.
+    What a person typed or pasted, too. "Keep the three spaces" loses its point
+    when the spaces are collapsed, pasted code loses its comments and TODOs, and
+    Cline, Aider and Continue put file contents and tool output into user
+    messages, where their edits are matched against the same bytes. Logs, search
+    results and listings in there still compress; prose and code do not.
+    """
+    if role in ("tool", "function"):
+        return True
+    return role == "user" and not settings.gateway_rewrite_user_text
+
+
 def is_oauth(headers: dict[str, str]) -> bool:
     """A Claude subscription request: a bearer token rather than an API key."""
     lowered = {k.lower(): v for k, v in headers.items()}
@@ -159,8 +174,9 @@ class _Builder:
             if msg.get("role") == "assistant":
                 return msg
             content = msg.get("content")
+            exact = exact_role(msg.get("role", "user"))
             if isinstance(content, str):
-                return {**msg, "content": self.text(content, tally, edit_target=False)}
+                return {**msg, "content": self.text(content, tally, edit_target=exact)}
             if not isinstance(content, list):
                 return msg
             out = []
@@ -169,7 +185,7 @@ class _Builder:
                     out.append(block)
                 elif block.get("type") == "text":
                     out.append(
-                        {**block, "text": self.text(block.get("text"), tally, edit_target=False)}
+                        {**block, "text": self.text(block.get("text"), tally, edit_target=exact)}
                     )
                 elif block.get("type") == "tool_result":
                     inner = block.get("content")
@@ -188,7 +204,7 @@ class _Builder:
                 return msg
             if role in ("system", "developer") and not settings.gateway_compress_system:
                 return msg
-            edit_target = role in ("tool", "function")
+            edit_target = exact_role(role)
             content = msg.get("content")
             if isinstance(content, str):
                 return {**msg, "content": self.text(content, tally, edit_target=edit_target)}
@@ -207,13 +223,14 @@ class _Builder:
             if role in ("system", "developer") and not settings.gateway_compress_system:
                 return msg
             content = msg.get("content")
+            exact = exact_role(role)
             if isinstance(content, str):
-                return {**msg, "content": self.text(content, tally, edit_target=False)}
+                return {**msg, "content": self.text(content, tally, edit_target=exact)}
             if isinstance(content, list):
                 return {
                     **msg,
                     "content": self.parts(
-                        content, tally, edit_target=False, types=_TEXT_PART_TYPES
+                        content, tally, edit_target=exact, types=_TEXT_PART_TYPES
                     ),
                 }
             return msg

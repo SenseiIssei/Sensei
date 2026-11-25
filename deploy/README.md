@@ -25,7 +25,12 @@ compression **gateway** (`/v1/...`), and the chat WebSocket (`/api/chat/ws`).
 The backend has no TLS and minimal auth by default — that's fine *behind* the
 proxy on localhost. When the proxy is internet-facing, also:
 
-- `SENSEI_AUTH_ENABLED=true` + `SENSEI_AUTH_TOKEN=<random>` (bearer auth on the API)
+- `SENSEI_AUTH_ENABLED=true` + `SENSEI_AUTH_TOKEN=<random>` (on the API, the gateway and the chat
+  WebSocket). Clients that send their own provider key send the Sensei token as
+  `X-Sensei-Token`; Sensei never passes it on. `x-api-key` and
+  `Authorization: Bearer` are accepted too, for clients without a provider key
+- without auth, `SENSEI_ALLOWED_HOSTS=sensei.example.org`: a request for a public
+  name is refused otherwise, because that is what DNS rebinding looks like
 - `SENSEI_RATE_LIMIT_ENABLED=true` (on by default)
 - consider `SENSEI_REDACTION_ENABLED=true` (DLP) and `SENSEI_BLOCKED_MODELS` / `SENSEI_BLOCKED_PATTERNS` (policy)
 - put real keys in the encrypted vault (set them via the Key UI / `PUT /api/settings`), not plaintext `.env`

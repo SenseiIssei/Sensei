@@ -23,7 +23,7 @@ def blocked_model(model: str | None) -> str | None:
     """Return the matching block-rule if `model` is disallowed, else None."""
     if not model:
         return None
-    low = model.lower()
+    low = str(model).lower()
     for rule in _items(settings.blocked_models):
         if rule.lower() in low:
             return rule

@@ -264,6 +264,8 @@ class Settings(BaseSettings):
     # ── end compression pipeline ──
 
     ccr_ttl_hours: int = 24
+    # Disk the originals may take. Over it, the oldest go first.
+    ccr_max_mb: int = 512
     ccr_cache_dir: str = ".sensei_cache"
     # Ask the model for terser answers. Output tokens cost roughly 4-5x input
     # tokens. Off by default: this changes what the model writes, which is the
@@ -299,9 +301,14 @@ class Settings(BaseSettings):
     mcp_page_chars: int = 12_000
     # How long a row is kept. The dashboard's longest view is a year.
     savings_retention_days: int = 400
-    # Compress system prompts at the gateway too (where IDE tools hide most of
-    # their tokens). Lossy — disable for byte-exact system prompts.
-    gateway_compress_system: bool = True
+    # Rewrite system prompts too. Off: they are instructions, the rewriting is
+    # lossy and leaves no marker, and they are the best-cached part of a request,
+    # so there is little to win. On for long hand-written prompts you own.
+    gateway_compress_system: bool = False
+    # Rewrite what people type and paste: shorter phrases, collapsed whitespace,
+    # comments dropped from pasted code. Off: it arrives as written, and only
+    # logs, search results and other recognised output inside it shrink.
+    gateway_rewrite_user_text: bool = False
     # Compress only the newest message, leaving earlier turns untouched.
     #
     # Do not turn this on to protect a prompt cache. It does the opposite, and
@@ -471,6 +478,11 @@ class Settings(BaseSettings):
     # Optional rotating log file for the (often hidden) background server.
     log_file: str = ""
     cors_origins: str = "http://localhost:5173,http://localhost:7000"
+    # Public names Sensei may be reached under without auth (comma-separated,
+    # "*" for any). Loopback, IP addresses, single-label and private names
+    # (.local, .lan, .internal, .home.arpa) always work. Everything else is
+    # refused, because that is what a DNS-rebinding web page looks like.
+    allowed_hosts: str = ""
 
     # Security
     auth_enabled: bool = False
