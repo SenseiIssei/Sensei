@@ -977,8 +977,8 @@ MCP proxy is meant to sit in front of servers like it.
 ## Contributing
 
 Issues and PRs welcome — [CONTRIBUTING.md](CONTRIBUTING.md) has the setup, and
-[docs/ROADMAP-NEXT.md](docs/ROADMAP-NEXT.md) is the queue: what's planned, in
-what order, and why.
+[ROADMAP.md](ROADMAP.md) is the plan: what comes next, in what order, why, and
+how to tell that it is done.
 
 <div align="center">
 <sub>MIT · built by <a href="https://github.com/SenseiIssei">@SenseiIssei</a></sub>

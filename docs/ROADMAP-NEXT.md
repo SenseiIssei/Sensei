@@ -1,5 +1,8 @@
 # What's next
 
+> Superseded on 2026-11-25 by [ROADMAP.md](../ROADMAP.md). Kept because it explains
+> why older choices were made.
+
 Written 2026-07-27, after Phase 2 and the MCP server landed. Revised 2026-08-10.
 This is the handover document: enough context that someone picking this up cold
 — including me, in six months — knows what to do and why, without re-deriving it.
