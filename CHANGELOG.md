@@ -7,8 +7,8 @@
 - **What you type and paste is no longer rewritten**, and neither is the system
   prompt. Prose lost words and spaces, pasted code lost comments and docstrings,
   without a marker. `SENSEI_GATEWAY_REWRITE_USER_TEXT` and
-  `SENSEI_GATEWAY_COMPRESS_SYSTEM` bring it back. On 499 replayed turns the
-  difference is 0.01 points of the bill (1.18 % before, 1.17 % after).
+  `SENSEI_GATEWAY_COMPRESS_SYSTEM` bring it back. On 477 replayed turns the
+  saving is the same with and without it: 0.96 % of the bill.
 - **Data moved to `~/.sensei`**: settings (`.env`), key vault, conversations,
   sessions, accounts, audit log, knowledge base, watch list. They were relative
   to the working directory, and in the downloadable binary the settings were in

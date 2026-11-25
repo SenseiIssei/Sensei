@@ -211,8 +211,8 @@ limits on memory and p95 overhead (today 4 ms on a small request, 11 ms on a
 
 ## Not planned
 
-- Rewriting prose or code the user wrote. It was lossy, unmarked, and worth 0.01
-  points of the bill.
+- Rewriting prose or code the user wrote. It was lossy, unmarked, and worth less
+  than 0.01 points of the bill.
 - Learned compressors as a default. Generic ones cost
   [6 to 12 points of solve rate](https://arxiv.org/html/2601.16746v1) on code.
 - Telemetry of any kind.
