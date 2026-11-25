@@ -67,7 +67,7 @@ mcp = [
     # 1.0.98 does exactly that, so with 2.3.0 its `sensei` server never
     # starts; 2.2.0 serves it. Verified against the real CLI — lift the cap
     # once a newer SDK (or Copilot) negotiates on one connection.
-    "mcp>=2.0.0,<2.3",
+    "mcp>=2.0.0,<2.4",
 ]
 # A system-tray icon, so the gateway can run without a terminal window open.
 # pystray + Pillow rather than PySide6: ~5 MB against ~150 MB for one icon.
