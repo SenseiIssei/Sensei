@@ -8,7 +8,7 @@
 # connected (each one backed up first; the uninstaller puts them back).
 #
 # Settings, as environment variables (set before piping into iex):
-#   $env:SENSEI_VERSION = "0.2.0"     a specific release instead of the latest
+#   $env:SENSEI_VERSION = "0.3.0"     a specific release instead of the latest
 #   $env:SENSEI_AUTOSTART = "no"      do not start at sign-in
 #   $env:SENSEI_SETUP_TOOLS = "no"    do not connect AI tools, now or later
 #                                     (remembered; `sensei connect` changes it)
@@ -75,7 +75,7 @@ if ($env:SENSEI_VERSION) {
     $release = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest" -Headers $headers
     $setup = $release.assets | Where-Object { $_.name -like "sensei-setup-*.exe" } | Select-Object -First 1
     $sums = $release.assets | Where-Object { $_.name -eq "SHA256SUMS" } | Select-Object -First 1
-    if (-not $setup -or -not $sums) { throw "Release $tagName has no Windows installer." }
+    if (-not $setup -or -not $sums) { throw "Release $($release.tag_name) has no Windows installer." }
     $tagName = $release.tag_name
     $setupName = $setup.name
     $setupUrl = $setup.browser_download_url

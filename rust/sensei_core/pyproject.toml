@@ -4,7 +4,9 @@ build-backend = "maturin"
 
 [project]
 name = "sensei_core"
-version = "0.1.0"
+# Taken from Cargo.toml, which the release process bumps. It was a fixed 0.1.0
+# here, so every release shipped a wheel pip considered already installed.
+dynamic = ["version"]
 description = "Optional Rust accelerator for Sensei compression."
 # Matches the abi3-py311 feature in Cargo.toml.
 requires-python = ">=3.11"
